@@ -1,7 +1,6 @@
 import { Show, Switch, Match, For } from 'solid-js';
 import VesselTable from './VesselTable';
 import PortList from './PortList';
-import FusionPanel from './FusionPanel';
 import AnalyticsPanel from './AnalyticsPanel';
 import IntelligencePanel from './IntelligencePanel';
 import ReconPanel from './ReconPanel';
@@ -21,7 +20,7 @@ export default function RegistryDrawer(props) {
                     <div class="p-4 border-b border-[#00f2ff]/10 bg-[#0b0c10]">
                         <div class="flex gap-4 h-8 items-center justify-between mb-4">
                             <div class="flex gap-2 h-full">
-                                <For each={['VESSELS', 'PORTS', 'HAZARDS', 'FUSION', 'ANALYTICS', 'INTELLIGENCE']}>
+                                <For each={['VESSELS', 'PORTS', 'HAZARDS', 'ANALYTICS', 'INTELLIGENCE']}>
                                     {(tab) => (
                                          <button
                                              onClick={() => {
@@ -91,21 +90,8 @@ export default function RegistryDrawer(props) {
                                     onSelect={(port) => props.onPortSelect(port)}
                                 />
                             </Match>
-                            <Match when={props.activeTab() === 'FUSION'}>
-                                <FusionPanel
-                                    fusionResults={props.fusionResults}
-                                    fusionLoading={props.fusionLoading}
-                                    weatherData={props.weatherData}
-                                    marketData={props.marketData}
-                                    showAllFlows={props.showAllFlows}
-                                    onToggleFlows={props.onToggleFlows}
-                                    onSelectVessel={props.onVesselSelectDetailed}
-                                    onSelectRefinery={props.onRefinerySelect}
-                                />
-                            </Match>
                             <Match when={props.activeTab() === 'ANALYTICS'}>
                                 <AnalyticsPanel 
-                                    fusionResults={props.fusionResults}
                                     intelDossier={props.intelDossier}
                                     marketData={props.marketData}
                                     stormData={props.stormData}

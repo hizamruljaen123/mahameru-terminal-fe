@@ -41,10 +41,6 @@ export function useVesselState() {
     const [selectedRefinery, setSelectedRefinery] = createSignal(null);
     const [showAllFlows, setShowAllFlows] = createSignal(false);
 
-    // Fusion analysis state
-    const [fusionResults, setFusionResults] = createSignal(null);
-    const [fusionLoading, setFusionLoading] = createSignal(false);
-    const [analyzedCount, setAnalyzedCount] = createSignal(0);
 
     // External data state
     const [marketData, setMarketData] = createSignal({
@@ -69,9 +65,7 @@ export function useVesselState() {
     const activeShip = () => {
         const mmsi = selectedMmsi();
         if (!mmsi) return null;
-        return vesselRegistry.get(mmsi)
-            || fusionResults()?.details.find(d => String(d.mmsi) === String(mmsi))
-            || null;
+        return vesselRegistry.get(mmsi) || null;
     };
 
     const activePort = () => selectedPortId()
@@ -106,12 +100,6 @@ export function useVesselState() {
         return all.filter(p => p.harbor_type === portFilter());
     };
 
-    const shouldAnalyzeBatch = () => {
-        const current = vesselCount();
-        const quorum = BATCH_ANALYSIS_QUORUM[activeTheater()] || BATCH_ANALYSIS_QUORUM.DEFAULT;
-        return current >= quorum &&
-            (current - analyzedCount() >= quorum || analyzedCount() === 0);
-    };
 
     return {
         // Signals
@@ -138,9 +126,6 @@ export function useVesselState() {
         loadingIntel, setLoadingIntel,
         selectedRefinery, setSelectedRefinery,
         showAllFlows, setShowAllFlows,
-        fusionResults, setFusionResults,
-        fusionLoading, setFusionLoading,
-        analyzedCount, setAnalyzedCount,
         marketData, setMarketData,
         weatherData, setWeatherData,
         weatherLoading, setWeatherLoading,
@@ -160,7 +145,6 @@ export function useVesselState() {
         activeRefineryDetail,
         groupedPorts,
         filteredShips,
-        portsForMap,
-        shouldAnalyzeBatch
+        portsForMap
     };
 }

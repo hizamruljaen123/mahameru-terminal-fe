@@ -78,7 +78,6 @@ export default function FleetVesselPanel() {
         const styles = {
             'VESSELS': state.activeTab() === tab ? 'bg-[#00f2ff] text-black border-[#00f2ff]' : 'text-white/40 border-white/10 hover:border-white/20',
             'PORTS': state.activeTab() === tab ? 'bg-blue-600 text-white border-blue-600' : 'text-white/40 border-white/10 hover:border-white/20',
-            'FUSION': state.activeTab() === tab ? 'bg-[#00f2ff]/20 text-[#00f2ff] border-[#00f2ff]/40 relative' : 'text-white/40 border-white/10 hover:border-white/20',
             'ANALYTICS': state.activeTab() === tab ? 'bg-purple-600 text-white border-purple-600 shadow-[0_0_15px_rgba(147,51,234,0.3)]' : 'text-white/40 border-white/10 hover:border-white/20',
             'INTELLIGENCE': state.activeTab() === tab ? 'bg-orange-600 text-black border-orange-600' : 'text-orange-600/40 border-orange-600/20 hover:border-orange-600/40',
             'HAZARDS': state.activeTab() === tab ? 'bg-red-600 text-white border-red-600 shadow-[0_0_15px_rgba(220,38,38,0.3)]' : 'text-white/40 border-white/10 hover:border-white/20'
@@ -285,8 +284,6 @@ export default function FleetVesselPanel() {
                 groupedPorts={state.groupedPorts}
                 registrySize={state.vesselCount}
                 portsCount={() => state.ports().length}
-                fusionResults={state.fusionResults}
-                fusionLoading={state.fusionLoading}
                 marketData={state.marketData}
                 weatherData={state.weatherData}
                 showAllFlows={state.showAllFlows}

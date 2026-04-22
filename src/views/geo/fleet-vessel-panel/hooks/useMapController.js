@@ -343,8 +343,7 @@ export function useMapController(state) {
             refineryMarkers.forEach(m => m.remove());
             refineryMarkers = [];
 
-            const ship = state.vesselRegistry.get(mmsi)
-                || state.fusionResults()?.details.find(d => String(d.mmsi) === String(mmsi));
+            const ship = state.vesselRegistry.get(mmsi);
 
             if (ship) {
                 const shipHtml = `
@@ -405,7 +404,7 @@ export function useMapController(state) {
         refineryMarkers.forEach(m => m.remove());
         refineryMarkers = [];
 
-        const refineries = state.fusionResults()?.all_refineries || [];
+        const refineries = [];
         refineries.forEach(ref => {
             const el = document.createElement('div');
             el.innerHTML = `
@@ -461,7 +460,7 @@ export function useMapController(state) {
         if (ship) drawShipFlow(ship, 1.0);
 
         if (state.showAllFlows()) {
-            const others = state.fusionResults()?.details.filter(d => String(d.mmsi) !== String(state.selectedMmsi())) || [];
+            const others = [];
             others.forEach(s => drawShipFlow(s, 0.3));
 
             if (mapInstance.getSource('tanker-mesh-dots')) {

@@ -1,10 +1,9 @@
 import { Show, For } from 'solid-js';
 
 /**
- * Analytics Engine Hub - Real-time metrics and data fusion
+ * Analytics Engine Hub - Real-time metrics and data intelligence
  */
 export default function AnalyticsPanel(props) {
-    const fusionResults = () => props.fusionResults();
     const intelDossier = () => props.intelDossier();
     const marketData = () => props.marketData();
     const stormData = () => props.stormData();
@@ -12,7 +11,7 @@ export default function AnalyticsPanel(props) {
 
     return (
         <div class="p-6 space-y-8 overflow-y-auto h-full tactical-scrollbar bg-[#0a0b10]">
-            {/* --- PHASE 2: DATA FUSION HUD --- */}
+            {/* --- PHASE 2: DATA INTELLIGENCE HUD --- */}
             <section class="space-y-4">
                 <div class="flex items-center gap-3">
                     <div class="h-px flex-1 bg-white/10"></div>
@@ -36,7 +35,7 @@ export default function AnalyticsPanel(props) {
                                     <div class="h-1 bg-white/5 rounded-full overflow-hidden">
                                         <div class="h-full bg-blue-500" style={`width: ${stormData().storm?.severity || 30}%`} />
                                     </div>
-                                    <p class="text-[7px] text-blue-200/40 italic">Global_Storm_Radar tracking {fusionResults()?.summary.total_analyzed} active conduits.</p>
+                                    <p class="text-[7px] text-blue-200/40 italic">Global_Storm_Radar monitoring theater vectors.</p>
                                 </div>
                             </Show>
                         </div>
@@ -115,28 +114,9 @@ export default function AnalyticsPanel(props) {
                     </div>
                 </div>
 
-                {/* Refinery Queue Tracker */}
                 <div class="p-5 bg-white/5 border border-white/10">
                     <h4 class="text-[9px] font-black text-white opacity-40 uppercase mb-4">Refinery_Proximity_Queue_Tracker (Real-Time_Congestion)</h4>
-                    <div class="divide-y divide-white/5">
-                        <For each={fusionResults()?.details?.filter(d => d.status === 'TERMINAL_ZONE')?.slice(0, 3)}>
-                            {(item) => (
-                                <div class="py-3 flex justify-between items-center">
-                                    <div class="flex flex-col">
-                                        <span class="text-[10px] font-black text-white uppercase">{item.name}</span>
-                                        <span class="text-[7px] text-white/40">DOCK: {item.destination_port}</span>
-                                    </div>
-                                    <div class="text-right">
-                                        <span class="text-[10px] font-black text-orange-400">{(item.distance_port_km / 5).toFixed(1)} HRS</span>
-                                        <span class="text-[7px] block text-white/20 uppercase tracking-widest">Time_At_Berth_Est</span>
-                                    </div>
-                                </div>
-                            )}
-                        </For>
-                        <Show when={!fusionResults()?.details?.some(d => d.status === 'TERMINAL_ZONE')}>
-                            <div class="py-6 text-center text-[8px] opacity-20 uppercase italic">NO_VESSELS_AT_BERTH_DETECTED</div>
-                        </Show>
-                    </div>
+                    <div class="py-6 text-center text-[8px] opacity-20 uppercase italic">SUBSYSTEM_OFFLINE_OR_NO_DATA</div>
                 </div>
 
                 {/* ENVIRONMENTAL HAZARD RADAR */}
