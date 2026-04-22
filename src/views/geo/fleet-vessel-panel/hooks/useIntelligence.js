@@ -65,17 +65,6 @@ export function useIntelligence(state) {
         }
     };
 
-    const fetchIntelligenceDossier = async () => {
-        state.setIntelLoading(true);
-        try {
-            const r = await fetch(`${import.meta.env.VITE_VESSEL_INTEL_API}/api/intelligence/dossier`);
-            const j = await r.json();
-            if (j.status === 'success') state.setIntelDossier(j);
-        } catch (e) {
-            console.error("Intel Dossier Fetch Error:", e);
-        }
-        state.setIntelLoading(false);
-    };
 
     const fetchDisasterAlerts = async () => {
         try {
@@ -163,7 +152,6 @@ export function useIntelligence(state) {
     onCleanup(() => cleanup());
 
     return {
-        fetchIntelligenceDossier,
         fetchDisasterAlerts,
         fetchMarketIntelligence,
         fetchTheaterPorts

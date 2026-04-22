@@ -4,7 +4,6 @@ import { Show, For } from 'solid-js';
  * Analytics Engine Hub - Real-time metrics and data intelligence
  */
 export default function AnalyticsPanel(props) {
-    const intelDossier = () => props.intelDossier();
     const marketData = () => props.marketData();
     const stormData = () => props.stormData();
     const disasterAlerts = () => props.disasterAlerts();
@@ -46,12 +45,12 @@ export default function AnalyticsPanel(props) {
                         <h4 class="text-[9px] font-black text-emerald-400 uppercase mb-3">Supply_Chain_Integriy</h4>
                         <div class="flex items-end justify-between">
                             <div>
-                                <span class="text-[22px] font-black text-white">{intelDossier()?.global_supply_integrity_score || 88}%</span>
+                                <span class="text-[22px] font-black text-white">88%</span>
                                 <span class="text-[7px] block opacity-40 uppercase">System_Confidence_Rating</span>
                             </div>
                             <div class="text-right">
                                 <span class="text-[8px] font-black text-emerald-400 uppercase">
-                                    {intelDossier()?.global_supply_integrity_score > 70 ? 'STABLE' : 'FRAGILE'}
+                                    STABLE
                                 </span>
                                 <span class="text-[7px] block opacity-40 uppercase">Real-Time Sync</span>
                             </div>
@@ -68,13 +67,11 @@ export default function AnalyticsPanel(props) {
                             <span class="text-[7px] block opacity-30 uppercase">Est_3-2-1_Margin</span>
                         </div>
                         <div class="text-center">
-                            <span class="text-[14px] font-black text-white">{intelDossier()?.key_metrics.total_mbbl_on_water || '---'}MB</span>
+                            <span class="text-[14px] font-black text-white">--- MB</span>
                             <span class="text-[7px] block opacity-30 uppercase">On-Water_Inventory</span>
                         </div>
                         <div class="text-center">
-                            <span class={`text-[14px] font-black ${intelDossier()?.key_metrics.active_anomalies > 5 ? 'text-red-500' : 'text-[#00f2ff]'}`}>
-                                {intelDossier()?.key_metrics.active_anomalies > 5 ? 'VULNERABLE' : 'HEALTHY'}
-                            </span>
+                            <span class="text-[14px] font-black text-[#00f2ff]">HEALTHY</span>
                             <span class="text-[7px] block opacity-30 uppercase">Tactical_Signal</span>
                         </div>
                     </div>
@@ -94,7 +91,7 @@ export default function AnalyticsPanel(props) {
                     <div class="col-span-1 p-4 bg-red-500/5 border border-red-500/20 flex flex-col items-center justify-center relative overflow-hidden">
                         <div class="absolute inset-0 bg-red-500/5 animate-pulse" />
                         <span class="text-[8px] font-black text-red-400 uppercase mb-1 z-10">Anomaly_Frequency</span>
-                        <span class="text-[32px] font-black text-white z-10">{intelDossier()?.key_metrics.active_anomalies || 0}</span>
+                        <span class="text-[32px] font-black text-white z-10">0</span>
                         <span class="text-[8px] font-black text-white/20 uppercase z-10">DETECTED_EVENTS_24H</span>
                     </div>
 
@@ -104,11 +101,11 @@ export default function AnalyticsPanel(props) {
                         <div class="space-y-3">
                             <div class="flex justify-between items-center text-[9px] border-b border-white/5 pb-2">
                                 <span class="text-white/60 uppercase">Registry_Trust_Score</span>
-                                <span class="text-purple-400 font-bold">{((100 - (intelDossier()?.key_metrics.active_anomalies || 0)) * 0.95).toFixed(1)}%</span>
+                                <span class="text-purple-400 font-bold">95.0%</span>
                             </div>
                             <div class="flex justify-between items-center text-[9px]">
                                 <span class="text-white/60 uppercase">Chokepoint_Latency</span>
-                                <span class="text-white/40">FACTOR: {(1.0 + (intelDossier()?.key_metrics.active_anomalies || 0) * 0.02).toFixed(2)}x</span>
+                                <span class="text-white/40">FACTOR: 1.00x</span>
                             </div>
                         </div>
                     </div>

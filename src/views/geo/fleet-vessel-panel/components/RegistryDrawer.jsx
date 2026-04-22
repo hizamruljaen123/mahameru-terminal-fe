@@ -2,7 +2,6 @@ import { Show, Switch, Match, For } from 'solid-js';
 import VesselTable from './VesselTable';
 import PortList from './PortList';
 import AnalyticsPanel from './AnalyticsPanel';
-import IntelligencePanel from './IntelligencePanel';
 import ReconPanel from './ReconPanel';
 import DisasterPanel from './DisasterPanel';
 
@@ -20,13 +19,10 @@ export default function RegistryDrawer(props) {
                     <div class="p-4 border-b border-[#00f2ff]/10 bg-[#0b0c10]">
                         <div class="flex gap-4 h-8 items-center justify-between mb-4">
                             <div class="flex gap-2 h-full">
-                                <For each={['VESSELS', 'PORTS', 'HAZARDS', 'ANALYTICS', 'INTELLIGENCE']}>
+                                <For each={['VESSELS', 'PORTS', 'HAZARDS', 'ANALYTICS']}>
                                     {(tab) => (
                                          <button
-                                             onClick={() => {
-                                                 if (tab === 'INTELLIGENCE') props.onTabChange(tab, true);
-                                                 else props.onTabChange(tab);
-                                             }}
+                                             onClick={() => props.onTabChange(tab)}
                                              class={`h-full px-4 text-[9px] font-black transition-all border ${props.getTabStyle(tab)}`}
                                          >
                                              {tab}
@@ -96,12 +92,6 @@ export default function RegistryDrawer(props) {
                                     marketData={props.marketData}
                                     stormData={props.stormData}
                                     disasterAlerts={props.disasterAlerts}
-                                />
-                            </Match>
-                            <Match when={props.activeTab() === 'INTELLIGENCE'}>
-                                <IntelligencePanel 
-                                    intelDossier={props.intelDossier}
-                                    intelLoading={props.intelLoading}
                                 />
                             </Match>
                             <Match when={props.activeTab() === 'HAZARDS'}>

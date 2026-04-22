@@ -49,9 +49,6 @@ export function useVesselState() {
     const [weatherData, setWeatherData] = createSignal(null);
     const [weatherLoading, setWeatherLoading] = createSignal(false);
 
-    // Phase 4 & 5 state
-    const [intelDossier, setIntelDossier] = createSignal(null);
-    const [intelLoading, setIntelLoading] = createSignal(false);
     const [disasterAlerts, setDisasterAlerts] = createSignal([]);
 
     // Map & Perspective state
@@ -129,8 +126,6 @@ export function useVesselState() {
         marketData, setMarketData,
         weatherData, setWeatherData,
         weatherLoading, setWeatherLoading,
-        intelDossier, setIntelDossier,
-        intelLoading, setIntelLoading,
         disasterAlerts, setDisasterAlerts,
 
         mapMode, setMapMode,

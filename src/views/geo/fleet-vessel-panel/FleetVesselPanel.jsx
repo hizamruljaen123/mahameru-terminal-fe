@@ -79,7 +79,6 @@ export default function FleetVesselPanel() {
             'VESSELS': state.activeTab() === tab ? 'bg-[#00f2ff] text-black border-[#00f2ff]' : 'text-white/40 border-white/10 hover:border-white/20',
             'PORTS': state.activeTab() === tab ? 'bg-blue-600 text-white border-blue-600' : 'text-white/40 border-white/10 hover:border-white/20',
             'ANALYTICS': state.activeTab() === tab ? 'bg-purple-600 text-white border-purple-600 shadow-[0_0_15px_rgba(147,51,234,0.3)]' : 'text-white/40 border-white/10 hover:border-white/20',
-            'INTELLIGENCE': state.activeTab() === tab ? 'bg-orange-600 text-black border-orange-600' : 'text-orange-600/40 border-orange-600/20 hover:border-orange-600/40',
             'HAZARDS': state.activeTab() === tab ? 'bg-red-600 text-white border-red-600 shadow-[0_0_15px_rgba(220,38,38,0.3)]' : 'text-white/40 border-white/10 hover:border-white/20'
         };
         return styles[tab] || styles['VESSELS'];
@@ -316,9 +315,8 @@ export default function FleetVesselPanel() {
                 intelLoading={state.intelLoading}
                 stormData={state.stormData}
                 disasterAlerts={state.disasterAlerts}
-                onTabChange={(tab, fetchIntel) => {
+                onTabChange={(tab) => {
                     state.setActiveTab(tab);
-                    if (fetchIntel) intel.fetchIntelligenceDossier();
                 }}
                 onModeChange={setOperatingMode}
                 onVesselSelect={(ship) => {
