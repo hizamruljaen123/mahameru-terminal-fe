@@ -230,8 +230,8 @@ export default function MapsView(props) {
 
     airports().forEach(apt => {
       const icon = window.L.divIcon({
-        html: `<div style="width: 24px; height: 24px; background: rgba(0,0,0,0.7); border: 1px solid rgba(99, 102, 241, 0.4); border-radius: 4px; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 0 5px rgba(99, 102, 241, 0.6));">
-                  <img src="https://unpkg.com/lucide-static@latest/icons/tower-control.svg" style="width: 16px; height: 16px; filter: brightness(0) invert(1) drop-shadow(0 0 2px #6366f1);" />
+        html: `<div style="width: 22px; height: 22px; background: rgba(0,0,0,0.8); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px rgba(0,0,0,0.5);">
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/f/f6/Domestic_Airport_1.png" style="width: 16px; height: 16px; object-fit: contain;" />
                 </div>`,
         className: 'airport-div-icon',
         iconSize: [24, 24],
