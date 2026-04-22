@@ -1,0 +1,28 @@
+{
+  "name": "enqy-terminal-fe",
+  "version": "1.0.0",
+  "description": "ENQY TERMINAL",
+  "type": "module",
+  "main": "src/index.jsx",
+  "scripts": {
+    "dev": "bun x vite",
+    "build": "bun x vite build",
+    "serve": "bun x vite preview"
+  },
+  "dependencies": {
+    "autoprefixer": "^10.4.17",
+    "echarts": "^6.0.0",
+    "leaflet": "^1.9.4",
+    "lightweight-charts": "^5.1.0",
+    "postcss": "^8.4.35",
+    "socket.io-client": "^4.8.3",
+    "solid-js": "^1.8.11",
+    "tailwindcss": "^3.4.1"
+  },
+  "devDependencies": {
+    "framer-motion": "^12.38.0",
+    "unocss": "^66.6.8",
+    "vite": "^5.1.4",
+    "vite-plugin-solid": "^2.10.2"
+  }
+}
