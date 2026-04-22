@@ -1,13 +1,17 @@
 {
-  "name": "enqy-terminal-fe",
-  "version": "1.0.0",
-  "description": "ENQY TERMINAL",
+  "name": "mahameru-terminal-fe",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "version": "1.1.0",
+  "description": "Mahameru Intelligence Terminal Frontend",
   "type": "module",
   "main": "src/index.jsx",
   "scripts": {
-    "dev": "bun x vite",
-    "build": "bun x vite build",
-    "serve": "bun x vite preview"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 3000",
+    "start": "vite preview --host 0.0.0.0 --port 3000"
   },
   "dependencies": {
     "autoprefixer": "^10.4.17",
