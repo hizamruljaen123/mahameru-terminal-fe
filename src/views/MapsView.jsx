@@ -231,7 +231,7 @@ export default function MapsView(props) {
     airports().forEach(apt => {
       const icon = window.L.divIcon({
         html: `<div style="width: 24px; height: 24px; background: rgba(0,0,0,0.7); border: 1px solid rgba(99, 102, 241, 0.4); border-radius: 4px; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 0 5px rgba(99, 102, 241, 0.6));">
-                  <i class="fa-solid fa-plane-arrival" style="font-size: 14px; color: #6366f1; filter: drop-shadow(0 0 2px #6366f1);"></i>
+                  <img src="https://unpkg.com/lucide-static@latest/icons/tower-control.svg" style="width: 16px; height: 16px; filter: brightness(0) invert(1) drop-shadow(0 0 2px #6366f1);" />
                 </div>`,
         className: 'airport-div-icon',
         iconSize: [24, 24],
