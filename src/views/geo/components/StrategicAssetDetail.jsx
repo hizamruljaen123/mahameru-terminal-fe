@@ -18,6 +18,17 @@ export default function StrategicAssetDetail(props) {
   
   const { nearbyFacilities, isLoadingNearby } = useNearbyFacilities(props);
   const ais = useAisStream();
+  
+  // Reset local state when the main asset changes
+  createEffect(() => {
+    props.selectedRefinery();
+    props.selectedLng();
+    props.selectedOffshore();
+    props.selectedTerminal();
+    setSelectedNearby(null);
+    setSidebarTab('META');
+    setActiveCategory('all');
+  });
 
   // Reactive Merged List: Static Infra + Live AIS Stream
   const mergedFacilities = createMemo(() => {

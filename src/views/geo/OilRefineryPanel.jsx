@@ -261,6 +261,11 @@ export default function OilRefineryPanel() {
   });
 
   createEffect(() => {
+    const id = selectedId() || selectedLngId() || selectedOffshoreId() || selectedTerminalId();
+    if (id) fetchNews(id);
+  });
+
+  createEffect(() => {
     const v = view();
     const r = filteredRefineries();
     const l = filteredLng();
@@ -322,6 +327,7 @@ export default function OilRefineryPanel() {
   };
 
   const fetchNews = async (id) => {
+    if (!id) return;
     setLoadingNews(true);
     setNews([]);
     try {
@@ -383,25 +389,21 @@ export default function OilRefineryPanel() {
       setSelectedId(null);
       setSelectedOffshoreId(null);
       setSelectedTerminalId(null);
-      fetchNews(ref.id);
     } else if (ref.category === 'offshore') {
       setSelectedOffshoreId(ref.id);
       setSelectedId(null);
       setSelectedLngId(null);
       setSelectedTerminalId(null);
-      fetchNews(ref.id);
     } else if (ref.category === 'terminal') {
       setSelectedTerminalId(ref.id);
       setSelectedId(null);
       setSelectedLngId(null);
       setSelectedOffshoreId(null);
-      fetchNews(ref.id);
     } else {
       setSelectedId(ref.id);
       setSelectedLngId(null);
       setSelectedOffshoreId(null);
       setSelectedTerminalId(null);
-      fetchNews(ref.id);
     }
     
     if (mapInstance && ref.latitude) {
@@ -731,7 +733,7 @@ export default function OilRefineryPanel() {
                            <span class="border-l border-white/10 pl-4 text-green-500 uppercase">{selectedRefinery() ? 'OPERATIONAL' : (selectedLng() || selectedOffshore() || selectedTerminal())?.fac_status}</span>
                         </div>
                      </div>
-                     <button onClick={() => { fetchNews(selectedId() || selectedLngId() || selectedOffshoreId() || selectedTerminalId()); setShowDetail(true); }} class="bg-orange-600 text-white px-8 py-3 text-[12px] font-black uppercase tracking-[0.2em] hover:bg-orange-500 transition-all shadow-[0_0_30px_rgba(234,88,12,0.4)] border border-orange-400/50">ANALYZE STRATEGIC ASSET</button>
+                     <button onClick={() => setShowDetail(true)} class="bg-orange-600 text-white px-8 py-3 text-[12px] font-black uppercase tracking-[0.2em] hover:bg-orange-500 transition-all shadow-[0_0_30px_rgba(234,88,12,0.4)] border border-orange-400/50">ANALYZE STRATEGIC ASSET</button>
                   </div>
                </Show>
             </div>

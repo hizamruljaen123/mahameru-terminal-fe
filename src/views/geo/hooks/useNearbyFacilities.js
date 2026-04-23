@@ -40,7 +40,14 @@ export function useNearbyFacilities(props) {
   };
 
   createEffect(() => {
-    if (props.showDetail()) {
+    // Explicitly track selection and show state
+    const show = props.showDetail();
+    const lat = props.selectedRefinery()?.latitude || props.selectedLng()?.latitude || props.selectedOffshore()?.latitude || props.selectedTerminal()?.latitude;
+    const lon = props.selectedRefinery()?.longitude || props.selectedLng()?.longitude || props.selectedOffshore()?.longitude || props.selectedTerminal()?.longitude;
+    const radius = nearbyRadius();
+
+    if (show && lat && lon) {
+      setNearbyFacilities([]);
       fetchNearby();
     }
   });
