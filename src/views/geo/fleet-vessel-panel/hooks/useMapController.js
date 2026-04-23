@@ -350,24 +350,24 @@ export function useMapController(state) {
         isolatedMarkers.forEach(m => m.remove());
         isolatedMarkers = [];
 
-        if (mmsi) {
-            // Isolation mode - clear regular sources
-            mapInstance.getSource('vessels').setData({ type: 'FeatureCollection', features: [] });
-            mapInstance.getSource('ports').setData({ type: 'FeatureCollection', features: [] });
-            refineryMarkers.forEach(m => m.remove());
-            refineryMarkers = [];
+        // Always sync basic sources to maintain context and use normal pin styles
+        syncPortsOnMap();
+        const features = vessels.map(v => ({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [v.lon, v.lat] },
+            properties: { name: v.name, mmsi: v.mmsi, color: getVesselColor(v.type) }
+        }));
+        mapInstance.getSource('vessels').setData({ type: 'FeatureCollection', features });
 
+        if (mmsi) {
             const ship = state.vesselRegistry.get(mmsi);
 
             if (ship) {
+                const shipColor = getVesselColor(ship.type);
                 const shipHtml = `
           <div class="flex flex-col items-center gap-1">
-            <div class="bg-blue-600 p-2 rounded-full border-2 border-white shadow-[0_0_25px_#0066ff]">
-              <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-              </svg>
-            </div>
-            <div class="px-2 py-0.5 bg-black/90 border border-blue-400 text-[9px] font-black text-white whitespace-nowrap">SHIP: ${ship.name}</div>
+            <div style="background-color: ${shipColor}; box-shadow: 0 0 20px ${shipColor}" class="w-4 h-4 rounded-full border-2 border-white animate-pulse"></div>
+            <div style="border-color: ${shipColor}" class="px-2 py-0.5 bg-black/90 border text-[9px] font-black text-white whitespace-nowrap">SHIP: ${ship.name}</div>
           </div>`;
                 isolatedMarkers.push(createIsolatedMarker(shipHtml, [ship.lon || ship.longitude, ship.lat || ship.latitude]));
 
@@ -400,15 +400,6 @@ export function useMapController(state) {
                 }
             }
         } else {
-            // Normal sync mode
-            syncPortsOnMap();
-            const features = vessels.map(v => ({
-                type: 'Feature',
-                geometry: { type: 'Point', coordinates: [v.lon, v.lat] },
-                properties: { name: v.name, mmsi: v.mmsi, color: getVesselColor(v.type) }
-            }));
-            mapInstance.getSource('vessels').setData({ type: 'FeatureCollection', features });
-
             syncRefineryMarkers();
         }
         syncRouting();
