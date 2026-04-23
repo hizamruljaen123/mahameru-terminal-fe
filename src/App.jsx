@@ -26,7 +26,9 @@ import CrisisDisasterView from './views/CrisisDisasterView';
 import GovernmentFacilityView from './views/GovernmentFacilityView';
 // === TIER 1: INSTITUTIONAL INTELLIGENCE MODULES ===
 import WatchlistView from './views/WatchlistView';
+import CorrelationView from './views/CorrelationView';
 import AlertCenterView from './views/AlertCenterView';
+import EntityCorrelationView from './views/entity-correlation/EntityCorrelationView';
 import { alertManager } from './utils/alertManager';
 
 function App() {
@@ -264,6 +266,7 @@ function App() {
     '/trade-policy': 'trade-policy',
     // TIER 1: INSTITUTIONAL
     '/watchlist': 'watchlist',
+    '/correlation': 'correlation',
     '/alerts': 'alerts',
     '/cyber-intel': 'cyber-intel',
     '/sectors': 'sectors',
@@ -271,6 +274,7 @@ function App() {
     '/conflict-index': 'conflict-index',
     '/crisis-disaster': 'crisis-disaster',
     '/government-facility': 'government-facility',
+    '/entity-correlation': 'entity-correlation',
   };
 
   // Immediate detection before first render
@@ -407,6 +411,10 @@ function App() {
             <WatchlistView />
           </Show>
 
+          <Show when={view() === 'correlation'}>
+            <CorrelationView />
+          </Show>
+
           <Show when={view() === 'alerts'}>
             <AlertCenterView />
           </Show>
@@ -439,6 +447,10 @@ function App() {
 
           <Show when={view() === 'government-facility'}>
             <GovernmentFacilityView />
+          </Show>
+
+          <Show when={view() === 'entity-correlation'}>
+            <EntityCorrelationView />
           </Show>
 
         </div>

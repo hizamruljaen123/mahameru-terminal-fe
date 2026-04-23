@@ -190,6 +190,8 @@ export function Sidebar(props) {
             title: 'PORTFOLIO',
             items: [
               { id: 'watchlist', label: 'Watchlist', icon: 'M3 3v18h18 M19 9l-5 5-4-4-3 3' },
+              { id: 'correlation', label: 'Correlation', icon: 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z' },
+              { id: 'entity-correlation', label: 'Entity Correlation', icon: 'M12 2L2 7l10 5 10-5-10-5z M2 17l10 5 10-5 M2 12l10 5 10-5' },
               { id: 'alerts', label: 'Notifications', icon: 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0' },
             ]
           },
