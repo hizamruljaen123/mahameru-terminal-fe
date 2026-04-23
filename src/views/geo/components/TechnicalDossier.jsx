@@ -427,12 +427,12 @@ export default function TechnicalDossier(props) {
                          </div>
                       </div>
                    )}
-                   <Show when={(props.nearbyFacilities || []).filter(f => ['refinery', 'lng', 'terminal', 'offshore'].includes(f.infra_type) && f.distance <= 5 && f.name !== (props.selectedRefinery?.nama_kilang || props.selectedLng?.fac_name || props.selectedOffshore?.fac_name || props.selectedTerminal?.fac_name || props.selectedVessel?.name)).length === 0}>
-                      <div class="py-3 px-2 border border-dashed border-white/5 flex items-center justify-center">
-                         <span class="text-[7px] font-black text-zinc-600 uppercase tracking-widest">NO_CRITICAL_PETROLEUM_PROXIMITY</span>
-                      </div>
-                   </Show>
                 </For>
+                <Show when={(props.nearbyFacilities || []).filter(f => ['refinery', 'lng', 'terminal', 'offshore'].includes(f.infra_type) && f.distance <= 5 && f.name !== (props.selectedRefinery?.nama_kilang || props.selectedLng?.fac_name || props.selectedOffshore?.fac_name || props.selectedTerminal?.fac_name || props.selectedVessel?.name)).length === 0}>
+                   <div class="py-3 px-2 border border-dashed border-white/5 flex items-center justify-center">
+                      <span class="text-[7px] font-black text-zinc-600 uppercase tracking-widest">NO_CRITICAL_PETROLEUM_PROXIMITY</span>
+                   </div>
+                </Show>
              </div>
           </div>
 

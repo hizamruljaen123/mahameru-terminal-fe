@@ -534,7 +534,11 @@ export default function OilRefineryPanel() {
   });
 
   const initMap = (el) => {
-    if (mapInstance || !el) return;
+    if (!el) return;
+    if (mapInstance) {
+      mapInstance.remove();
+      mapInstance = null;
+    }
     mapInstance = window.L.map(el, { zoomControl: false }).setView([20, 0], 2);
     window.L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Esri' }).addTo(mapInstance);
     window.L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', { opacity: 0.7 }).addTo(mapInstance);
@@ -649,6 +653,7 @@ export default function OilRefineryPanel() {
             <span class="text-[10px] font-black text-white tracking-widest uppercase">REFINERY ANALYTICS SYSTEM</span>
          </div>
          <div class="flex gap-1">
+            <button onClick={() => initMap(document.querySelector('.leaflet-container')?.parentElement || null)} class="h-6 px-3 text-[9px] font-black uppercase border border-orange-500/40 text-orange-500 hover:bg-orange-500 hover:text-white transition-all">RE-INIT MAP</button>
             <button onClick={() => toggleView('combined')} class={`h-6 px-3 text-[9px] font-black uppercase border transition-all ${view() === 'combined' ? 'bg-purple-600 text-white border-purple-400' : 'text-white/40 border-transparent hover:text-white'}`}>COMBINED HUB</button>
             <button onClick={() => toggleView('trades')} class={`h-6 px-3 text-[9px] font-black uppercase border transition-all ${view() === 'trades' ? 'bg-blue-600 text-white border-blue-400' : 'text-white/40 border-transparent hover:text-white'}`}>TRADE FLOW</button>
             <button onClick={() => setView('report')} class={`h-6 px-3 text-[9px] font-black uppercase border transition-all ${view() === 'report' ? 'bg-green-600 text-white border-green-400' : 'text-white/40 border-transparent hover:text-white'}`}>ANALYTICS REPORT</button>

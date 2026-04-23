@@ -126,7 +126,11 @@ export default function StrategicAssetDetail(props) {
   };
 
   const initMap = () => {
-    if (mapInstance || !mapContainer) return;
+    if (!mapContainer) return;
+    if (mapInstance) {
+      mapInstance.remove();
+      mapInstance = null;
+    }
 
     const lat = props.selectedRefinery()?.latitude || props.selectedLng()?.latitude || props.selectedOffshore()?.latitude || props.selectedTerminal()?.latitude || 0;
     const lon = props.selectedRefinery()?.longitude || props.selectedLng()?.longitude || props.selectedOffshore()?.longitude || props.selectedTerminal()?.longitude || 0;
@@ -240,6 +244,13 @@ export default function StrategicAssetDetail(props) {
   createEffect(() => {
     if (props.showDetail() && props.detailTab() === 'INTEL') {
       setTimeout(initMap, 300);
+    } else {
+      // Cleanup map instance when tab changes or hidden
+      if (mapInstance) {
+        mapInstance.remove();
+        mapInstance = null;
+        setIsMapReady(false);
+      }
     }
   });
   const getMarkerHTML = (type, name, lat, lon, color, isSelected = false, activeCategory = 'all') => {
@@ -643,6 +654,13 @@ export default function StrategicAssetDetail(props) {
                                 >
                                   {viewPerspective() === 'top' ? '2D' : '3D'}
                                 </button>
+                             </div>
+
+                             <div class="bg-[#0a1628]/90 border border-white/10 backdrop-blur-md flex flex-col overflow-hidden shadow-2xl">
+                                <button 
+                                  onClick={() => initMap()}
+                                  class="px-3 py-2 text-[8px] font-black uppercase tracking-widest text-orange-500 hover:bg-orange-500 hover:text-white transition-all"
+                                >RE-INIT</button>
                              </div>
                           </div>
                           
