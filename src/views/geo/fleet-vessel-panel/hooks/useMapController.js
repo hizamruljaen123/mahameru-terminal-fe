@@ -265,7 +265,21 @@ export function useMapController(state) {
     };
 
     const initMap = (el) => {
-        if (mapInstance || !el) return;
+        if (!el) {
+            if (mapInstance) {
+                isolatedMarkers.forEach(m => m.remove());
+                isolatedMarkers = [];
+                refineryMarkers.forEach(m => m.remove());
+                refineryMarkers = [];
+                mapInstance.remove();
+                mapInstance = null;
+                window.__mapInstance = null;
+                setIsMapReady(false);
+            }
+            return;
+        }
+
+        if (mapInstance) return;
 
         mapInstance = new window.maplibregl.Map({
             container: el,
@@ -543,9 +557,9 @@ export function useMapController(state) {
     };
 
     const setupReactiveEffects = () => {
-        createEffect(() => syncSelection());
-        createEffect(() => { state.ships(); state.vesselFilter(); syncMap(); });
-        createEffect(() => { state.portFilter(); syncPortsOnMap(); });
+        createEffect(() => { isMapReady(); syncSelection(); });
+        createEffect(() => { isMapReady(); state.ships(); state.vesselFilter(); syncMap(); });
+        createEffect(() => { isMapReady(); state.portFilter(); syncPortsOnMap(); });
 
         // Map Style Switching (Ported from IndustrialZonePanel)
         createEffect(() => {
