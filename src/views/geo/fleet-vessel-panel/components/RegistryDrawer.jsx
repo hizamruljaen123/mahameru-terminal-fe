@@ -70,7 +70,7 @@ export default function RegistryDrawer(props) {
                     </div>
 
                     {/* Content Area */}
-                    <div class="flex-1 overflow-y-auto tactical-scrollbar bg-black/20">
+                    <div class="flex-1 flex flex-col bg-black/20 overflow-hidden">
                         <Switch>
                             <Match when={props.activeTab() === 'VESSELS'}>
                                 <VesselTable
@@ -80,24 +80,30 @@ export default function RegistryDrawer(props) {
                                 />
                             </Match>
                             <Match when={props.activeTab() === 'PORTS'}>
-                                <PortList
-                                    groupedPorts={props.groupedPorts}
-                                    selectedPortId={props.selectedPortId}
-                                    onSelect={(port) => props.onPortSelect(port)}
-                                />
+                                <div class="flex-1 overflow-y-auto tactical-scrollbar">
+                                    <PortList
+                                        groupedPorts={props.groupedPorts}
+                                        selectedPortId={props.selectedPortId}
+                                        onSelect={(port) => props.onPortSelect(port)}
+                                    />
+                                </div>
                             </Match>
                             <Match when={props.activeTab() === 'ANALYTICS'}>
-                                <AnalyticsPanel 
-                                    intelDossier={props.intelDossier}
-                                    marketData={props.marketData}
-                                    stormData={props.stormData}
-                                    disasterAlerts={props.disasterAlerts}
-                                />
+                                <div class="flex-1 overflow-y-auto tactical-scrollbar">
+                                    <AnalyticsPanel 
+                                        intelDossier={props.intelDossier}
+                                        marketData={props.marketData}
+                                        stormData={props.stormData}
+                                        disasterAlerts={props.disasterAlerts}
+                                    />
+                                </div>
                             </Match>
                             <Match when={props.activeTab() === 'HAZARDS'}>
-                                <DisasterPanel 
-                                    state={props.state} 
-                                />
+                                <div class="flex-1 overflow-y-auto tactical-scrollbar">
+                                    <DisasterPanel 
+                                        state={props.state} 
+                                    />
+                                </div>
                             </Match>
                         </Switch>
                     </div>
