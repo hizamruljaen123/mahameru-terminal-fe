@@ -112,10 +112,15 @@ const ModuleToolbar = (props) => {
     const symbol = customSymbol().toUpperCase() || props.node.symbol;
     setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_ENTITY_CORRELATION_API}/api/correlation/history/${encodeURIComponent(symbol)}?period=${selectedPeriod()}`);
+      const response = await fetch(`${import.meta.env.VITE_ENTITY_URL}/api/entity/profile/${encodeURIComponent(symbol)}?period=${selectedPeriod()}`);
       const res = await response.json();
-      if (res.success) {
-        props.onAddChartNode(props.node.id, symbol, res.data, selectedPeriod());
+      const data = res.data || res;
+      if (data.history) {
+        const transformedHistory = data.history.map(h => ({
+          price: h.Close || h.price,
+          time: h.Date || h.time
+        }));
+        props.onAddChartNode(props.node.id, symbol, transformedHistory, selectedPeriod());
         init();
         props.onClose();
       }
@@ -128,13 +133,46 @@ const ModuleToolbar = (props) => {
 
   const handleFetchPreview = async () => {
     setLoading(true);
+    const keyword = localKeyword();
     try {
-      const response = await fetch(`${import.meta.env.VITE_ENTITY_CORRELATION_API}/api/correlation/news/${encodeURIComponent(localKeyword())}`);
-      const res = await response.json();
-      if (res.success) {
-        setPreviewNews(res.data || []);
-        setStep('preview');
+      const fetchSources = [
+          { url: `${import.meta.env.VITE_API_BASE}/api/news/search?q=${encodeURIComponent(keyword)}`, key: 'results' },
+          { url: `${import.meta.env.VITE_GNEWS_API}/api/gnews/search?q=${encodeURIComponent(keyword)}`, key: 'news' }
+      ];
+
+      const allResults = await Promise.all(
+        fetchSources.map(async (src) => {
+          try {
+            const r = await fetch(src.url);
+            const data = await r.json();
+            return data[src.key] || [];
+          } catch (e) {
+            return [];
+          }
+        })
+      );
+
+      const rawNews = allResults.flat();
+      
+      const seen = new Set();
+      const uniqueNews = [];
+      for (const item of rawNews) {
+          const link = item.link || item.url;
+          if (link && !seen.has(link)) {
+              seen.add(link);
+              uniqueNews.push({
+                  ...item,
+                  link,
+                  title: item.title || "No Title",
+                  publisher: item.publisher || item.source || "GNews Intel",
+                  time: item.time || item.timestamp
+              });
+          }
       }
+      uniqueNews.sort((a, b) => (b.time || b.timestamp) - (a.time || a.timestamp));
+
+      setPreviewNews(uniqueNews);
+      setStep('preview');
     } catch (err) {
       console.error(err);
     } finally {
@@ -145,10 +183,11 @@ const ModuleToolbar = (props) => {
   const handleFetchManagement = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_ENTITY_CORRELATION_API}/api/correlation/management/${encodeURIComponent(props.node.symbol)}`);
+      const response = await fetch(`${import.meta.env.VITE_ENTITY_URL}/api/entity/profile/${encodeURIComponent(props.node.symbol)}`);
       const res = await response.json();
-      if (res.success) {
-        setPreviewMgmt(res.data || []);
+      const data = res.data || res;
+      if (data.management) {
+        setPreviewMgmt(data.management);
         setStep('mgmt_preview');
       }
     } catch (err) {

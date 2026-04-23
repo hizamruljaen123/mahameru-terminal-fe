@@ -248,7 +248,8 @@ const EntityModal = (props) => {
                           >
                             <div>
                               <div class="text-[12px] font-black text-white uppercase group-hover:text-blue-400 transition-colors">{item.symbol}</div>
-                              <div class="text-[9px] font-bold text-white/30 uppercase mt-1 truncate max-w-[200px]">{item.name}</div>
+                              <div class="text-[9px] font-bold text-white/30 uppercase mt-1 truncate max-w-[200px]">{item.shortname || item.longname}</div>
+                              <div class="text-[7px] text-white/20 font-black uppercase tracking-tighter mt-0.5">{item.exchDisp}</div>
                             </div>
                             <div class="p-2 border border-blue-500/0 text-blue-500 opacity-0 group-hover:opacity-100 transition-all">
                               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>

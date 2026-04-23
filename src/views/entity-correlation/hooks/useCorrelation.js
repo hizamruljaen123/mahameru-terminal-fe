@@ -25,11 +25,9 @@ export const useCorrelation = () => {
     if (!q) return;
     setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_ENTITY_CORRELATION_API}/api/correlation/search?q=${encodeURIComponent(q)}`);
+      const response = await fetch(`${import.meta.env.VITE_ENTITY_URL}/api/entity/search?q=${encodeURIComponent(q)}`);
       const res = await response.json();
-      if (res.success) {
-        setResults(res.data || []);
-      }
+      setResults(res.quotes || []);
     } catch (err) {
       console.error("Search error:", err);
     } finally {
@@ -133,12 +131,49 @@ export const useCorrelation = () => {
     const node = nodes().find(n => n.id === nodeId);
     if (!node) return;
     setLoading(true);
+    
+    const companyName = node.name || node.symbol || queryStr;
+    const symbol = node.symbol || queryStr;
+
     try {
-      const response = await fetch(`${import.meta.env.VITE_ENTITY_CORRELATION_API}/api/correlation/news/${encodeURIComponent(queryStr)}`);
-      const res = await response.json();
-      if (res.success) {
-        addNewsNode(nodeId, queryStr, res.data);
+      const fetchSources = [
+          { url: `${import.meta.env.VITE_API_BASE}/api/news/search?q=${encodeURIComponent(companyName)}`, key: 'results' },
+          { url: `${import.meta.env.VITE_GNEWS_API}/api/gnews/search?q=${encodeURIComponent(symbol)}`, key: 'news' },
+          { url: `${import.meta.env.VITE_GNEWS_API}/api/gnews/search?q=${encodeURIComponent(companyName)}`, key: 'news' }
+      ];
+
+      const allResults = await Promise.all(
+        fetchSources.map(async (src) => {
+          try {
+            const r = await fetch(src.url);
+            const data = await r.json();
+            return data[src.key] || [];
+          } catch (e) {
+            return [];
+          }
+        })
+      );
+
+      const rawNews = allResults.flat();
+      
+      const seen = new Set();
+      const uniqueNews = [];
+      for (const item of rawNews) {
+          const link = item.link || item.url;
+          if (link && !seen.has(link)) {
+              seen.add(link);
+              uniqueNews.push({
+                  ...item,
+                  link,
+                  title: item.title || "No Title",
+                  publisher: item.publisher || item.source || "GNews Intel",
+                  time: item.time || item.timestamp
+              });
+          }
       }
+      uniqueNews.sort((a, b) => (b.time || b.timestamp) - (a.time || a.timestamp));
+
+      addNewsNode(nodeId, queryStr, uniqueNews);
     } catch (err) {
       console.error("News fetch error:", err);
     } finally {
@@ -149,10 +184,11 @@ export const useCorrelation = () => {
   const fetchNodeManagement = async (symbol) => {
     setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_ENTITY_CORRELATION_API}/api/correlation/management/${encodeURIComponent(symbol)}`);
+      const response = await fetch(`${import.meta.env.VITE_ENTITY_URL}/api/entity/profile/${encodeURIComponent(symbol)}`);
       const res = await response.json();
-      if (res.success) {
-        return res.data;
+      const data = res.data || res;
+      if (data.management) {
+        return data.management;
       }
       return [];
     } catch (err) {
@@ -166,10 +202,15 @@ export const useCorrelation = () => {
   const fetchNodeHistory = async (symbol, period = "1mo") => {
     setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_ENTITY_CORRELATION_API}/api/correlation/history/${encodeURIComponent(symbol)}?period=${period}`);
+      const response = await fetch(`${import.meta.env.VITE_ENTITY_URL}/api/entity/profile/${encodeURIComponent(symbol)}?period=${period}`);
       const res = await response.json();
-      if (res.success) {
-        return res.data;
+      const data = res.data || res;
+      if (data.history) {
+        // Map Close to price for the chart engine
+        return data.history.map(h => ({
+          price: h.Close || h.price,
+          time: h.Date || h.time
+        }));
       }
       return [];
     } catch (err) {
@@ -310,6 +351,11 @@ export const useCorrelation = () => {
     fetchNodeHistory,
     activeNodeId,
     setActiveNodeId,
-    clearCanvas
+    clearCanvas,
+    loadProject: ({ nodes: newNodes, links: newLinks }) => {
+      setActiveNodeId(null);
+      setNodes(newNodes || []);
+      setLinks(newLinks || []);
+    },
   };
 };

@@ -6,7 +6,6 @@ import EntityModal from './components/EntityModal';
 import ModuleToolbar from './components/ModuleToolbar';
 import RelationshipLines from './components/RelationshipLines';
 import CalendarPanel from './components/CalendarPanel';
-
 const EntityCorrelationView = () => {
   const [isModalOpen, setIsModalOpen] = createSignal(false);
   const [scale, setScale] = createSignal(1);
@@ -15,7 +14,10 @@ const EntityCorrelationView = () => {
   const [isAltPressed, setIsAltPressed] = createSignal(false);
   const [connectionSourceId, setConnectionSourceId] = createSignal(null);
   const [showCalendar, setShowCalendar] = createSignal(false);
-  
+
+  const [projectName, setProjectName] = createSignal('Untitled Project');
+  const [lastSaved, setLastSaved] = createSignal(null);
+
   const {
     nodes,
     links,
@@ -47,7 +49,8 @@ const EntityCorrelationView = () => {
     fetchGlobalCalendar,
     activeNodeId,
     setActiveNodeId,
-    clearCanvas
+    clearCanvas,
+    loadProject,
   } = useCorrelation();
 
   const handleAddEntity = (entity) => {
@@ -272,6 +275,14 @@ const EntityCorrelationView = () => {
         onAddClick={() => setIsModalOpen(true)} 
         onClear={clearCanvas} 
         onCalendarToggle={() => setShowCalendar(!showCalendar())}
+        projectName={projectName}
+        setProjectName={setProjectName}
+        lastSaved={lastSaved}
+        setLastSaved={setLastSaved}
+        nodes={nodes}
+        links={links}
+        onLoad={(data) => { loadProject(data); }}
+        onNewProject={() => { clearCanvas(); setLastSaved(null); }}
       />
 
       {/* Search Modal */}
@@ -332,7 +343,7 @@ const EntityCorrelationView = () => {
 
       {/* Legend / Status Overlay */}
       <div class="absolute top-4 left-4 z-40 flex flex-col gap-1 pointer-events-none">
-        <div class="text-[10px] font-black text-black/40 tracking-[0.2em] uppercase">ENTITY_CANVAS_V1.5</div>
+        <div class="text-[10px] font-black text-black/40 tracking-[0.2em] uppercase">ENTITY_CANVAS_V2.0</div>
         <div class="text-[8px] text-black/20 font-bold uppercase tracking-widest">LAYER: GRAPH_ENGINE_MODULAR</div>
       </div>
     </div>
