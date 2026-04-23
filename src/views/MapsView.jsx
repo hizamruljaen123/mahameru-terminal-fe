@@ -229,16 +229,7 @@ export default function MapsView(props) {
     airportMarkers = {};
 
     airports().forEach(apt => {
-      const icon = window.L.divIcon({
-        html: `<div style="width: 22px; height: 22px; background: rgba(0,0,0,0.8); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px rgba(0,0,0,0.5);">
-                  <img src="https://upload.wikimedia.org/wikipedia/commons/f/f6/Domestic_Airport_1.png" style="width: 16px; height: 16px; object-fit: contain;" />
-                </div>`,
-        className: 'airport-div-icon',
-        iconSize: [24, 24],
-        iconAnchor: [12, 12]
-      });
-
-      const m = window.L.marker([apt.latitude, apt.longitude], { icon }).addTo(airportLayer);
+      const m = window.L.marker([apt.latitude, apt.longitude]).addTo(airportLayer);
       airportMarkers[apt.id] = m;
 
       const popupHtml = `

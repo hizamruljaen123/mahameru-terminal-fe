@@ -18,9 +18,7 @@ export default function SentimentView() {
     const [summary, { refetch }] = createResource(fetchGlobalSummary);
     const [keyword, setKeyword] = createSignal('');
     const [researchResults, setResearchResults] = createSignal(null);
-    const [projectionResults, setProjectionResults] = createSignal(null);
     const [isResearching, setIsResearching] = createSignal(false);
-    const [isProjecting, setIsProjecting] = createSignal(false);
     const [activeTab, setActiveTab] = createSignal('OVERVIEW'); // OVERVIEW | RESEARCH | SENTIMENT TRENDS
 
 
@@ -29,8 +27,6 @@ export default function SentimentView() {
     let pieChartRef;
     let barChartRef;
     let heatmapChartRef;
-    let pcaChartRef;
-    let tsneChartRef;
     let barChartResearchRef;
 
 
@@ -183,47 +179,10 @@ export default function SentimentView() {
         }
     };
 
-    const initProjections = () => {
-        if (projectionResults() && projectionResults().status === 'success') {
-            const { pca, tsne } = projectionResults().data;
 
-            const formatScatterData = (data) => {
-                return data.map(p => ({
-                    value: [p.x, p.y],
-                    name: p.title,
-                    itemStyle: { 
-                        color: p.sentiment === 'POSITIVE' ? '#10b981' : p.sentiment === 'NEGATIVE' ? '#ef4444' : '#64748b',
-                        opacity: 0.8
-                    }
-                }));
-            };
-
-            const scatterOption = (name, data) => ({
-                title: { text: name, left: 'center', textStyle: { color: '#64748b', fontSize: 10, fontWeight: 'bold' } },
-                tooltip: { formatter: (params) => `<div style="max-width:200px; white-space:normal; font-size:9px;">${params.data.name}</div>` },
-                xAxis: { show: false },
-                yAxis: { show: false },
-                grid: { top: 20, bottom: 20, left: 20, right: 20 },
-                series: [{
-                    type: 'scatter',
-                    symbolSize: 8,
-                    data: formatScatterData(data)
-                }]
-            });
-
-            if (pcaChartRef) {
-                const chart = echarts.init(pcaChartRef);
-                chart.setOption(scatterOption('SEMANTIC PROJECTION (PCA)', pca));
-            }
-            if (tsneChartRef) {
-                const chart = echarts.init(tsneChartRef);
-                chart.setOption(scatterOption('TOPOLOGICAL CLUSTERS (T-SNE)', tsne));
-            }
-        }
-    };
 
     createEffect(() => initCharts());
-    createEffect(() => { initHeatmap(); initProjections(); });
+    createEffect(() => { initHeatmap(); });
 
     const handleResearch = async (e) => {
         e.preventDefault();
@@ -231,9 +190,7 @@ export default function SentimentView() {
         if (!query) return;
         
         setIsResearching(true);
-        setIsProjecting(false);
         setResearchResults(null);
-        setProjectionResults(null);
         setActiveTab('RESEARCH');
         
         try {
@@ -242,19 +199,9 @@ export default function SentimentView() {
             const data = await res.json();
             setResearchResults(data.data);
             setIsResearching(false);
-
-            // STEP 2: Fetch Neural Projections (Slow, Background)
-            if (data.data && data.data.total > 0) {
-                setIsProjecting(true);
-                const projRes = await fetch(`${import.meta.env.VITE_SENTIMENT_URL}/api/sentiment/research/projections?keyword=${encodeURIComponent(query)}`);
-                const projData = await projRes.json();
-                setProjectionResults(projData);
-                setIsProjecting(false);
-            }
         } catch (e) {
             console.error(e);
             setIsResearching(false);
-            setIsProjecting(false);
         }
     };
 
@@ -464,21 +411,7 @@ export default function SentimentView() {
                                     </div>
                                 </div></div>
 
-                                {/* PCA AND T-SNE VISUALIZATIONS WITH STAGGERED LOADING */}
-                                <div class="col-span-12 xl:col-span-8 grid grid-cols-2 gap-6 relative">
-                                    <Show when={isProjecting()}>
-                                        <div class="absolute inset-0 bg-bg_main/80 z-30 flex flex-col items-center justify-center gap-4 border border-text_accent/20">
-                                             <div class="w-8 h-8 border-2 border-t-text_accent animate-spin"></div>
-                                             <span class="text-[9px] tracking-widest font-black text-text_accent">CALCULATING PROJECTIONS...</span>
-                                        </div>
-                                    </Show>
-                                    <div class="bg-bg_header/20 border border-border_main p-4 h-[300px]">
-                                        <div ref={pcaChartRef} class="w-full h-full"></div>
-                                    </div>
-                                    <div class="bg-bg_header/20 border border-border_main p-4 h-[300px]">
-                                        <div ref={tsneChartRef} class="w-full h-full"></div>
-                                    </div>
-                                </div>
+
 
                                 {/* CATEGORY BAR CHART IN RESEARCH */}
                                 <div class="col-span-12 xl:col-span-4 bg-bg_header/20 border border-border_main p-4 h-[300px]">
