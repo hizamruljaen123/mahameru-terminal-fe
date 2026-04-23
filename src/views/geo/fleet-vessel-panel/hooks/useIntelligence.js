@@ -112,7 +112,7 @@ export function useIntelligence(state) {
     const triggerTacticalRecon = (ship) => {
         // Tactical reconnaissance logic involving correlation service removed.
         // Ready for new correlation engine implementation.
-        state.setLoadingIntel(false);
+        state.setIntelLoading(false);
     };
 
     const setupShipIntelligenceEffect = () => {

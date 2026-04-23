@@ -37,7 +37,7 @@ export function useVesselState() {
     // Tactical intelligence state
     const [tacticalIntel, setTacticalIntel] = createSignal(null);
     const [stormData, setStormData] = createSignal(null);
-    const [loadingIntel, setLoadingIntel] = createSignal(false);
+    const [intelLoading, setIntelLoading] = createSignal(false);
     const [selectedRefinery, setSelectedRefinery] = createSignal(null);
     const [showAllFlows, setShowAllFlows] = createSignal(false);
 
@@ -120,7 +120,7 @@ export function useVesselState() {
         selectedPortId, setSelectedPortId,
         tacticalIntel, setTacticalIntel,
         stormData, setStormData,
-        loadingIntel, setLoadingIntel,
+        intelLoading, setIntelLoading,
         selectedRefinery, setSelectedRefinery,
         showAllFlows, setShowAllFlows,
         marketData, setMarketData,

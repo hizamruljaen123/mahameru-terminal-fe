@@ -308,6 +308,11 @@ export function useMapController(state) {
             setupClickHandlers();
 
             setTimeout(() => mapInstance?.resize(), 100);
+            
+            mapInstance.on('styleimagemissing', (e) => {
+                const data = new Uint8Array(1 * 1 * 4);
+                mapInstance.addImage(e.id, { width: 1, height: 1, data });
+            });
         });
     };
 
@@ -361,15 +366,17 @@ export function useMapController(state) {
 
         if (mmsi) {
             const ship = state.vesselRegistry.get(mmsi);
+            const sLat = ship?.lat || ship?.latitude;
+            const sLon = ship?.lon || ship?.longitude;
 
-            if (ship) {
+            if (ship && typeof sLat === 'number' && typeof sLon === 'number') {
                 const shipColor = getVesselColor(ship.type);
                 const shipHtml = `
           <div class="flex flex-col items-center gap-1">
             <div style="background-color: ${shipColor}; box-shadow: 0 0 20px ${shipColor}" class="w-4 h-4 rounded-full border-2 border-white animate-pulse"></div>
             <div style="border-color: ${shipColor}" class="px-2 py-0.5 bg-black/90 border text-[9px] font-black text-white whitespace-nowrap">SHIP: ${ship.name}</div>
           </div>`;
-                isolatedMarkers.push(createIsolatedMarker(shipHtml, [ship.lon || ship.longitude, ship.lat || ship.latitude]));
+                isolatedMarkers.push(createIsolatedMarker(shipHtml, [sLon, sLat]));
 
                 const port = state.ports().find(p => p.name === ship.destination_port);
                 if (port) {
@@ -402,14 +409,17 @@ export function useMapController(state) {
         } else {
             syncRefineryMarkers();
         }
-        syncRouting();
+        syncRouting(vessels, mmsi);
     };
 
     const syncRefineryMarkers = () => {
         refineryMarkers.forEach(m => m.remove());
         refineryMarkers = [];
 
+        // Placeholder for future refinery marker implementation if needed
         const refineries = [];
+        if (refineries.length === 0) return;
+
         refineries.forEach(ref => {
             const el = document.createElement('div');
             el.innerHTML = `
@@ -431,7 +441,7 @@ export function useMapController(state) {
         });
     };
 
-    const syncRouting = () => {
+    const syncRouting = (vessels, mmsi) => {
         const ship = state.activeShip();
         let portFeatures = [];
         let refineryFeatures = [];
@@ -465,7 +475,7 @@ export function useMapController(state) {
         if (ship) drawShipFlow(ship, 1.0);
 
         if (state.showAllFlows()) {
-            const others = [];
+            const others = vessels.filter(v => v.mmsi !== mmsi);
             others.forEach(s => drawShipFlow(s, 0.3));
 
             if (mapInstance.getSource('tanker-mesh-dots')) {
@@ -594,16 +604,17 @@ export function useMapController(state) {
                 console.warn("Style update skipped:", e);
             }
         });
-
-
     };
 
+    const handleResize = () => mapInstance?.resize();
+
     onMount(() => {
-        window.addEventListener('resize', () => mapInstance?.resize());
+        window.addEventListener('resize', handleResize);
         setupReactiveEffects();
     });
 
     onCleanup(() => {
+        window.removeEventListener('resize', handleResize);
         if (mapInstance) mapInstance.remove();
     });
 

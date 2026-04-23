@@ -8,7 +8,7 @@ import { getVesselColor } from '../../../../utils/analysis/vesselIntel';
  * Ported from FleetVesselPanel.txt
  */
 export default function ReconPanel(props) {
-    const ship = () => props.ship();
+    const ship = () => props.ship?.();
     const port = () => props.activePort?.();
     const refinery = () => props.activeRefinery?.();
 

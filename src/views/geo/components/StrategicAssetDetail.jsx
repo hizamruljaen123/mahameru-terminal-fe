@@ -173,6 +173,10 @@ export default function StrategicAssetDetail(props) {
           'text-halo-width': 2
         }
       });
+      mapInstance.on('styleimagemissing', (e) => {
+        const data = new Uint8Array(1 * 1 * 4);
+        mapInstance.addImage(e.id, { width: 1, height: 1, data });
+      });
     });
   };
 
@@ -205,6 +209,7 @@ export default function StrategicAssetDetail(props) {
     if (mode === 'satellite') {
       mapInstance.setStyle({
         version: 8,
+        glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
         sources: {
           'satellite': {
             type: 'raster',
@@ -277,9 +282,8 @@ export default function StrategicAssetDetail(props) {
 
   let facilityMarkers = new Map();
 
-  // Adaptive Viewport Recalibration
   createEffect(() => {
-    const list = filteredMarkers();
+    const list = filteredMarkers().filter(f => typeof (f.longitude || f.lon) === 'number' && typeof (f.latitude || f.lat) === 'number');
     const ready = isMapReady();
     if (!mapInstance || !ready) return;
 
@@ -293,9 +297,15 @@ export default function StrategicAssetDetail(props) {
 
     if (list.length > 0) {
       list.forEach(fac => {
-        bounds.extend([fac.longitude || fac.lon, fac.latitude || fac.lat]);
+        const fLat = fac.latitude || fac.lat;
+        const fLon = fac.longitude || fac.lon;
+        if (typeof fLat === 'number' && typeof fLon === 'number') {
+          bounds.extend([fLon, fLat]);
+        }
       });
-      mapInstance.fitBounds(bounds, { padding: 100, pitch: 45, duration: 2000 });
+      if (!bounds.isEmpty()) {
+        mapInstance.fitBounds(bounds, { padding: 100, pitch: 45, duration: 2000 });
+      }
     } else {
       mapInstance.flyTo({ center: [mainLon, mainLat], zoom: 15, pitch: 45, duration: 2000 });
     }
@@ -303,7 +313,7 @@ export default function StrategicAssetDetail(props) {
 
   // Marker Management Effect
   createEffect(() => {
-    const list = filteredMarkers();
+    const list = filteredMarkers().filter(f => typeof (f.longitude || f.lon) === 'number' && typeof (f.latitude || f.lat) === 'number');
     const selected = selectedNearby();
     const ready = isMapReady();
     if (!mapInstance || !ready) return;
@@ -418,7 +428,7 @@ export default function StrategicAssetDetail(props) {
     const name = props.selectedRefinery()?.nama_kilang || props.selectedLng()?.name || props.selectedOffshore()?.name || props.selectedTerminal()?.name;
     const ready = isMapReady();
 
-    if (mapInstance && ready && lat && lon) {
+    if (mapInstance && ready && typeof lat === 'number' && typeof lon === 'number') {
       if (activeMarker) activeMarker.remove();
       
       const type = props.selectedRefinery() ? 'refinery' : props.selectedLng() ? 'lng' : props.selectedOffshore() ? 'offshore' : 'terminal';
