@@ -219,9 +219,18 @@ export default function FleetVesselPanel() {
                             </div>
                         </div>
 
-                        {/* STREAM CONTROLS */}
+                        {/* SYSTEM & STREAM CONTROLS */}
                         <Show when={state.isOperational()}>
                             <div class="bg-black/60 backdrop-blur-xl border border-white/10 p-1.5 flex flex-col gap-2 shadow-2xl rounded-lg">
+                                <div class="group relative">
+                                    <button 
+                                        onClick={map.hardReset}
+                                        class="w-8 h-8 flex items-center justify-center transition-all rounded text-white/40 hover:text-red-400 hover:bg-red-400/10"
+                                    >
+                                        <span class="text-xs">🛠️</span>
+                                    </button>
+                                    <div class="absolute right-10 top-1.5 bg-black text-[7px] font-black text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none border border-white/10 shadow-xl z-50">HARD RESET MAP</div>
+                                </div>
                                 <div class="group relative">
                                     <button 
                                         onClick={() => {

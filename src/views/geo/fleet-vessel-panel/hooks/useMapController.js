@@ -607,6 +607,14 @@ export function useMapController(state) {
         if (mapInstance) mapInstance.remove();
     });
 
+    const hardReset = () => {
+        const el = mapInstance?.getContainer();
+        if (el) {
+            initMap(null);
+            setTimeout(() => initMap(el), 100);
+        }
+    };
+
     return {
         initMap,
         syncMap,
@@ -615,6 +623,7 @@ export function useMapController(state) {
         jumpTo,
         flyTo,
         clearVessels,
+        hardReset,
         getMap: () => mapInstance
     };
 }
