@@ -178,16 +178,15 @@ export default function ForexIntelligenceView(props) {
     setNewsLoading(true);
     try {
       const q = buildForexQuery(symbol, name);
-      // Determine regional parameters
       const isIDR = symbol.includes('IDR');
       const lang = 'en';
       const country = isIDR ? 'ID' : 'US';
 
-      // Using proxy with optimized parameters
-      const resp = await fetch(`${GNEWS_API}/api/news/search?q=${encodeURIComponent(q)}&lang=${lang}&country=${country}`);
+      const resp = await fetch(`${GNEWS_API}/api/gnews/search?q=${encodeURIComponent(q)}&lang=${lang}&country=${country}`);
       const json = await resp.json();
-
-      let data = (json.status === 'success') ? (json.data || []) : [];
+      
+      // Adjusted to match the specific "news" key structure provided
+      let data = json.news || [];
 
       // FALLBACK 1: If results are low, retry with bilateral focus
       if (data.length < 5) {
@@ -195,22 +194,30 @@ export default function ForexIntelligenceView(props) {
         const cur1 = raw.slice(0, 3).toUpperCase();
         const cur2 = raw.slice(3, 6).toUpperCase();
         const fallbackQ = `${cur1} ${cur2} bilateral trade economic relations central bank`;
-        const fbResp = await fetch(`${GNEWS_API}/api/news/search?q=${encodeURIComponent(fallbackQ)}&lang=${lang}&country=${country}`);
+        const fbResp = await fetch(`${GNEWS_API}/api/gnews/search?q=${encodeURIComponent(fallbackQ)}&lang=${lang}&country=${country}`);
         const fbJson = await fbResp.json();
-        if (fbJson.status === 'success' && fbJson.data?.length > 0) {
-          data = [...data, ...fbJson.data.filter(f => !data.some(d => d.title === f.title))];
+        const fbData = fbJson.news || [];
+        if (fbData.length > 0) {
+          data = [...data, ...fbData.filter(f => !data.some(d => d.title === f.title))];
         }
       }
 
       // FINAL FALLBACK: Global FX context
       if (data.length === 0) {
         const genericQ = "Global Forex Market Exchange Rate Economic Outlook Central Bank";
-        const genResp = await fetch(`${GNEWS_API}/api/news/search?q=${encodeURIComponent(genericQ)}&lang=${lang}&country=${country}`);
+        const genResp = await fetch(`${GNEWS_API}/api/gnews/search?q=${encodeURIComponent(genericQ)}&lang=${lang}&country=${country}`);
         const genJson = await genResp.json();
-        if (genJson.status === 'success') data = genJson.data || [];
+        data = genJson.news || [];
       }
 
-      setNews(data);
+      const formatted = data.map(item => ({
+        title: item.title,
+        publisher: (item.publisher || 'FOREX').toUpperCase(),
+        time: item.time || Math.floor(Date.now() / 1000),
+        link: item.link
+      }));
+      
+      setNews(formatted);
     } catch (e) {
       console.error("News fetch error:", e);
       setNews([]);

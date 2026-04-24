@@ -156,7 +156,7 @@ export default function CommoditiesIntelligenceView(props) {
     setNewsLoading(true);
     try {
         const query = `${name} Commodity News`;
-        const resp = await fetch(`${GNEWS_API}/api/news/search?q=${encodeURIComponent(query)}&lang=en`);
+        const resp = await fetch(`${GNEWS_API}/api/gnews/search?q=${encodeURIComponent(query)}&lang=en`);
         const json = await resp.json();
         
         let data = (json.status === 'success') ? (json.data || []) : [];
@@ -164,7 +164,7 @@ export default function CommoditiesIntelligenceView(props) {
         // FALLBACK 1: If specific commodity news is thin, search for broader Supply/Demand and Economic impact news
         if (data.length < 3) {
             const fallbackQuery = `${name} Market Supply Demand Economics News`;
-            const fbResp = await fetch(`${GNEWS_API}/api/news/search?q=${encodeURIComponent(fallbackQuery)}&lang=en`);
+            const fbResp = await fetch(`${GNEWS_API}/api/gnews/search?q=${encodeURIComponent(fallbackQuery)}&lang=en`);
             const fbJson = await fbResp.json();
             if (fbJson.status === 'success' && fbJson.data?.length > 0) {
                 data = [...data, ...fbJson.data.filter(f => !data.some(d => d.title === f.title))];
@@ -174,18 +174,12 @@ export default function CommoditiesIntelligenceView(props) {
         // FALLBACK 2: Final fallback to general Commodity Market trends
         if (data.length === 0) {
             const genericQuery = "Global Commodity Markets Economic Outlook Trends";
-            const genResp = await fetch(`${GNEWS_API}/api/news/search?q=${encodeURIComponent(genericQuery)}&lang=en`);
+            const genResp = await fetch(`${GNEWS_API}/api/gnews/search?q=${encodeURIComponent(genericQuery)}&lang=en`);
             const genJson = await genResp.json();
             if (genJson.status === 'success') data = genJson.data || [];
         }
 
-        const formatted = data.map(item => ({
-            title: item.title,
-            publisher: item.source?.name || 'RSS',
-            time: Math.floor(new Date(item.publishedAt).getTime() / 1000),
-            link: item.url
-        }));
-        setNews(formatted);
+        setNews(data);
     } catch (e) { 
         console.error("News fetch error:", e);
         setNews([]);
