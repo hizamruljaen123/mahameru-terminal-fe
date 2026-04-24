@@ -25,19 +25,19 @@ function EntityRealTimeChart(props) {
         try {
             const res = await fetch(`${import.meta.env.VITE_ENTITY_URL}/api/entity/realtime/${props.symbol}`);
             const data = await res.json();
-            
+
             setMarketOpen(data.isStreaming !== false);
-            
+
             if (data.intraday) {
                 setRtData(prev => {
                     if (!prev || !prev.intraday) return data;
-                    
+
                     // Intelligent Merge Logic:
                     // We trust the history fetch for finalized bars, 
                     // but we 'patch' it with the latest live data if needed.
                     const freshIntraday = [...data.intraday];
                     const lastHist = freshIntraday[freshIntraday.length - 1];
-                    
+
                     // If the current live state has a newer price/tick 
                     // and it's within the same minute as the last historical bar, 
                     // we allow the live tick to overwrite the historical 'close' 
@@ -45,12 +45,12 @@ function EntityRealTimeChart(props) {
                     if (prev.price && lastHist) {
                         const timeNow = prev.timestamp?.split(':').slice(0, 2).join(':');
                         if (lastHist.time === timeNow) {
-                             lastHist.close = prev.price;
-                             if (prev.price > lastHist.high) lastHist.high = prev.price;
-                             if (prev.price < lastHist.low) lastHist.low = prev.price;
+                            lastHist.close = prev.price;
+                            if (prev.price > lastHist.high) lastHist.high = prev.price;
+                            if (prev.price < lastHist.low) lastHist.low = prev.price;
                         }
                     }
-                    
+
                     updateChart(freshIntraday);
                     return { ...data, intraday: freshIntraday };
                 });
@@ -169,10 +169,10 @@ function EntityRealTimeChart(props) {
     onMount(() => {
         setLoading(true);
         fetchFullIntraday();
-        
+
         // --- WEBSOCKET HEARTBEAT ---
         socket = io(import.meta.env.VITE_ENTITY_URL);
-        
+
         socket.on("connect", () => {
             console.log("[WS] CONNECTED TO DATA STREAM.");
             if (props.symbol) socket.emit("subscribe", { symbol: props.symbol });
@@ -181,7 +181,7 @@ function EntityRealTimeChart(props) {
         socket.on("ticker_update", (data) => {
             if (data.symbol === props.symbol) {
                 setMarketOpen(data.isStreaming !== false);
-                
+
                 if (data.isStreaming === false) {
                     setTickerPulse(false);
                     return;
@@ -190,12 +190,12 @@ function EntityRealTimeChart(props) {
                 setTickerPulse(true);
                 setRtData(prev => {
                     if (!prev || !prev.intraday) return prev;
-                    
+
                     const newIntraday = [...prev.intraday];
                     const lastEntry = newIntraday[newIntraday.length - 1];
                     // Extract HH:MM from timestamp (e.g. "16:35:01" -> "16:35")
                     const timeNow = data.timestamp.split(':').slice(0, 2).join(':');
-                    
+
                     if (lastEntry && lastEntry.time === timeNow) {
                         // Update the current minute candlestick
                         lastEntry.close = data.price;
@@ -209,7 +209,7 @@ function EntityRealTimeChart(props) {
                             high: data.price,
                             low: data.price,
                             close: data.price,
-                            volume: 0 
+                            volume: 0
                         });
                         // Manage memory for long-running sessions
                         if (newIntraday.length > 1000) newIntraday.shift();
@@ -233,10 +233,10 @@ function EntityRealTimeChart(props) {
 
         // We rely on WebSocket streaming for updates. 
         // Interval polling removed to reduce backend load.
-        
+
         const handleResize = () => chart && chart.resize();
         window.addEventListener('resize', handleResize);
-        
+
         onCleanup(() => {
             if (socket) {
                 if (props.symbol) socket.emit("unsubscribe", { symbol: props.symbol });
@@ -256,7 +256,7 @@ function EntityRealTimeChart(props) {
                 socket.emit("subscribe", { symbol });
             }
         }
-        
+
         onCleanup(() => {
             if (socket && socket.connected && symbol) {
                 socket.emit("unsubscribe", { symbol });
@@ -293,7 +293,7 @@ function EntityRealTimeChart(props) {
                         </div>
                     </Show>
                 </div>
-                
+
                 <div class="flex-1 relative">
                     <Show when={loading()}>
                         <div class="absolute inset-0 flex items-center justify-center z-10 bg-bg_main/10 backdrop-blur-[1px]">
@@ -305,22 +305,22 @@ function EntityRealTimeChart(props) {
 
                 <div class="mt-4 pt-3 border-t border-border_main/10 flex justify-between items-center gap-4">
                     <div class="flex gap-4">
-                         <div class="flex flex-col">
-                             <span class="text-[7px] font-black text-text_secondary uppercase opacity-30">Open</span>
-                             <span class="text-[9px] font-mono font-bold text-text_primary/80">{rtData()?.open?.toFixed(2)}</span>
-                         </div>
-                         <div class="flex flex-col">
-                             <span class="text-[7px] font-black text-text_secondary uppercase opacity-30">High</span>
-                             <span class="text-[9px] font-mono font-bold text-emerald-400">{rtData()?.high?.toFixed(2)}</span>
-                         </div>
-                         <div class="flex flex-col">
-                             <span class="text-[7px] font-black text-text_secondary uppercase opacity-30">Low</span>
-                             <span class="text-[9px] font-mono font-bold text-red-400">{rtData()?.low?.toFixed(2)}</span>
-                         </div>
-                         <div class="flex flex-col">
-                             <span class="text-[7px] font-black text-text_secondary uppercase opacity-30">Vol</span>
-                             <span class="text-[9px] font-mono font-bold text-blue-400">{(rtData()?.volume / 1000).toFixed(1)}K</span>
-                         </div>
+                        <div class="flex flex-col">
+                            <span class="text-[7px] font-black text-text_secondary uppercase opacity-30">Open</span>
+                            <span class="text-[9px] font-mono font-bold text-text_primary/80">{rtData()?.open?.toFixed(2)}</span>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-[7px] font-black text-text_secondary uppercase opacity-30">High</span>
+                            <span class="text-[9px] font-mono font-bold text-emerald-400">{rtData()?.high?.toFixed(2)}</span>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-[7px] font-black text-text_secondary uppercase opacity-30">Low</span>
+                            <span class="text-[9px] font-mono font-bold text-red-400">{rtData()?.low?.toFixed(2)}</span>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-[7px] font-black text-text_secondary uppercase opacity-30">Vol</span>
+                            <span class="text-[9px] font-mono font-bold text-blue-400">{(rtData()?.volume / 1000).toFixed(1)}K</span>
+                        </div>
                     </div>
                     <span class="text-[7px] font-mono text-text_secondary/40 uppercase">NODE: {rtData()?.timestamp || 'CONNECTING...'}</span>
                 </div>
@@ -362,10 +362,10 @@ function EntityRealTimeChart(props) {
                 </div>
                 <div class="p-2 bg-text_accent/5 border-t border-border_main/20">
                     <div class="flex justify-between items-center">
-                          <span class="text-[7px] font-black text-text_accent/40 uppercase tracking-tighter">DATA FEED: CLOUD STREAM</span>
-                          <span class={`text-[7px] font-black uppercase ${marketOpen() ? 'text-emerald-500/60' : 'text-amber-500/60'}`}>
-                              {marketOpen() ? 'ONLINE' : 'STOPPED'}
-                          </span>
+                        <span class="text-[7px] font-black text-text_accent/40 uppercase tracking-tighter">DATA FEED: CLOUD STREAM</span>
+                        <span class={`text-[7px] font-black uppercase ${marketOpen() ? 'text-emerald-500/60' : 'text-amber-500/60'}`}>
+                            {marketOpen() ? 'ONLINE' : 'STOPPED'}
+                        </span>
                     </div>
                 </div>
             </div>
@@ -432,10 +432,10 @@ const EntityAnalysisView = (props) => {
     const handleSearch = async (e) => {
         e.preventDefault();
         if (!searchQuery()) return;
-        
+
         if (searchController) searchController.abort();
         searchController = new AbortController();
-        
+
         setLoading(true);
         try {
             const res = await fetch(`${import.meta.env.VITE_ENTITY_URL}/api/entity/search?q=${encodeURIComponent(searchQuery())}`, { signal: searchController.signal });
@@ -521,7 +521,7 @@ const EntityAnalysisView = (props) => {
                     .then(data => {
                         if (data[src.key]) updateNews(data[src.key]);
                     })
-                    .catch(() => {})
+                    .catch(() => { })
                     .finally(() => {
                         pending--;
                         if (pending === 0 && !signal.aborted) setNewsLoading(false);
@@ -559,11 +559,11 @@ const EntityAnalysisView = (props) => {
                 <div class="flex justify-between items-center mb-1">
                     <h1 class="text-xs font-black text-text_accent tracking-[0.4em] uppercase">ENTITY INTELLIGENCE ANALYSIS</h1>
                     <Show when={selectedEntity()}>
-                        <button 
+                        <button
                             onClick={() => { setSelectedEntity(null); setProfile(null); setSearchQuery(""); }}
                             class="text-[9px] font-black text-text_secondary/60 hover:text-text_accent transition-colors flex items-center gap-1 uppercase tracking-widest"
                         >
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
                             BACK TO DASHBOARD
                         </button>
                     </Show>
@@ -578,7 +578,7 @@ const EntityAnalysisView = (props) => {
                             class="w-full bg-bg_main border border-border_main p-3 pl-10 rounded text-text_primary placeholder:text-text_secondary/40 outline-none focus:border-text_accent transition-all font-mono uppercase text-sm shadow-inner"
                         />
                         <div class="absolute left-3 top-1/2 -translate-y-1/2 text-text_secondary opacity-40">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>
                         </div>
                     </div>
                     <button type="submit" class="bg-text_accent text-bg_main px-8 font-black rounded hover:bg-bg_header transition-all uppercase tracking-widest text-xs hidden md:block">EXECUTE</button>
@@ -640,15 +640,15 @@ const EntityAnalysisView = (props) => {
                                                 <tbody class="divide-y divide-border_main/10 font-mono">
                                                     <For each={category.data.slice(0, 5)}>
                                                         {(row) => (
-                                                            <tr 
+                                                            <tr
                                                                 onClick={() => { selectEntity(row.symbol); setActiveTab('profile'); }}
                                                                 class="hover:bg-bg_main/60 cursor-pointer group/row transition-colors"
                                                             >
                                                                 <td class="p-2 pl-3">
-                                                                     <div class="flex items-center gap-2">
+                                                                    <div class="flex items-center gap-2">
                                                                         <img src={`https://flagcdn.com/w20/${row.country.toLowerCase()}.png`} width="12" class="opacity-80 group-hover/row:opacity-100" />
                                                                         <span class={`whitespace-normal font-bold ${row.name.includes('IDX') ? 'text-blue-400' : 'text-text_primary'}`}>{row.name}</span>
-                                                                     </div>
+                                                                    </div>
                                                                 </td>
                                                                 <td class="p-2 text-right">
                                                                     <div class="flex flex-col items-end">
@@ -679,46 +679,8 @@ const EntityAnalysisView = (props) => {
 
             <Show when={selectedEntity()}>
                 <div class="flex-1 flex flex-col space-y-4 min-h-0 animate-in slide-in-from-bottom-4 duration-500">
-                    
-                    {/* ASSET IDENTIFICATION HEADER */}
-                    <Show when={profile()}>
-                        <div class="px-5 py-4 bg-bg_header/30 border border-border_main/50 rounded-lg flex justify-between items-center shadow-2xl relative overflow-hidden group">
-                            <div class="absolute top-0 left-0 w-1.5 h-full bg-text_accent opacity-80" />
-                            <div class="flex flex-col relative z-10 flex-1 min-w-0">
-                                <div class="flex items-center gap-3 mb-1">
-                                    <span class="text-[9px] font-black text-text_accent tracking-[0.4em] uppercase opacity-70">ASSET LOADED</span>
-                                    <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                </div>
-                                <div class="flex items-center gap-6 min-w-0">
-                                    <h2 class="text-4xl font-black text-white italic tracking-tighter uppercase leading-tight drop-shadow-[0_2px_10px_rgba(255,255,255,0.1)] truncate" title={profile().name}>
-                                        {profile().name}
-                                    </h2>
-                                    <div class="flex items-baseline gap-2 shrink-0">
-                                        <span class="text-2xl font-mono font-black text-text_accent tracking-widest">{selectedEntity()}</span>
-                                        <span class="text-[10px] font-black text-text_secondary/40 uppercase tracking-[0.2em] mb-1">{profile().exchange}</span>
-                                    </div>
-                                </div>
-                            </div>
 
-                            <div class="flex items-center gap-12 pr-4 relative z-10 shrink-0">
-                                <div class="flex flex-col items-end gap-1">
-                                    <span class="text-[8px] font-black text-text_secondary/30 uppercase tracking-[0.3em]">SECTOR</span>
-                                    <span class="px-3 py-1 bg-white/[0.03] border border-white/5 text-[11px] font-black text-text_primary uppercase tracking-tight">
-                                        {profile().sector || 'DATA UNAVAILABLE'}
-                                    </span>
-                                </div>
-                                <div class="flex flex-col items-end gap-1">
-                                    <span class="text-[8px] font-black text-text_secondary/30 uppercase tracking-[0.3em]">INDUSTRY</span>
-                                    <span class="px-3 py-1 bg-white/[0.03] border border-white/5 text-[11px] font-black text-text_primary uppercase tracking-tight">
-                                        {profile().industry || 'UNAVAILABLE'}
-                                    </span>
-                                </div>
-                            </div>
-                            
-                            {/* Decorative background grid */}
-                            <div class="absolute inset-0 opacity-[0.03] pointer-events-none" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 20px 20px;"></div>
-                        </div>
-                    </Show>
+
 
                     {/* Entity Sub-Navigation Tabs */}
                     <div class="flex gap-1 border-b border-border_main/50 shrink-0 p-1 bg-bg_header/20 rounded-t-lg">
@@ -749,276 +711,276 @@ const EntityAnalysisView = (props) => {
                     </div>
 
 
-            <Show when={profile()}>
-                <Show 
-                    when={selectedEntity()?.startsWith('^') || selectedEntity() === '000001.SS' || selectedEntity() === 'VNI.HM' || selectedEntity() === 'VNINDEX.VN'} 
-                    fallback={
-                        <>
-                            <Show when={activeTab() === 'profile'}>
-                                <div class="flex-1 overflow-auto space-y-6 scrollbar-thin pr-2">
-                                    {/* Real-Time Pulse Monitoring Node */}
-                                    <div class="grid grid-cols-1 gap-4">
-                                        <div class="min-h-[450px] shrink-0">
-                                            <EntityRealTimeChart symbol={selectedEntity()} theme={props.theme} />
-                                        </div>
-                                    </div>
-
-                                    {/* Top Stats Cards */}
-                                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                        <div class="bg-bg_header border-l-4 border-text_accent p-4 rounded shadow-lg">
-                                            <p class="text-[10px] text-text_secondary opacity-60 uppercase font-bold tracking-widest mb-1">Market Capitalization</p>
-                                            <p class="text-xl font-black text-text_primary">{formatNumber(profile().metrics.marketCap)}</p>
-                                        </div>
-                                        <div class="bg-bg_header border-l-4 border-amber-500 p-4 rounded shadow-lg">
-                                            <p class="text-[10px] text-text_secondary opacity-60 uppercase font-bold tracking-widest mb-1">Trailing PE Ratio</p>
-                                            <p class="text-xl font-black text-amber-500">{profile().metrics.trailingPE?.toFixed(2) || "N/A"}</p>
-                                        </div>
-                                        <div class="bg-bg_header border-l-4 border-blue-400 p-4 rounded shadow-lg">
-                                            <p class="text-[10px] text-text_secondary opacity-60 uppercase font-bold tracking-widest mb-1">Dividend Yield</p>
-                                            <p class="text-xl font-black text-blue-400">{(profile().metrics.dividendYield * 100)?.toFixed(2)}%</p>
-                                        </div>
-                                        <div class="bg-bg_header border-l-4 border-emerald-500 p-4 rounded shadow-lg">
-                                            <p class="text-[10px] text-text_secondary opacity-60 uppercase font-bold tracking-widest mb-1">Total Revenue (TTM)</p>
-                                            <p class="text-xl font-black text-emerald-500">{formatNumber(profile().metrics.totalRevenue)}</p>
-                                        </div>
-                                    </div>
-
-                                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                                        {/* Main Analysis Pane */}
-                                        <div class="lg:col-span-8 space-y-6">
-                                            {/* Historical Table */}
-                                            <div class="bg-bg_header border border-border_main rounded overflow-hidden flex flex-col h-[400px]">
-                                                <div class="bg-bg_main px-4 py-2 border-b border-border_main flex justify-between items-center gap-4">
-                                                    <h3 class="text-[11px] font-black text-text_accent uppercase tracking-widest whitespace-nowrap">Historical Quote Matrix [{selectedRange()}]</h3>
-                                                    <div class="flex items-center gap-3">
-                                                        <div class="flex gap-1">
-                                                            {RANGES.map(r => (
-                                                                <button 
-                                                                    onClick={() => setSelectedRange(r)}
-                                                                    class={`px-2 py-0.5 text-[8px] font-black border transition-all ${selectedRange() === r ? 'bg-text_accent text-bg_main border-text_accent' : 'border-border_main/30 text-text_secondary opacity-60 hover:opacity-100 hover:border-text_accent/30'}`}
-                                                                >{r}</button>
-                                                            ))}
-                                                        </div>
-                                                        <button 
-                                                            onClick={() => selectEntity(selectedEntity())}
-                                                            class="flex items-center gap-1.5 px-3 py-0.5 bg-text_accent/10 border border-text_accent/30 text-[8px] font-black text-text_accent hover:bg-text_accent hover:text-bg_main transition-all uppercase"
-                                                        >
-                                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                                                            RELOAD
-                                                        </button>
-                                                    </div>
+                    <Show when={profile()}>
+                        <Show
+                            when={selectedEntity()?.startsWith('^') || selectedEntity() === '000001.SS' || selectedEntity() === 'VNI.HM' || selectedEntity() === 'VNINDEX.VN'}
+                            fallback={
+                                <>
+                                    <Show when={activeTab() === 'profile'}>
+                                        <div class="flex-1 overflow-auto space-y-6 scrollbar-thin pr-2">
+                                            {/* Real-Time Pulse Monitoring Node */}
+                                            <div class="grid grid-cols-1 gap-4">
+                                                <div class="min-h-[450px] shrink-0">
+                                                    <EntityRealTimeChart symbol={selectedEntity()} theme={props.theme} />
                                                 </div>
-                                                <div class="flex-1 overflow-auto scrollbar-thin">
-                                                    <table class="w-full text-left text-[11px] border-collapse">
-                                                        <thead class="bg-bg_main sticky top-0 text-text_secondary opacity-60 uppercase font-bold">
-                                                            <tr>
-                                                                <th class="p-3 border-b border-border_main">Date</th>
-                                                                <th class="p-3 border-b border-border_main text-right">Open</th>
-                                                                <th class="p-3 border-b border-border_main text-right">High</th>
-                                                                <th class="p-3 border-b border-border_main text-right">Low</th>
-                                                                <th class="p-3 border-b border-border_main text-right text-text_accent">Close</th>
-                                                                <th class="p-3 border-b border-border_main text-right">Volume</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody class="divide-y divide-border_main/30 font-mono">
-                                                            <For each={profile().history.slice().reverse()}>
-                                                                {(row) => (
-                                                                    <tr class="hover:bg-bg_main/50">
-                                                                        <td class="p-3">{row.Date}</td>
-                                                                        <td class="p-3 text-right">{row.Open.toFixed(2)}</td>
-                                                                        <td class="p-3 text-right">{row.High.toFixed(2)}</td>
-                                                                        <td class="p-3 text-right">{row.Low.toFixed(2)}</td>
-                                                                        <td class="p-3 text-right text-text_accent font-bold">{row.Close.toFixed(2)}</td>
-                                                                        <td class="p-3 text-right">{formatNumber(row.Volume)}</td>
+                                            </div>
+
+                                            {/* Top Stats Cards */}
+                                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                                <div class="bg-bg_header border-l-4 border-text_accent p-4 rounded shadow-lg">
+                                                    <p class="text-[10px] text-text_secondary opacity-60 uppercase font-bold tracking-widest mb-1">Market Capitalization</p>
+                                                    <p class="text-xl font-black text-text_primary">{formatNumber(profile().metrics.marketCap)}</p>
+                                                </div>
+                                                <div class="bg-bg_header border-l-4 border-amber-500 p-4 rounded shadow-lg">
+                                                    <p class="text-[10px] text-text_secondary opacity-60 uppercase font-bold tracking-widest mb-1">Trailing PE Ratio</p>
+                                                    <p class="text-xl font-black text-amber-500">{profile().metrics.trailingPE?.toFixed(2) || "N/A"}</p>
+                                                </div>
+                                                <div class="bg-bg_header border-l-4 border-blue-400 p-4 rounded shadow-lg">
+                                                    <p class="text-[10px] text-text_secondary opacity-60 uppercase font-bold tracking-widest mb-1">Dividend Yield</p>
+                                                    <p class="text-xl font-black text-blue-400">{(profile().metrics.dividendYield * 100)?.toFixed(2)}%</p>
+                                                </div>
+                                                <div class="bg-bg_header border-l-4 border-emerald-500 p-4 rounded shadow-lg">
+                                                    <p class="text-[10px] text-text_secondary opacity-60 uppercase font-bold tracking-widest mb-1">Total Revenue (TTM)</p>
+                                                    <p class="text-xl font-black text-emerald-500">{formatNumber(profile().metrics.totalRevenue)}</p>
+                                                </div>
+                                            </div>
+
+                                            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                                                {/* Main Analysis Pane */}
+                                                <div class="lg:col-span-8 space-y-6">
+                                                    {/* Historical Table */}
+                                                    <div class="bg-bg_header border border-border_main rounded overflow-hidden flex flex-col h-[400px]">
+                                                        <div class="bg-bg_main px-4 py-2 border-b border-border_main flex justify-between items-center gap-4">
+                                                            <h3 class="text-[11px] font-black text-text_accent uppercase tracking-widest whitespace-nowrap">Historical Quote Matrix [{selectedRange()}]</h3>
+                                                            <div class="flex items-center gap-3">
+                                                                <div class="flex gap-1">
+                                                                    {RANGES.map(r => (
+                                                                        <button
+                                                                            onClick={() => setSelectedRange(r)}
+                                                                            class={`px-2 py-0.5 text-[8px] font-black border transition-all ${selectedRange() === r ? 'bg-text_accent text-bg_main border-text_accent' : 'border-border_main/30 text-text_secondary opacity-60 hover:opacity-100 hover:border-text_accent/30'}`}
+                                                                        >{r}</button>
+                                                                    ))}
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => selectEntity(selectedEntity())}
+                                                                    class="flex items-center gap-1.5 px-3 py-0.5 bg-text_accent/10 border border-text_accent/30 text-[8px] font-black text-text_accent hover:bg-text_accent hover:text-bg_main transition-all uppercase"
+                                                                >
+                                                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>
+                                                                    RELOAD
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        <div class="flex-1 overflow-auto scrollbar-thin">
+                                                            <table class="w-full text-left text-[11px] border-collapse">
+                                                                <thead class="bg-bg_main sticky top-0 text-text_secondary opacity-60 uppercase font-bold">
+                                                                    <tr>
+                                                                        <th class="p-3 border-b border-border_main">Date</th>
+                                                                        <th class="p-3 border-b border-border_main text-right">Open</th>
+                                                                        <th class="p-3 border-b border-border_main text-right">High</th>
+                                                                        <th class="p-3 border-b border-border_main text-right">Low</th>
+                                                                        <th class="p-3 border-b border-border_main text-right text-text_accent">Close</th>
+                                                                        <th class="p-3 border-b border-border_main text-right">Volume</th>
                                                                     </tr>
+                                                                </thead>
+                                                                <tbody class="divide-y divide-border_main/30 font-mono">
+                                                                    <For each={profile().history.slice().reverse()}>
+                                                                        {(row) => (
+                                                                            <tr class="hover:bg-bg_main/50">
+                                                                                <td class="p-3">{row.Date}</td>
+                                                                                <td class="p-3 text-right">{row.Open.toFixed(2)}</td>
+                                                                                <td class="p-3 text-right">{row.High.toFixed(2)}</td>
+                                                                                <td class="p-3 text-right">{row.Low.toFixed(2)}</td>
+                                                                                <td class="p-3 text-right text-text_accent font-bold">{row.Close.toFixed(2)}</td>
+                                                                                <td class="p-3 text-right">{formatNumber(row.Volume)}</td>
+                                                                            </tr>
+                                                                        )}
+                                                                    </For>
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Institutional Matrix */}
+                                                    <div class="bg-bg_header border border-border_main rounded overflow-hidden flex flex-col min-h-[400px]">
+                                                        <div class="bg-bg_main px-4 py-2 border-b border-border_main flex justify-between items-center text-text_accent">
+                                                            <h3 class="text-[11px] font-black uppercase tracking-widest text-text_accent">INSTITUTIONAL METRICS</h3>
+                                                        </div>
+                                                        <div class="flex-1 overflow-auto scrollbar-thin p-4 space-y-4">
+                                                            {(() => {
+                                                                const categories = {
+                                                                    "Valuation Measures": ["marketCap", "enterpriseValue", "trailingPE", "forwardPE", "pegRatio", "priceToSalesTrailing12Months", "priceToBook", "enterpriseToRevenue", "enterpriseToEbitda"],
+                                                                    "Financial Highlights": ["profitMargins", "operatingMargins", "returnOnAssets", "returnOnEquity"],
+                                                                    "Income Statement": ["totalRevenue", "revenuePerShare", "quarterlyRevenueGrowth", "grossProfits", "ebitda", "netIncomeToCommon", "trailingEps", "forwardEps", "earningsQuarterlyGrowth", "revenueGrowth", "earningsGrowth"],
+                                                                    "Balance Sheet": ["totalCash", "totalCashPerShare", "totalDebt", "quickRatio", "currentRatio", "debtToEquity", "bookValue"],
+                                                                    "Cash Flow": ["operatingCashflow", "leveredFreeCashflow"],
+                                                                    "Stock Price History": ["fiftyTwoWeekHigh", "fiftyTwoWeekLow", "fiftyDayAverage", "twoHundredDayAverage"],
+                                                                    "Share Statistics": ["floatShares", "sharesOutstanding", "shortRatio", "shortPercentOfFloat", "beta"],
+                                                                    "Dividends": ["dividendYield", "dividendRate", "payoutRatio", "trailingAnnualDividendYield"]
+                                                                };
+
+                                                                return (
+                                                                    <div class="space-y-2">
+                                                                        {Object.entries(categories).map(([catName, keys]) => {
+                                                                            const [isOpen, setIsOpen] = createSignal(catName === "Valuation Measures");
+                                                                            return (
+                                                                                <div class="border border-border_main/30 rounded overflow-hidden">
+                                                                                    <button
+                                                                                        onClick={() => setIsOpen(!isOpen())}
+                                                                                        class="w-full bg-bg_main/50 px-3 py-2 flex justify-between items-center hover:bg-bg_main transition-colors"
+                                                                                    >
+                                                                                        <span class="text-[10px] font-black uppercase tracking-widest text-text_secondary opacity-80">{catName}</span>
+                                                                                        <span class="text-[10px] text-text_accent">{isOpen() ? "-" : "+"}</span>
+                                                                                    </button>
+                                                                                    <Show when={isOpen()}>
+                                                                                        <div class="max-h-48 overflow-y-auto scrollbar-thin divide-y divide-border_main/10 bg-bg_header/30">
+                                                                                            <For each={keys}>
+                                                                                                {(key) => {
+                                                                                                    const value = profile()?.institutional?.[key];
+                                                                                                    if (value === undefined) return null;
+                                                                                                    const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                                                                                                    return (
+                                                                                                        <div class="flex justify-between items-center p-2 px-3 text-[10px] font-mono hover:bg-bg_main/20">
+                                                                                                            <span class="text-text_secondary opacity-60 uppercase">{label}</span>
+                                                                                                            <span class="text-text_primary font-bold">
+                                                                                                                {typeof value === 'number' ?
+                                                                                                                    (Math.abs(value) > 1000 ? formatNumber(value) : value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })) :
+                                                                                                                    (value || "N/A")}
+                                                                                                            </span>
+                                                                                                        </div>
+                                                                                                    );
+                                                                                                }}
+                                                                                            </For>
+                                                                                        </div>
+                                                                                    </Show>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                );
+                                                            })()}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* News Stream */}
+                                                    <div class="bg-bg_header border border-border_main rounded overflow-hidden flex flex-col h-[400px]">
+                                                        <div class="bg-bg_main px-4 py-2 border-b border-border_main flex justify-between items-center text-text_accent">
+                                                            <h3 class="text-[11px] font-black uppercase tracking-widest text-amber-500">STRATEGIC NEWS FEED</h3>
+                                                            <Show when={newsLoading()}>
+                                                                <span class="text-[8px] animate-pulse font-mono font-black uppercase">STREAM ACTIVE...</span>
+                                                            </Show>
+                                                        </div>
+                                                        <div class="flex-1 overflow-auto scrollbar-thin p-4 space-y-4">
+                                                            <Show when={newsLoading() && (!profile().news || profile().news.length === 0)}>
+                                                                <For each={[1, 2, 3, 4, 5]}>
+                                                                    {() => (
+                                                                        <div class="border-l-2 border-border_main/30 pl-4 py-2 animate-pulse">
+                                                                            <div class="h-4 bg-border_main/50 rounded w-3/4 mb-2"></div>
+                                                                            <div class="flex gap-4">
+                                                                                <div class="h-2 bg-border_main/30 rounded w-20"></div>
+                                                                                <div class="h-2 bg-border_main/30 rounded w-24"></div>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </For>
+                                                            </Show>
+
+                                                            <For each={profile()?.news}>
+                                                                {(item) => (
+                                                                    <a href={item.link} target="_blank" class="block group">
+                                                                        <div class="border-l-2 border-border_main group-hover:border-amber-500 pl-4 py-1 transition-all">
+                                                                            <h4 class="text-[13px] font-bold text-text_primary group-hover:text-amber-500 transition-colors uppercase leading-tight">{item.title}</h4>
+                                                                            <div class="flex gap-4 mt-1">
+                                                                                <span class="text-[9px] text-text_secondary opacity-60 font-black uppercase">{item.publisher}</span>
+                                                                                <span class="text-[9px] text-text_secondary opacity-40 font-mono">{new Date(item.time * 1000).toLocaleString()}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </a>
                                                                 )}
                                                             </For>
-                                                        </tbody>
-                                                    </table>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            </div>
 
-                                            {/* Institutional Matrix */}
-                                            <div class="bg-bg_header border border-border_main rounded overflow-hidden flex flex-col min-h-[400px]">
-                                                <div class="bg-bg_main px-4 py-2 border-b border-border_main flex justify-between items-center text-text_accent">
-                                                    <h3 class="text-[11px] font-black uppercase tracking-widest text-text_accent">INSTITUTIONAL METRICS</h3>
-                                                </div>
-                                                <div class="flex-1 overflow-auto scrollbar-thin p-4 space-y-4">
-                                                    {(() => {
-                                                        const categories = {
-                                                            "Valuation Measures": ["marketCap", "enterpriseValue", "trailingPE", "forwardPE", "pegRatio", "priceToSalesTrailing12Months", "priceToBook", "enterpriseToRevenue", "enterpriseToEbitda"],
-                                                            "Financial Highlights": ["profitMargins", "operatingMargins", "returnOnAssets", "returnOnEquity"],
-                                                            "Income Statement": ["totalRevenue", "revenuePerShare", "quarterlyRevenueGrowth", "grossProfits", "ebitda", "netIncomeToCommon", "trailingEps", "forwardEps", "earningsQuarterlyGrowth", "revenueGrowth", "earningsGrowth"],
-                                                            "Balance Sheet": ["totalCash", "totalCashPerShare", "totalDebt", "quickRatio", "currentRatio", "debtToEquity", "bookValue"],
-                                                            "Cash Flow": ["operatingCashflow", "leveredFreeCashflow"],
-                                                            "Stock Price History": ["fiftyTwoWeekHigh", "fiftyTwoWeekLow", "fiftyDayAverage", "twoHundredDayAverage"],
-                                                            "Share Statistics": ["floatShares", "sharesOutstanding", "shortRatio", "shortPercentOfFloat", "beta"],
-                                                            "Dividends": ["dividendYield", "dividendRate", "payoutRatio", "trailingAnnualDividendYield"]
-                                                        };
-
-                                                        return (
-                                                            <div class="space-y-2">
-                                                                {Object.entries(categories).map(([catName, keys]) => {
-                                                                    const [isOpen, setIsOpen] = createSignal(catName === "Valuation Measures");
-                                                                    return (
-                                                                        <div class="border border-border_main/30 rounded overflow-hidden">
-                                                                            <button
-                                                                                onClick={() => setIsOpen(!isOpen())}
-                                                                                class="w-full bg-bg_main/50 px-3 py-2 flex justify-between items-center hover:bg-bg_main transition-colors"
-                                                                            >
-                                                                                <span class="text-[10px] font-black uppercase tracking-widest text-text_secondary opacity-80">{catName}</span>
-                                                                                <span class="text-[10px] text-text_accent">{isOpen() ? "-" : "+"}</span>
-                                                                            </button>
-                                                                            <Show when={isOpen()}>
-                                                                                <div class="max-h-48 overflow-y-auto scrollbar-thin divide-y divide-border_main/10 bg-bg_header/30">
-                                                                                    <For each={keys}>
-                                                                                        {(key) => {
-                                                                                            const value = profile()?.institutional?.[key];
-                                                                                            if (value === undefined) return null;
-                                                                                            const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                                                                                            return (
-                                                                                                <div class="flex justify-between items-center p-2 px-3 text-[10px] font-mono hover:bg-bg_main/20">
-                                                                                                    <span class="text-text_secondary opacity-60 uppercase">{label}</span>
-                                                                                                    <span class="text-text_primary font-bold">
-                                                                                                        {typeof value === 'number' ?
-                                                                                                            (Math.abs(value) > 1000 ? formatNumber(value) : value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })) :
-                                                                                                            (value || "N/A")}
-                                                                                                    </span>
-                                                                                                </div>
-                                                                                            );
-                                                                                        }}
-                                                                                    </For>
-                                                                                </div>
-                                                                            </Show>
-                                                                        </div>
-                                                                    );
-                                                                })}
+                                                {/* Sidebar Intel Pane */}
+                                                <div class="lg:col-span-4 space-y-6">
+                                                    {/* Strategic Profile */}
+                                                    <div class="bg-bg_header border border-border_main p-6 rounded shadow-xl">
+                                                        <h3 class="text-[12px] font-black text-text_accent uppercase tracking-[0.2em] mb-4 border-l-2 border-text_accent pl-4">STRATEGIC PROFILE</h3>
+                                                        <p class="text-[14px] text-text_secondary leading-relaxed mb-6 font-medium line-clamp-6 hover:line-clamp-none transition-all">
+                                                            {profile().metrics.longBusinessSummary || "No strategic overview available in current intelligence node."}
+                                                        </p>
+                                                        <div class="space-y-3 pt-4 border-t border-border_main">
+                                                            <div class="flex justify-between items-center">
+                                                                <span class="text-[10px] text-text_secondary opacity-60 font-black uppercase">Sector</span>
+                                                                <span class="text-[11px] font-bold text-text_primary">{profile().metrics.sector || "N/A"}</span>
                                                             </div>
-                                                        );
-                                                    })()}
-                                                </div>
-                                            </div>
+                                                            <div class="flex justify-between items-center">
+                                                                <span class="text-[10px] text-text_secondary opacity-60 font-black uppercase">Industry</span>
+                                                                <span class="text-[11px] font-bold text-text_primary">{profile().metrics.industry || "N/A"}</span>
+                                                            </div>
+                                                            <div class="flex justify-between items-center">
+                                                                <span class="text-[10px] text-text_secondary opacity-60 font-black uppercase">Employees</span>
+                                                                <span class="text-[11px] font-bold text-text_primary">{formatNumber(profile().metrics.fullTimeEmployees)}</span>
+                                                            </div>
+                                                            <div class="flex justify-between items-center">
+                                                                <span class="text-[10px] text-text_secondary opacity-60 font-black uppercase">LOCATION</span>
+                                                                <span class="text-[11px] font-bold text-text_primary">{profile().metrics.city}, {profile().metrics.country}</span>
+                                                            </div>
+                                                            <div class="mt-4">
+                                                                <a href={profile().metrics.website} target="_blank" class="block w-full text-center bg-bg_main border border-text_accent text-text_accent py-2 text-[10px] font-black rounded hover:bg-text_accent hover:text-bg_main transition-all uppercase tracking-widest">LAUNCH PORTAL</a>
+                                                            </div>
+                                                        </div>
+                                                    </div>
 
-                                            {/* News Stream */}
-                                            <div class="bg-bg_header border border-border_main rounded overflow-hidden flex flex-col h-[400px]">
-                                                <div class="bg-bg_main px-4 py-2 border-b border-border_main flex justify-between items-center text-text_accent">
-                                                    <h3 class="text-[11px] font-black uppercase tracking-widest text-amber-500">STRATEGIC NEWS FEED</h3>
-                                                    <Show when={newsLoading()}>
-                                                        <span class="text-[8px] animate-pulse font-mono font-black uppercase">STREAM ACTIVE...</span>
-                                                    </Show>
-                                                </div>
-                                                <div class="flex-1 overflow-auto scrollbar-thin p-4 space-y-4">
-                                                    <Show when={newsLoading() && (!profile().news || profile().news.length === 0)}>
-                                                        <For each={[1, 2, 3, 4, 5]}>
-                                                            {() => (
-                                                                <div class="border-l-2 border-border_main/30 pl-4 py-2 animate-pulse">
-                                                                    <div class="h-4 bg-border_main/50 rounded w-3/4 mb-2"></div>
-                                                                    <div class="flex gap-4">
-                                                                        <div class="h-2 bg-border_main/30 rounded w-20"></div>
-                                                                        <div class="h-2 bg-border_main/30 rounded w-24"></div>
+                                                    {/* Management */}
+                                                    <div class="bg-bg_header border border-border_main rounded overflow-hidden">
+                                                        <div class="bg-bg_main px-4 py-2 border-b border-border_main">
+                                                            <h3 class="text-[11px] font-black text-blue-400 uppercase tracking-widest">LEADERSHIP</h3>
+                                                        </div>
+                                                        <div class="p-4 space-y-4 max-h-[300px] overflow-auto scrollbar-thin">
+                                                            <For each={profile().management}>
+                                                                {(person) => (
+                                                                    <div class="border-b border-border_main/30 pb-2 last:border-0 last:pb-0">
+                                                                        <p class="text-[11px] font-bold text-text_primary uppercase">{person.name}</p>
+                                                                        <p class="text-[9px] text-text_secondary opacity-60 uppercase">{person.title}</p>
                                                                     </div>
-                                                                </div>
-                                                            )}
-                                                        </For>
-                                                    </Show>
-
-                                                    <For each={profile()?.news}>
-                                                        {(item) => (
-                                                            <a href={item.link} target="_blank" class="block group">
-                                                                <div class="border-l-2 border-border_main group-hover:border-amber-500 pl-4 py-1 transition-all">
-                                                                    <h4 class="text-[13px] font-bold text-text_primary group-hover:text-amber-500 transition-colors uppercase leading-tight">{item.title}</h4>
-                                                                    <div class="flex gap-4 mt-1">
-                                                                        <span class="text-[9px] text-text_secondary opacity-60 font-black uppercase">{item.publisher}</span>
-                                                                        <span class="text-[9px] text-text_secondary opacity-40 font-mono">{new Date(item.time * 1000).toLocaleString()}</span>
-                                                                    </div>
-                                                                </div>
-                                                            </a>
-                                                        )}
-                                                    </For>
+                                                                )}
+                                                            </For>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
+                                    </Show>
 
-                                        {/* Sidebar Intel Pane */}
-                                        <div class="lg:col-span-4 space-y-6">
-                                            {/* Strategic Profile */}
-                                            <div class="bg-bg_header border border-border_main p-6 rounded shadow-xl">
-                                                <h3 class="text-[12px] font-black text-text_accent uppercase tracking-[0.2em] mb-4 border-l-2 border-text_accent pl-4">STRATEGIC PROFILE</h3>
-                                                <p class="text-[14px] text-text_secondary leading-relaxed mb-6 font-medium line-clamp-6 hover:line-clamp-none transition-all">
-                                                    {profile().metrics.longBusinessSummary || "No strategic overview available in current intelligence node."}
-                                                </p>
-                                                <div class="space-y-3 pt-4 border-t border-border_main">
-                                                    <div class="flex justify-between items-center">
-                                                        <span class="text-[10px] text-text_secondary opacity-60 font-black uppercase">Sector</span>
-                                                        <span class="text-[11px] font-bold text-text_primary">{profile().metrics.sector || "N/A"}</span>
-                                                    </div>
-                                                    <div class="flex justify-between items-center">
-                                                        <span class="text-[10px] text-text_secondary opacity-60 font-black uppercase">Industry</span>
-                                                        <span class="text-[11px] font-bold text-text_primary">{profile().metrics.industry || "N/A"}</span>
-                                                    </div>
-                                                    <div class="flex justify-between items-center">
-                                                        <span class="text-[10px] text-text_secondary opacity-60 font-black uppercase">Employees</span>
-                                                        <span class="text-[11px] font-bold text-text_primary">{formatNumber(profile().metrics.fullTimeEmployees)}</span>
-                                                    </div>
-                                                    <div class="flex justify-between items-center">
-                                                        <span class="text-[10px] text-text_secondary opacity-60 font-black uppercase">LOCATION</span>
-                                                        <span class="text-[11px] font-bold text-text_primary">{profile().metrics.city}, {profile().metrics.country}</span>
-                                                    </div>
-                                                    <div class="mt-4">
-                                                        <a href={profile().metrics.website} target="_blank" class="block w-full text-center bg-bg_main border border-text_accent text-text_accent py-2 text-[10px] font-black rounded hover:bg-text_accent hover:text-bg_main transition-all uppercase tracking-widest">LAUNCH PORTAL</a>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Management */}
-                                            <div class="bg-bg_header border border-border_main rounded overflow-hidden">
-                                                <div class="bg-bg_main px-4 py-2 border-b border-border_main">
-                                                    <h3 class="text-[11px] font-black text-blue-400 uppercase tracking-widest">LEADERSHIP</h3>
-                                                </div>
-                                                <div class="p-4 space-y-4 max-h-[300px] overflow-auto scrollbar-thin">
-                                                    <For each={profile().management}>
-                                                        {(person) => (
-                                                            <div class="border-b border-border_main/30 pb-2 last:border-0 last:pb-0">
-                                                                <p class="text-[11px] font-bold text-text_primary uppercase">{person.name}</p>
-                                                                <p class="text-[9px] text-text_secondary opacity-60 uppercase">{person.title}</p>
-                                                            </div>
-                                                        )}
-                                                    </For>
-                                                </div>
-                                            </div>
+                                    <Show when={activeTab() === 'analysis'}>
+                                        <div class="flex-1 flex flex-col h-[800px] border border-border_main rounded overflow-hidden">
+                                            <EntityAnalysisCharts symbol={selectedEntity()} />
                                         </div>
-                                    </div>
-                                </div>
-                            </Show>
+                                    </Show>
 
-                            <Show when={activeTab() === 'analysis'}>
-                                <div class="flex-1 flex flex-col h-[800px] border border-border_main rounded overflow-hidden">
-                                    <EntityAnalysisCharts symbol={selectedEntity()} />
-                                </div>
-                            </Show>
+                                    <Show when={activeTab() === 'advanced'}>
+                                        <EntityAdvancedView symbol={selectedEntity()} fullHistory={profile()?.history} news={profile()?.news} newsLoading={newsLoading()} />
+                                    </Show>
 
-                            <Show when={activeTab() === 'advanced'}>
-                                <EntityAdvancedView symbol={selectedEntity()} fullHistory={profile()?.history} news={profile()?.news} newsLoading={newsLoading()} />
-                            </Show>
+                                    <Show when={activeTab() === 'report'}>
+                                        <EntityFullReport symbol={selectedEntity()} />
+                                    </Show>
 
-                            <Show when={activeTab() === 'report'}>
-                                <EntityFullReport symbol={selectedEntity()} />
-                            </Show>
-
-                            <Show when={activeTab() === 'technical'}>
-                                <div class="h-[calc(100vh-320px)] min-h-[600px] border border-border_main rounded overflow-hidden">
-                                    <TechnicalAnalysisPanel symbol={selectedEntity()} showToolbar={false} />
-                                </div>
-                            </Show>
-                        </>
-                    }
-                >
-                    <IndexAnalysisView symbol={selectedEntity()} />
-                </Show>
+                                    <Show when={activeTab() === 'technical'}>
+                                        <div class="h-[calc(100vh-320px)] min-h-[600px] border border-border_main rounded overflow-hidden">
+                                            <TechnicalAnalysisPanel symbol={selectedEntity()} showToolbar={false} />
+                                        </div>
+                                    </Show>
+                                </>
+                            }
+                        >
+                            <IndexAnalysisView symbol={selectedEntity()} />
+                        </Show>
+                    </Show>
+                </div>
             </Show>
         </div>
-    </Show>
-</div>
     );
 };
 

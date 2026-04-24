@@ -37,7 +37,6 @@ const IndexAnalysisView = (props) => {
                 <div class="flex items-center gap-4">
                     <div>
                         <h2 class="text-xl font-black text-text_primary tracking-widest uppercase">{props.symbol} Index Analysis</h2>
-                        <p class="text-[10px] text-text_secondary opacity-60 font-black uppercase tracking-[0.2em] mt-1">Strategic Market Diagnostic Node</p>
                     </div>
                 </div>
                 <div class="text-right">
