@@ -102,6 +102,8 @@ function App() {
 
         if (parsed.status) setStatus(parsed.status);
         if (parsed.news) mergeData(parsed.news);
+        
+        // Immediate release of loading screen to show the progressive UI
         setIsLoading(false);
       } catch (err) {
         console.error("Initial Load Error:", err);

@@ -79,9 +79,14 @@ export default function NewsView(props) {
     const tryFetchArchive = async (cat) => {
       const data = props.data();
       const existing = data[cat] || [];
+      // If we already have data (from initial load) or already fetched, skip
       if (existing.length > 0 || fetchedArchive().has(cat)) return;
 
-      setFetchedArchive(prev => new Set([...prev, cat]));
+      setFetchedArchive(prev => {
+        const next = new Set(prev);
+        next.add(cat);
+        return next;
+      });
 
       controllers[cat] = new AbortController();
       try {
@@ -94,16 +99,26 @@ export default function NewsView(props) {
         }
       } catch (err) {
         if (err.name !== 'AbortError') {
-          console.warn(`[Archive] ${cat}: ${err.message}`);
+          console.warn(`[Progressive Load] ${cat}: ${err.message}`);
         }
       }
     };
 
-    // Fetch archives for Tier 1-2 categories that are empty — staggered to avoid burst
-    const highPriorityCats = PRIORITY_CATEGORIES.slice(0, 24);
-    highPriorityCats.forEach((cat, i) => {
-      setTimeout(() => tryFetchArchive(cat), i * 200);
-    });
+    // STRICT SEQUENTIAL LOADING STRATEGY:
+    // We fetch one category, wait for it to finish, then move to the next.
+    const loadSequentially = async () => {
+      for (const cat of PRIORITY_CATEGORIES) {
+        // Check if component was unmounted/aborted mid-loop
+        if (controllers[cat]?.signal.aborted) break;
+        
+        await tryFetchArchive(cat);
+        
+        // Small 50ms breather between requests to keep the UI thread smooth
+        await new Promise(r => setTimeout(r, 50));
+      }
+    };
+
+    loadSequentially();
 
     return () => {
       Object.values(controllers).forEach(c => c.abort());
@@ -151,11 +166,11 @@ export default function NewsView(props) {
 
   // Get categories that have data for each group
   const groupsWithData = createMemo(() => {
-    const data = filteredData();
     const result = {};
     Object.entries(NEWS_GROUPS).forEach(([group, cats]) => {
-      const active = cats.filter(c => (data[c] || []).length > 0);
-      if (active.length > 0) result[group] = active;
+      // In progressive mode, we show groups that contain any of our priority categories
+      // so the user sees the structure immediately.
+      result[group] = cats;
     });
     return result;
   });
@@ -356,9 +371,12 @@ export default function NewsView(props) {
                               {/* Articles List */}
                               <div class="flex-1 overflow-y-auto win-scroll divide-y divide-white/[0.04]">
                                 <Show when={paged().length > 0} fallback={
-                                  <div class="h-full flex flex-col items-center justify-center gap-3 opacity-15 py-10">
-                                    <div class="w-8 h-8 border border-dashed border-text_accent" />
-                                    <span class="text-[9px] font-black tracking-[0.4em] uppercase">FETCHING DATA</span>
+                                  <div class="h-full flex flex-col items-center justify-center gap-4 py-20 bg-black/5 animate-pulse">
+                                    <div class="w-6 h-6 border-2 border-text_accent/20 border-t-text_accent animate-spin rounded-full" />
+                                    <div class="flex flex-col items-center gap-1">
+                                       <span class="text-[9px] font-black tracking-[0.4em] text-text_accent uppercase">RETRIEVING INTEL</span>
+                                       <span class="text-[7px] font-mono text-white/10 uppercase tracking-widest italic">Scanning global repositories...</span>
+                                    </div>
                                   </div>
                                 }>
                                   <For each={paged()}>
