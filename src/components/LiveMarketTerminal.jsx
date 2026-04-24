@@ -1,262 +1,387 @@
-import { createSignal, onMount, onCleanup, For } from 'solid-js';
+import { createSignal, onMount, onCleanup, For, Show, createEffect } from 'solid-js';
 import * as echarts from 'echarts';
 
-export default function LiveMarketTerminal() {
-    const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'TRXUSDT', 'DOTUSDT', 'LINKUSDT'];
-    const assets = {};
-    const [prices, setPrices] = createSignal({});
-    const [trades, setTrades] = createSignal({});
-    const [sentiment, setSentiment] = createSignal({});
-    const [depths, setDepths] = createSignal({});
-    const [cardTabs, setCardTabs] = createSignal(Object.fromEntries(symbols.map(s => [s, 'trades'])));
+// Top 50 popular coins with Binance USDT pairs
+const TOP_50 = [
+  'BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','DOGEUSDT','TRXUSDT','DOTUSDT','LINKUSDT',
+  'AVAXUSDT','MATICUSDT','LTCUSDT','ATOMUSDT','UNIUSDT','XLMUSDT','ETCUSDT','FILUSDT','APTUSDT','OPUSDT',
+  'ARBUSDT','NEARUSDT','INJUSDT','SUIUSDT','STXUSDT','RUNEUSDT','IMXUSDT','LDOUSDT','SEIUSDT','TIAUSDT',
+  'RENDERUSDT','FETUSDT','ARUSDT','ALGOUSDT','VETUSDT','ICPUSDT','HBARUSDT','EGLDUSDT','SANDUSDT','MANAUSDT',
+  'AXSUSDT','GALAUSDT','APEUSDT','FTMUSDT','JASMYUSDT','RNDRUSDT','WLDUSDT','JUPUSDT','PENDLEUSDT','ONDOUSDT'
+];
 
-    // Centralized BE Stream Connection
-    let ws;
+const fmt = (v, d = 2) => (v == null || isNaN(v)) ? '—' : Number(v).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
 
-    const getEChartsOption = (data) => {
-        const dates = data.map(d => new Date(d.time * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-        const values = data.map(d => [d.open, d.close, d.low, d.high]);
-        const volumes = data.map((d, i) => ({
+function MiniChart({ klines }) {
+  let ref;
+  let chart;
+
+  const render = () => {
+    if (!ref || !klines || klines.length === 0) return;
+    if (!chart) chart = echarts.init(ref);
+    const vals = klines.map(d => [d.open, d.close, d.low, d.high]);
+    const dates = klines.map(d => new Date(d.time * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    chart.setOption({
+      backgroundColor: 'transparent',
+      animation: false,
+      grid: [
+        { left: 0, right: 0, top: 4, height: '62%' },
+        { left: 0, right: 0, top: '72%', height: '24%' }
+      ],
+      xAxis: [
+        { type: 'category', data: dates, show: false },
+        { type: 'category', gridIndex: 1, data: dates, show: false }
+      ],
+      yAxis: [
+        { type: 'value', scale: true, show: false },
+        { type: 'value', gridIndex: 1, show: false }
+      ],
+      dataZoom: [{ type: 'inside', xAxisIndex: [0, 1] }],
+      series: [
+        {
+          type: 'candlestick',
+          data: vals,
+          itemStyle: { color: '#0ecb81', color0: '#f6465d', borderColor: '#0ecb81', borderColor0: '#f6465d' }
+        },
+        {
+          type: 'bar',
+          xAxisIndex: 1, yAxisIndex: 1,
+          data: klines.map(d => ({
             value: d.volume,
-            itemStyle: { color: d.close >= d.open ? 'rgba(14, 203, 129, 0.4)' : 'rgba(246, 70, 93, 0.4)' }
-        }));
+            itemStyle: { color: d.close >= d.open ? 'rgba(14,203,129,0.4)' : 'rgba(246,70,93,0.4)' }
+          }))
+        }
+      ]
+    });
+  };
 
-        // Calculate simple EMA 20
-        const period = 20;
-        const k = 2 / (period + 1);
-        let emaVal = values[0][1]; 
-        const emaData = values.map(v => {
-            emaVal = v[1] * k + emaVal * (1 - k);
-            return emaVal;
+  onMount(() => {
+    render();
+    const ro = new ResizeObserver(() => chart?.resize());
+    if (ref) ro.observe(ref);
+    onCleanup(() => { ro.disconnect(); chart?.dispose(); });
+  });
+
+  createEffect(() => { klines; render(); });
+
+  return <div ref={ref} class="w-full h-full" />;
+}
+
+export default function LiveMarketTerminal() {
+  const [selected, setSelected] = createSignal(['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT']);
+  const [prices, setPrices] = createSignal({});
+  const [klineStore, setKlineStore] = createSignal({});
+  const [trades, setTrades] = createSignal({});
+  const [depths, setDepths] = createSignal({});
+  const [sentiment, setSentiment] = createSignal({});
+  const [cardTabs, setCardTabs] = createSignal({});
+  const [showSelector, setShowSelector] = createSignal(false);
+  const [selectorSearch, setSelectorSearch] = createSignal('');
+  const [wsStatus, setWsStatus] = createSignal('CONNECTING');
+
+  // Internal mutable refs
+  const assetKlines = {};
+  const assetLastPrice = {};
+  let ws = null;
+
+  const toggleSelect = (sym) => {
+    setSelected(prev => {
+      if (prev.includes(sym)) {
+        if (prev.length <= 1) return prev;
+        return prev.filter(s => s !== sym);
+      }
+      if (prev.length >= 10) return prev;
+      return [...prev, sym];
+    });
+  };
+
+  const connectWS = () => {
+    if (ws) ws.close();
+    const wsUrl = import.meta.env.VITE_CRYPTO_STREAM_WS || 'ws://2.24.223.76:8092/ws/crypto';
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => setWsStatus('LIVE');
+    ws.onclose = () => { setWsStatus('RECONNECTING'); setTimeout(connectWS, 4000); };
+    ws.onerror = () => setWsStatus('ERROR');
+
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+
+      if (msg.type === 'snapshot') {
+        const newKlines = {};
+        const newTrades = {};
+        const newDepths = {};
+        const newPrices = {};
+        const newSentiment = {};
+        Object.entries(msg.data).forEach(([s, data]) => {
+          const klines = (data.klines || []).sort((a, b) => a.time - b.time);
+          assetKlines[s] = klines;
+          if (klines.length > 0) {
+            const last = klines[klines.length - 1];
+            assetLastPrice[s] = last.close;
+            newPrices[s] = { price: last.close, side: 'neutral' };
+            newSentiment[s] = last.close >= last.open ? 'BULLISH' : 'BEARISH';
+          }
+          newKlines[s] = [...klines];
+          newTrades[s] = (data.trades || []).slice(0, 50);
+          if (data.depth) newDepths[s] = data.depth;
         });
-
-        return {
-            backgroundColor: 'transparent',
-            animation: false,
-            grid: [
-                { left: 0, right: 40, top: 10, height: '60%' },
-                { left: 0, right: 40, top: '75%', height: '20%' }
-            ],
-            xAxis: [
-                { type: 'category', data: dates, axisLine: { lineStyle: { color: '#2a2a2a' } }, axisTick: { show: false }, axisLabel: { color: '#444', fontSize: 8, interval: Math.floor(dates.length / 4) }, splitLine: { show: false } },
-                { type: 'category', gridIndex: 1, data: dates, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { show: false }, splitLine: { show: false } }
-            ],
-            dataZoom: [
-                { type: 'inside', xAxisIndex: [0, 1], start: 0, end: 100 }
-            ],
-            yAxis: [
-                { type: 'value', position: 'right', scale: true, axisLine: { show: false }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.03)' } }, axisLabel: { color: '#555', fontSize: 8 } },
-                { type: 'value', gridIndex: 1, show: false }
-            ],
-            series: [
-                {
-                    name: 'KLINE',
-                    type: 'candlestick',
-                    data: values,
-                    itemStyle: {
-                        color: '#0ecb81', color0: '#f6465d',
-                        borderColor: '#0ecb81', borderColor0: '#f6465d'
-                    }
-                },
-                {
-                    name: 'EMA20',
-                    type: 'line',
-                    data: emaData,
-                    smooth: true,
-                    showSymbol: false,
-                    lineStyle: { width: 1, color: 'rgba(255, 171, 0, 0.6)' }
-                },
-                {
-                    name: 'VOLUME',
-                    type: 'bar',
-                    xAxisIndex: 1,
-                    yAxisIndex: 1,
-                    data: volumes
-                }
-            ]
+        setKlineStore(prev => ({ ...prev, ...newKlines }));
+        setTrades(prev => ({ ...prev, ...newTrades }));
+        setDepths(prev => ({ ...prev, ...newDepths }));
+        setPrices(prev => ({ ...prev, ...newPrices }));
+        setSentiment(prev => ({ ...prev, ...newSentiment }));
+      } else if (msg.type === 'kline') {
+        const s = msg.symbol;
+        const d = msg.data;
+        if (!assetKlines[s]) assetKlines[s] = [];
+        const idx = assetKlines[s].findIndex(k => k.time === d.time);
+        if (idx !== -1) assetKlines[s][idx] = d;
+        else { assetKlines[s].push(d); if (assetKlines[s].length > 300) assetKlines[s].shift(); }
+        setKlineStore(prev => ({ ...prev, [s]: [...assetKlines[s]] }));
+        const side = d.close >= (assetLastPrice[s] || d.close) ? 'up' : 'down';
+        assetLastPrice[s] = d.close;
+        setPrices(prev => ({ ...prev, [s]: { price: d.close, side } }));
+        setSentiment(prev => ({ ...prev, [s]: d.close >= d.open ? 'BULLISH' : 'BEARISH' }));
+      } else if (msg.type === 'trade') {
+        const s = msg.symbol;
+        const d = msg.data;
+        const isWhale = (d.p * d.q) > 10000;
+        const trade = {
+          p: d.p.toFixed(s.includes('DOGE') || s.includes('SHIB') ? 6 : 2),
+          q: d.q.toFixed(3), m: d.m, w: isWhale,
+          t: new Date(d.T).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
         };
+        setTrades(prev => ({ ...prev, [s]: [trade, ...(prev[s] || [])].slice(0, 50) }));
+      } else if (msg.type === 'depth') {
+        setDepths(prev => ({ ...prev, [msg.symbol]: msg.data }));
+      }
     };
+  };
 
-    const initChart = (el, s) => {
-        if (!el) return;
-        const chart = echarts.init(el);
-        assets[s] = { chart, klines: [], lastPrice: 0 };
-        
-        const ro = new ResizeObserver(() => chart.resize());
-        ro.observe(el);
-    };
+  onMount(() => {
+    connectWS();
+    onCleanup(() => { if (ws) ws.close(); });
+  });
 
-    onMount(() => {
-        const wsUrl = import.meta.env.VITE_CRYPTO_STREAM_WS || 'ws://2.24.223.76:8092/ws/crypto';
-        ws = new WebSocket(wsUrl);
-        
-        ws.onmessage = (e) => {
-            const msg = JSON.parse(e.data);
-            
-            if (msg.type === 'snapshot') {
-                Object.entries(msg.data).forEach(([s, data]) => {
-                    const asset = assets[s];
-                    if (asset) {
-                        const unique = (data.klines || []).sort((a,b) => a.time - b.time)
-                            .filter((k, i, self) => i === 0 || k.time > self[i-1].time);
-                        
-                        asset.klines = unique;
-                        asset.chart.setOption(getEChartsOption(unique));
-                        
-                        setTrades(prev => ({ ...prev, [s]: data.trades.reverse().slice(0, 50) }));
-                        if (data.depth) setDepths(prev => ({ ...prev, [s]: data.depth }));
+  const filteredTop50 = () =>
+    TOP_50.filter(s => s.toLowerCase().includes(selectorSearch().toLowerCase()));
 
-                        if (unique.length > 0) {
-                            const last = unique[unique.length-1];
-                            setPrices(prev => ({ ...prev, [s]: { price: last.close, side: 'neutral' } }));
-                            asset.lastPrice = last.close;
-                            setSentiment(prev => ({ ...prev, [s]: last.close >= last.open ? 'BULLISH' : 'BEARISH' }));
-                        }
-                    }
-                });
-            } else if (msg.type === 'kline') {
-                const s = msg.symbol;
-                const d = msg.data;
-                const asset = assets[s];
-                if (asset) {
-                    // Update internal store
-                    const existingIdx = asset.klines.findIndex(k => k.time === d.time);
-                    if (existingIdx !== -1) {
-                        asset.klines[existingIdx] = d;
-                    } else {
-                        asset.klines.push(d);
-                    }
-                    // Keep buffer
-                    if (asset.klines.length > 300) asset.klines.shift();
-                    
-                    asset.chart.setOption(getEChartsOption(asset.klines));
+  const priceColor = (sym) => {
+    const s = prices()[sym]?.side;
+    return s === 'up' ? 'text-green-400' : s === 'down' ? 'text-red-400' : 'text-text_primary';
+  };
 
-                    setPrices(prev => ({ 
-                        ...prev, [s]: { price: d.close, side: d.close >= asset.lastPrice ? 'up' : 'down' } 
-                    }));
-                    asset.lastPrice = d.close;
-                    setSentiment(prev => ({ ...prev, [s]: d.close >= d.open ? 'BULLISH' : 'BEARISH' }));
-                }
-            } else if (msg.type === 'trade') {
-                const s = msg.symbol;
-                const d = msg.data;
-                if (assets[s]) {
-                    const isWhale = (d.p * d.q) > 10000;
-                    const trade = {
-                        p: d.p.toFixed(s.includes('DOGE') ? 4 : 2),
-                        q: d.q.toFixed(3),
-                        m: d.m,
-                        w: isWhale,
-                        t: new Date(d.T).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
-                    };
-                    setTrades(prev => {
-                        const current = prev[s] || [];
-                        return { ...prev, [s]: [trade, ...current].slice(0, 50) };
-                    });
-                }
-            } else if (msg.type === 'depth') {
-                setDepths(prev => ({ ...prev, [msg.symbol]: msg.data }));
-            }
-        };
-    });
+  return (
+    <div class="flex flex-col h-full bg-black/40 font-mono overflow-hidden">
 
-    onCleanup(() => {
-        if (ws) ws.close();
-        Object.values(assets).forEach(a => a.chart.dispose());
-    });
-
-    const getBTCThreshold = (s) => (s !== 'BTCUSDT' && sentiment()['BTCUSDT'] === sentiment()[s]);
-
-    return (
-        <div class="flex flex-col h-full bg-black/40 font-mono">
-            <div class="grid grid-cols-2 md:grid-cols-5 gap-1 bg-border_main/10 flex-1 overflow-hidden p-1">
-                <For each={symbols}>
-                    {(s) => (
-                        <div class="flex flex-col bg-bg_main border border-border_main/20 overflow-hidden relative">
-                            {/* Card Header */}
-                            <div class="flex flex-col bg-black/60 border-b border-border_main/10">
-                                <div class="flex justify-between items-center px-3 py-1.5">
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-[10px] font-black text-text_accent uppercase">{s.replace('USDT','')}</span>
-                                        {s !== 'BTCUSDT' && (
-                                            <span class={`text-[7px] px-1 rounded-[1px] border ${getBTCThreshold(s) ? 'border-green-500/40 text-green-500' : 'border-white/10 text-text_secondary/40'}`}>
-                                                {getBTCThreshold(s) ? 'SYNCED' : 'DECOUPLED'}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <span class={`text-[11px] font-bold ${prices()[s]?.side === 'up' ? 'text-green-400' : 'text-red-400'}`}>
-                                        ${prices()[s]?.price?.toFixed(s.includes('DOGE') ? 4 : 2) || '0.00'}
-                                    </span>
-                                </div>
-                                <div class="flex justify-between items-center px-3 pb-1">
-                                    <span class={`text-[7px] font-black px-1 rounded-[2px] ${sentiment()[s] === 'BULLISH' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                                        {sentiment()[s] || 'NEUTRAL'}
-                                    </span>
-                                    <div class="w-20 h-1 bg-white/5 rounded-full overflow-hidden flex">
-                                        <div style={{ width: `${(depths()[s]?.bid_q / (depths()[s]?.bid_q + depths()[s]?.ask_q) * 100) || 50}%` }} class="h-full bg-green-500/60" />
-                                        <div style={{ width: `${(depths()[s]?.ask_q / (depths()[s]?.bid_q + depths()[s]?.ask_q) * 100) || 50}%` }} class="h-full bg-red-500/60" />
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            {/* Chart Area (ECharts) */}
-                            <div class="flex-1 min-h-0 relative">
-                                <div class="absolute inset-0" ref={(el) => initChart(el, s)} />
-                            </div>
-
-                            {/* Sub-Tabs */}
-                            <div class="h-5 bg-black/60 flex items-center border-t border-border_main/10 px-2 gap-3 shrink-0">
-                                <button onClick={() => setCardTabs(p => ({ ...p, [s]: 'trades' }))} 
-                                    class={`text-[7px] font-black uppercase ${cardTabs()[s] === 'trades' ? 'text-text_accent' : 'text-text_secondary/40'}`}>01_TAPE</button>
-                                <button onClick={() => setCardTabs(p => ({ ...p, [s]: 'depth' }))} 
-                                    class={`text-[7px] font-black uppercase ${cardTabs()[s] === 'depth' ? 'text-text_accent' : 'text-text_secondary/40'}`}>02_DEPTH</button>
-                            </div>
-
-                            {/* Bottom Info Area */}
-                            <div class="shrink-0 h-[80px] flex flex-col border-t border-border_main/10 bg-black/20 overflow-hidden">
-                                <div class="flex-1 overflow-y-auto win-scroll">
-                                    {cardTabs()[s] === 'trades' ? (
-                                        <For each={trades()[s] || []}>
-                                            {(t) => (
-                                                <div class={`grid grid-cols-12 px-2 py-0.5 border-b border-white/[0.02] items-center ${t.w ? 'bg-text_accent/10' : ''}`}>
-                                                    <div class={`col-span-1 text-[7px] ${t.m ? 'text-red-500' : 'text-green-500'}`}>{t.m ? '▼' : '▲'}</div>
-                                                    <div class={`col-span-4 text-[9px] font-bold ${t.m ? 'text-red-500' : 'text-green-500'}`}>{t.p}</div>
-                                                    <div class="col-span-4 text-[8px] text-text_secondary text-right opacity-60">{t.q}</div>
-                                                    <div class="col-span-3 text-[7px] text-text_secondary/40 text-right">{t.w ? <span class="text-text_accent animate-pulse font-black">WHALE</span> : t.t}</div>
-                                                </div>
-                                            )}
-                                        </For>
-                                    ) : (
-                                        <div class="flex flex-col p-2 gap-3">
-                                            <div class="flex justify-between text-[8px] font-black text-text_secondary">
-                                                <span>BUY/SELL RATIO</span>
-                                                <span class="text-text_accent">{((depths()[s]?.bid_q / depths()[s]?.ask_q) || 1).toFixed(2)}x</span>
-                                            </div>
-                                            <div class="h-1.5 w-full bg-white/5 rounded-full overflow-hidden flex">
-                                                <div style={{ width: `${(depths()[s]?.bid_q / (depths()[s]?.bid_q + depths()[s]?.ask_q) * 100) || 50}%` }} class="h-full bg-green-500" />
-                                            </div>
-                                            <div class="flex justify-between text-[9px] font-mono">
-                                                <span class="text-green-400">{depths()[s]?.bid_q?.toFixed(2)}</span>
-                                                <span class="text-red-400">{depths()[s]?.ask_q?.toFixed(2)}</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </For>
-            </div>
-
-            {/* Footer */}
-            <div class="h-6 bg-black/80 border-t border-border_main/30 flex items-center justify-between px-4 shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
-                <div class="flex items-center gap-4">
-                    <span class="text-[8px] font-black text-white tracking-[0.2em]">ENGINE: ECHARTS_LIVE_CORE</span>
-                    <div class="h-3 w-px bg-white/10" />
-                    <span class="text-[8px] text-text_secondary/60">SOURCE: BINANCE_WSS_AGGREGATOR</span>
-                </div>
-                <span class="text-[8px] font-black text-text_accent italic animate-pulse">OPTIMIZED FOR TRADER X</span>
-            </div>
+      {/* Toolbar */}
+      <div class="h-10 bg-bg_header/60 border-b border-border_main flex items-center justify-between px-4 shrink-0">
+        <div class="flex items-center gap-4">
+          <div class="flex items-center gap-2">
+            <div class={`w-2 h-2 rounded-full animate-pulse ${wsStatus() === 'LIVE' ? 'bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.8)]' : wsStatus() === 'ERROR' ? 'bg-red-400' : 'bg-yellow-400'}`} />
+            <span class="text-[9px] font-black tracking-widest uppercase text-text_secondary">
+              {wsStatus()} // BINANCE STREAM
+            </span>
+          </div>
+          <span class="text-[8px] text-text_secondary/40 uppercase">{selected().length} ASSET{selected().length !== 1 ? 'S' : ''} ACTIVE</span>
         </div>
-    );
+        <button
+          onClick={() => setShowSelector(v => !v)}
+          class={`flex items-center gap-2 px-4 py-1.5 border text-[9px] font-black uppercase tracking-widest transition-all ${showSelector() ? 'bg-text_accent text-bg_main border-text_accent' : 'border-text_accent/30 text-text_accent hover:bg-text_accent/10'}`}
+        >
+          <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          {showSelector() ? 'CLOSE SELECTOR' : 'SELECT ASSETS'}
+        </button>
+      </div>
+
+      {/* Coin Selector Panel */}
+      <Show when={showSelector()}>
+        <div class="border-b border-border_main bg-bg_main/80 p-4 shrink-0 animate-in slide-in-from-top-2 duration-300">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-[10px] font-black text-text_accent tracking-widest uppercase">ASSET SELECTOR — TOP 50 (MAX 10)</span>
+            <input
+              type="text"
+              placeholder="FILTER..."
+              value={selectorSearch()}
+              onInput={e => setSelectorSearch(e.target.value)}
+              class="bg-black/60 border border-border_main px-3 py-1 text-[9px] text-text_accent focus:outline-none focus:border-text_accent/50 font-mono uppercase tracking-widest w-48"
+            />
+          </div>
+          <div class="grid grid-cols-10 gap-1 max-h-40 overflow-y-auto win-scroll">
+            <For each={filteredTop50()}>
+              {(sym) => {
+                const isActive = () => selected().includes(sym);
+                const price = () => prices()[sym]?.price;
+                const sent = () => sentiment()[sym];
+                return (
+                  <button
+                    onClick={() => toggleSelect(sym)}
+                    class={`flex flex-col items-center justify-center p-2 border text-[8px] font-black uppercase transition-all h-14 relative overflow-hidden ${isActive() ? 'border-text_accent bg-text_accent/10 text-text_accent' : 'border-border_main/20 text-text_secondary opacity-60 hover:opacity-100 hover:border-text_accent/30'}`}
+                  >
+                    <Show when={isActive()}>
+                      <div class="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-text_accent" />
+                    </Show>
+                    <span class="leading-none">{sym.replace('USDT', '')}</span>
+                    <Show when={price()}>
+                      <span class={`text-[7px] mt-0.5 ${sent() === 'BULLISH' ? 'text-green-400' : 'text-red-400'}`}>
+                        ${price()?.toFixed(2)}
+                      </span>
+                    </Show>
+                  </button>
+                );
+              }}
+            </For>
+          </div>
+          <p class="text-[8px] text-text_secondary/30 uppercase mt-2 italic">Select up to 10 assets to monitor simultaneously. Click to toggle.</p>
+        </div>
+      </Show>
+
+      {/* Live Market Grid */}
+      <div class={`flex-1 overflow-auto p-1 grid gap-1 ${selected().length <= 2 ? 'grid-cols-1 md:grid-cols-2' : selected().length <= 4 ? 'grid-cols-2' : selected().length <= 6 ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-5'}`}>
+        <For each={selected()}>
+          {(sym) => {
+            const tab = () => cardTabs()[sym] || 'chart';
+            const setTab = (t) => setCardTabs(p => ({ ...p, [sym]: t }));
+            const klines = () => klineStore()[sym] || [];
+            const depth = () => depths()[sym] || {};
+            const tradeList = () => trades()[sym] || [];
+            const price = () => prices()[sym];
+            const sent = () => sentiment()[sym];
+            const bidPct = () => {
+              const d = depth();
+              const total = (d.bid_q || 0) + (d.ask_q || 0);
+              return total > 0 ? (d.bid_q / total * 100) : 50;
+            };
+
+            return (
+              <div class="flex flex-col bg-bg_main border border-border_main/30 overflow-hidden">
+                {/* Card Header */}
+                <div class="bg-black/60 border-b border-border_main/20 px-3 py-2 flex items-center justify-between shrink-0">
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 flex items-center justify-center bg-black/60 border border-border_main text-[10px] font-black text-text_accent">
+                      {sym.replace('USDT', '').slice(0, 3)}
+                    </div>
+                    <div class="flex flex-col">
+                      <span class="text-[11px] font-black text-text_accent uppercase">{sym.replace('USDT', '')}/USDT</span>
+                      <span class={`text-[8px] font-black px-1 ${sent() === 'BULLISH' ? 'text-green-400' : 'text-red-400'}`}>
+                        {sent() || '—'}
+                      </span>
+                    </div>
+                  </div>
+                  <div class="flex flex-col items-end">
+                    <span class={`text-[15px] font-black tabular-nums ${priceColor(sym)}`}>
+                      ${price()?.price?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 }) || '—'}
+                    </span>
+                    {/* Bid/Ask depth bar */}
+                    <div class="w-20 h-1 bg-white/5 mt-1 rounded-full overflow-hidden flex">
+                      <div style={{ width: `${bidPct()}%` }} class="h-full bg-green-500/60 transition-all duration-500" />
+                      <div style={{ width: `${100 - bidPct()}%` }} class="h-full bg-red-500/60 transition-all duration-500" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Chart */}
+                <div class="flex-1 min-h-[160px] relative">
+                  <Show when={klines().length > 0} fallback={
+                    <div class="absolute inset-0 flex items-center justify-center">
+                      <div class="w-5 h-5 border-2 border-text_accent/40 border-t-text_accent animate-spin rounded-full" />
+                    </div>
+                  }>
+                    <div class="absolute inset-0">
+                      <MiniChart klines={klines()} />
+                    </div>
+                  </Show>
+                </div>
+
+                {/* Sub-tab bar */}
+                <div class="h-6 bg-black/60 flex items-center border-t border-border_main/10 px-3 gap-4 shrink-0">
+                  {['chart', 'tape', 'depth'].map(t => (
+                    <button
+                      onClick={() => setTab(t)}
+                      class={`text-[7px] font-black uppercase tracking-widest transition-all ${tab() === t ? 'text-text_accent' : 'text-text_secondary/30 hover:text-text_secondary/60'}`}
+                    >
+                      {t === 'chart' ? '01_PRICE' : t === 'tape' ? '02_TAPE' : '03_DEPTH'}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Bottom panel */}
+                <div class="h-24 overflow-y-auto win-scroll border-t border-border_main/10 bg-black/20 shrink-0">
+                  <Show when={tab() === 'tape'}>
+                    <For each={tradeList()}>
+                      {(t) => (
+                        <div class={`grid grid-cols-12 px-2 py-0.5 border-b border-white/[0.02] items-center text-[8px] ${t.w ? 'bg-text_accent/5' : ''}`}>
+                          <span class={`col-span-1 ${t.m ? 'text-red-500' : 'text-green-500'}`}>{t.m ? '▼' : '▲'}</span>
+                          <span class={`col-span-4 font-bold ${t.m ? 'text-red-400' : 'text-green-400'}`}>{t.p}</span>
+                          <span class="col-span-4 text-text_secondary/50 text-right">{t.q}</span>
+                          <span class="col-span-3 text-right">{t.w ? <span class="text-text_accent animate-pulse font-black text-[7px]">WHALE</span> : <span class="text-text_secondary/30 text-[7px]">{t.t}</span>}</span>
+                        </div>
+                      )}
+                    </For>
+                    <Show when={tradeList().length === 0}>
+                      <div class="flex items-center justify-center h-full text-[8px] text-text_secondary/30 uppercase">Awaiting trades...</div>
+                    </Show>
+                  </Show>
+
+                  <Show when={tab() === 'depth'}>
+                    <div class="flex flex-col gap-2 p-3">
+                      <div class="flex justify-between text-[8px] font-black">
+                        <span class="text-text_secondary">BID/ASK RATIO</span>
+                        <span class="text-text_accent">{((depth().bid_q / (depth().ask_q || 1)) || 1).toFixed(2)}x</span>
+                      </div>
+                      <div class="h-2 w-full bg-white/5 rounded-full overflow-hidden flex">
+                        <div style={{ width: `${bidPct()}%` }} class="h-full bg-green-500 transition-all duration-500" />
+                        <div style={{ width: `${100 - bidPct()}%` }} class="h-full bg-red-500 transition-all duration-500" />
+                      </div>
+                      <div class="grid grid-cols-2 gap-2 text-[9px] font-mono">
+                        <div class="flex flex-col">
+                          <span class="text-text_secondary/40 text-[7px] uppercase">Best Bid</span>
+                          <span class="text-green-400 font-black">${fmt(depth().bid_p, 4)}</span>
+                          <span class="text-green-400/60">{fmt(depth().bid_q, 3)}</span>
+                        </div>
+                        <div class="flex flex-col items-end">
+                          <span class="text-text_secondary/40 text-[7px] uppercase">Best Ask</span>
+                          <span class="text-red-400 font-black">${fmt(depth().ask_p, 4)}</span>
+                          <span class="text-red-400/60">{fmt(depth().ask_q, 3)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </Show>
+
+                  <Show when={tab() === 'chart'}>
+                    <div class="p-3 flex flex-col gap-1 text-[8px] font-mono">
+                      <Show when={klines().length > 0}>
+                        {() => {
+                          const last = klines()[klines().length - 1];
+                          const prev = klines().length > 1 ? klines()[klines().length - 2] : last;
+                          const chg = ((last.close - prev.close) / prev.close * 100);
+                          return <>
+                            <div class="flex justify-between"><span class="text-text_secondary/40">OPEN</span><span>${fmt(last.open, 4)}</span></div>
+                            <div class="flex justify-between"><span class="text-text_secondary/40">HIGH</span><span class="text-green-400">${fmt(last.high, 4)}</span></div>
+                            <div class="flex justify-between"><span class="text-text_secondary/40">LOW</span><span class="text-red-400">${fmt(last.low, 4)}</span></div>
+                            <div class="flex justify-between"><span class="text-text_secondary/40">VOL</span><span>{fmt(last.volume, 2)}</span></div>
+                            <div class="flex justify-between"><span class="text-text_secondary/40">CHG</span><span class={chg >= 0 ? 'text-green-400' : 'text-red-400'}>{chg >= 0 ? '+' : ''}{chg.toFixed(3)}%</span></div>
+                          </>;
+                        }}
+                      </Show>
+                    </div>
+                  </Show>
+                </div>
+              </div>
+            );
+          }}
+        </For>
+      </div>
+
+      {/* Footer */}
+      <div class="h-6 bg-black/80 border-t border-border_main/30 flex items-center justify-between px-4 shrink-0">
+        <div class="flex items-center gap-4 text-[8px]">
+          <span class="font-black text-text_secondary tracking-[0.2em]">ENGINE: ECHARTS_LIVE_CORE</span>
+          <span class="text-text_secondary/40">SOURCE: BINANCE_WSS_AGG</span>
+        </div>
+        <span class="text-[8px] font-black text-text_accent italic animate-pulse">MAHAMERU LIVE SURVEILLANCE</span>
+      </div>
+    </div>
+  );
 }
