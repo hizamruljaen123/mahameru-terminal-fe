@@ -67,8 +67,8 @@ function MiniChart({ klines }) {
   return <div ref={ref} class="w-full h-full" />;
 }
 
-export default function LiveMarketTerminal() {
-  const [selected, setSelected] = createSignal(['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT']);
+export default function LiveMarketTerminal(props) {
+  const selected = () => props.watchlist || ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT'];
   const [prices, setPrices] = createSignal({});
   const [klineStore, setKlineStore] = createSignal({});
   const [trades, setTrades] = createSignal({});
@@ -85,7 +85,7 @@ export default function LiveMarketTerminal() {
   let ws = null;
 
   const toggleSelect = (sym) => {
-    setSelected(prev => {
+    props.setWatchlist(prev => {
       if (prev.includes(sym)) {
         if (prev.length <= 1) return prev;
         return prev.filter(s => s !== sym);
@@ -186,56 +186,7 @@ export default function LiveMarketTerminal() {
           </div>
           <span class="text-[8px] text-text_secondary/40 uppercase">{selected().length} ASSET{selected().length !== 1 ? 'S' : ''} ACTIVE</span>
         </div>
-        <button
-          onClick={() => setShowSelector(v => !v)}
-          class={`flex items-center gap-2 px-4 py-1.5 border text-[9px] font-black uppercase tracking-widest transition-all ${showSelector() ? 'bg-text_accent text-bg_main border-text_accent' : 'border-text_accent/30 text-text_accent hover:bg-text_accent/10'}`}
-        >
-          <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-          {showSelector() ? 'CLOSE SELECTOR' : 'SELECT ASSETS'}
-        </button>
       </div>
-
-      {/* Coin Selector Panel */}
-      <Show when={showSelector()}>
-        <div class="border-b border-border_main bg-bg_main/80 p-4 shrink-0 animate-in slide-in-from-top-2 duration-300">
-          <div class="flex items-center justify-between mb-3">
-            <span class="text-[10px] font-black text-text_accent tracking-widest uppercase">ASSET SELECTOR — TOP 50 (MAX 10)</span>
-            <input
-              type="text"
-              placeholder="FILTER..."
-              value={selectorSearch()}
-              onInput={e => setSelectorSearch(e.target.value)}
-              class="bg-black/60 border border-border_main px-3 py-1 text-[9px] text-text_accent focus:outline-none focus:border-text_accent/50 font-mono uppercase tracking-widest w-48"
-            />
-          </div>
-          <div class="grid grid-cols-10 gap-1 max-h-40 overflow-y-auto win-scroll">
-            <For each={filteredTop50()}>
-              {(sym) => {
-                const isActive = () => selected().includes(sym);
-                const price = () => prices()[sym]?.price;
-                const sent = () => sentiment()[sym];
-                return (
-                  <button
-                    onClick={() => toggleSelect(sym)}
-                    class={`flex flex-col items-center justify-center p-2 border text-[8px] font-black uppercase transition-all h-14 relative overflow-hidden ${isActive() ? 'border-text_accent bg-text_accent/10 text-text_accent' : 'border-border_main/20 text-text_secondary opacity-60 hover:opacity-100 hover:border-text_accent/30'}`}
-                  >
-                    <Show when={isActive()}>
-                      <div class="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-text_accent" />
-                    </Show>
-                    <span class="leading-none">{sym.replace('USDT', '')}</span>
-                    <Show when={price()}>
-                      <span class={`text-[7px] mt-0.5 ${sent() === 'BULLISH' ? 'text-green-400' : 'text-red-400'}`}>
-                        ${price()?.toFixed(2)}
-                      </span>
-                    </Show>
-                  </button>
-                );
-              }}
-            </For>
-          </div>
-          <p class="text-[8px] text-text_secondary/30 uppercase mt-2 italic">Select up to 10 assets to monitor simultaneously. Click to toggle.</p>
-        </div>
-      </Show>
 
       {/* Live Market Grid */}
       <div class={`flex-1 overflow-auto p-1 grid gap-1 ${selected().length <= 2 ? 'grid-cols-1 md:grid-cols-2' : selected().length <= 4 ? 'grid-cols-2' : selected().length <= 6 ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-5'}`}>

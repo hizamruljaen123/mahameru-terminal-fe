@@ -3,6 +3,11 @@ import * as echarts from 'echarts';
 import TechnicalAnalysisPanel from '../components/TechnicalAnalysisPanel';
 import EntityAdvancedView from '../components/EntityAdvancedView';
 import LiveMarketTerminal from '../components/LiveMarketTerminal';
+import CryptoOnChainPanel from '../components/crypto/CryptoOnChainPanel';
+import CryptoDerivativesPanel from '../components/crypto/CryptoDerivativesPanel';
+import CryptoQuantPanel from '../components/crypto/CryptoQuantPanel';
+import CryptoMacroPanel from '../components/crypto/CryptoMacroPanel';
+import CryptoAssetExplorer from '../components/crypto/CryptoAssetExplorer';
 
 // --- CONFIG & CONSTANTS ---
 const CRYPTO_API = import.meta.env.VITE_CRYPTO_API;
@@ -238,6 +243,7 @@ export default function CryptoIntelligenceView(props) {
   const [loading, setLoading] = createSignal(false);
   const [aiLoading, setAiLoading] = createSignal(false);
   const [activeTab, setActiveTab] = createSignal('overview');
+  const [liveWatchlist, setLiveWatchlist] = createSignal(['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT']);
   const [horizon, setHorizon] = createSignal('30d');
   const [searchTerm, setSearchTerm] = createSignal('');
   const [selectedRange, setSelectedRange] = createSignal('1M');
@@ -282,14 +288,21 @@ export default function CryptoIntelligenceView(props) {
       },
       series: [{
         name: 'MONTHLY RETURN', type: 'heatmap', data: stats().seasonality.matrix,
-        label: { show: false },
+        label: { 
+          show: true, 
+          fontSize: 8, 
+          fontWeight: 'black',
+          color: '#fff',
+          formatter: (p) => p.value[2].toFixed(1) + '%'
+        },
         emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0, 0, 0, 0.5)' } }
       }]
     });
   };
 
   createEffect(() => {
-    if (activeTab() === 'technical') {
+    const s = selectedSymbol();
+    if (activeTab() === 'technical' && s) {
       setTimeout(fetchStats, 100);
     }
   });
@@ -421,12 +434,17 @@ export default function CryptoIntelligenceView(props) {
   const displayCoins = () => coins();
 
   const TABS = [
-    { id: 'overview', label: '01 MARKET OVERVIEW' },
-    { id: 'technical', label: '02 TECHNICAL ANALYSIS' },
-    { id: 'risk', label: '03 RISK ANALYSIS' },
-    { id: 'news', label: '04 NEWS FEED' },
-    { id: 'advanced', label: '05 QUANT ANALYTICS' },
-    { id: 'live', label: '06 LIVE MARKET' }
+    { id: 'overview', label: '01 OVERVIEW' },
+    { id: 'technical', label: '02 TECHNICAL' },
+    { id: 'risk', label: '03 RISK' },
+    { id: 'onchain', label: '04 ON-CHAIN' },
+    { id: 'derivatives', label: '05 DERIVATIVES' },
+    { id: 'quant', label: '06 QUANT' },
+    { id: 'macro', label: '07 MACRO' },
+    { id: 'news', label: '08 NEWS' },
+    { id: 'advanced', label: '09 ADVANCED' },
+    { id: 'live', label: '10 LIVE' },
+    { id: 'explorer', label: '11 EXPLORER' }
   ];
 
   return (
@@ -447,7 +465,12 @@ export default function CryptoIntelligenceView(props) {
           <For each={displayCoins()}>
             {(coin) => (
               <button
-                onClick={() => setSelectedSymbol(coin.symbol)}
+                onClick={() => {
+                  setSelectedSymbol(coin.symbol);
+                  if (activeTab() === 'explorer' || activeTab() === 'live') {
+                    setActiveTab('overview');
+                  }
+                }}
                 class={`w-full flex items-center justify-between px-4 py-3 border-b border-border_main/10 hover:bg-text_accent/5 transition-all group ${selectedSymbol() === coin.symbol ? 'border-l-4 border-l-text_accent bg-text_accent/10' : 'border-l-4 border-l-transparent opacity-70 hover:opacity-100'}`}
               >
                 <div class="flex items-center gap-3">
@@ -484,45 +507,14 @@ export default function CryptoIntelligenceView(props) {
       {/* MAIN INTELLIGENCE AREA */}
       <div class="flex-1 flex flex-col min-w-0">
 
-        {/* HEADER: COIN STATUS */}
-        <div class="h-20 border-b border-border_main bg-bg_header/40 shrink-0 flex items-center justify-between px-6">
-          <Show when={detail()} fallback={<div class="animate-pulse flex gap-6"><div class="w-12 h-12 bg-white/5 rounded-sm"></div><div class="w-48 h-10 bg-white/5 rounded-sm"></div></div>}>
-            <div class="flex items-center gap-6">
-              <div class="w-12 h-12 flex items-center justify-center bg-black/40 border-2 border-border_main">
-                <Show when={detail().metadata?.logo} fallback={<div class="text-[14px] font-black text-text_accent">{detail().symbol}</div>}>
-                  <img src={detail().metadata.logo} class="w-8 h-8 rounded-full" />
-                </Show>
-              </div>
-              <div class="flex flex-col">
-                <div class="flex items-center gap-3">
-                  <h1 class="text-[18px] font-black tracking-tighter text-text_primary leading-none">{detail().name}</h1>
-                  <span class="px-2 py-0.5 bg-text_accent/10 border border-text_accent/30 text-[9px] font-black text-text_accent tracking-widest uppercase">RANK #{detail().rank}</span>
-                </div>
-                <span class="text-[10px] font-bold text-text_secondary opacity-60 mt-1 uppercase tracking-widest">CRYPTO ASSET // {detail().symbol} / USDT</span>
-              </div>
-            </div>
-
-            <div class="flex items-center gap-10">
-              <div class="flex flex-col items-end">
-                <span class="text-[22px] font-black font-mono text-text_primary leading-none">${fmt(detail().price, detail().price < 1 ? 5 : 2)}</span>
-                <span class={`text-[10px] font-black mt-1 ${signColor(detail().percent_change_24h)}`}>{fmtPct(detail().percent_change_24h)} <span class="text-text_secondary opacity-30 italic ml-1">(24H)</span></span>
-              </div>
-              <div class="h-10 w-px bg-border_main opacity-30"></div>
-              <div class="flex flex-col items-end">
-                <span class="text-[10px] font-black text-text_secondary/60 uppercase tracking-widest mb-1">MARKET CAP</span>
-                <span class="text-[12px] font-black text-text_primary">${(detail().market_cap / 1e9).toFixed(2)}B</span>
-              </div>
-            </div>
-          </Show>
-        </div>
 
         {/* TAB NAVIGATION */}
-        <div class="h-11 border-b border-border_main flex items-center gap-1 px-4 bg-black/20 shrink-0">
+        <div class="h-11 border-b border-border_main flex items-center gap-0 px-2 bg-black/20 shrink-0 overflow-x-auto win-scroll">
           <For each={TABS}>
             {(tab) => (
               <button
                 onClick={() => setActiveTab(tab.id)}
-                class={`px-4 h-full text-[9px] font-black tracking-[0.2em] transition-all border-b-2 flex items-center ${activeTab() === tab.id ? 'text-text_accent border-text_accent bg-text_accent/5' : 'text-text_secondary border-transparent opacity-40 hover:opacity-100 hover:bg-white/5'}`}
+                class={`px-3 h-full text-[8px] font-black tracking-[0.15em] transition-all border-b-2 flex items-center shrink-0 whitespace-nowrap ${activeTab() === tab.id ? 'text-text_accent border-text_accent bg-text_accent/5' : 'text-text_secondary border-transparent opacity-40 hover:opacity-100 hover:bg-white/5'}`}
               >
                 {tab.label}
               </button>
@@ -530,10 +522,32 @@ export default function CryptoIntelligenceView(props) {
           </For>
         </div>
 
-        {/* CONTENT SWITCHER */}
-        <div class="flex-1 overflow-y-auto win-scroll p-6 bg-black/5">
+          {/* CONTENT SWITCHER */}
+          <div class="flex-1 overflow-y-auto win-scroll p-6 bg-black/5">
 
-          <Show when={activeTab() === 'overview'}>
+            <Show when={activeTab() === 'live'}>
+              <LiveMarketTerminal watchlist={liveWatchlist()} setWatchlist={setLiveWatchlist} />
+            </Show>
+
+            <Show when={activeTab() === 'explorer'}>
+              <CryptoAssetExplorer 
+                onSelect={(sym) => {
+                  setSelectedSymbol(sym);
+                  setActiveTab('overview');
+                }}
+                onAddToLive={(sym) => {
+                  const pair = sym.includes('USDT') ? sym : `${sym}USDT`;
+                  setLiveWatchlist(prev => {
+                    if (prev.includes(pair)) return prev;
+                    if (prev.length >= 10) return [pair, ...prev.slice(0, 9)];
+                    return [pair, ...prev];
+                  });
+                  setActiveTab('live');
+                }}
+              />
+            </Show>
+
+            <Show when={activeTab() === 'overview'}>
             <div class="flex flex-col gap-6 animate-in slide-in-from-right-4 duration-500">
 
               {/* HISTORICAL CANDLESTICK AREA (MOVED TO TOP) */}
@@ -662,62 +676,51 @@ export default function CryptoIntelligenceView(props) {
                 </div>
               </div>
 
-              {/* AI MULTI-AGENT DOSSIER */}
-              {/* DUAL STREAM: HEATMAP & COMPACT INTELLIGENCE */}
+              {/* AI MULTI-AGENT DOSSIER (HIGH DENSITY) */}
               <div class="grid grid-cols-12 gap-6">
 
-                {/* TRADINGVIEW HEATMAP AREA */}
-                <div class="col-span-12 lg:col-span-8 flex flex-col border-2 border-border_main bg-black/40 group overflow-hidden min-h-[500px]">
-                  <SectionHeader title="MARKET HEATMAP" />
-                  <div class="flex-1 relative overflow-hidden">
-                    <TradingViewHeatmap theme={props.theme?.()} />
+                {/* COMPACT AI DOSSIER */}
+                <div class="col-span-12 lg:col-span-4 flex flex-col border-2 border-border_main bg-black/40 overflow-hidden">
+                  <SectionHeader title="ANALYTICS SUMMARY" />
+                  <div class="p-5 flex flex-col gap-4">
+                    <Show when={!aiLoading()} fallback={<div class="py-8 flex flex-col items-center gap-3"><div class="w-6 h-6 border-2 border-text_accent border-t-transparent animate-spin rounded-full"></div><span class="text-[8px] font-black text-text_accent uppercase tracking-[0.2em]">ANALYZING...</span></div>}>
+                      <div class="flex items-center gap-2 mb-2">
+                        <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
+                        <span class="text-[9px] font-black text-green-500 tracking-widest uppercase">SYSTEM: STABLE</span>
+                      </div>
+                      <p class="text-[12px] font-bold text-text_primary leading-tight italic border-l-2 border-text_accent pl-4 py-2 mb-4 bg-text_accent/5">
+                        "{aiVerdict()?.summary}"
+                      </p>
+                      <div class="flex flex-col gap-4">
+                        <div class="flex flex-col gap-2">
+                          <div class="flex justify-between items-end">
+                            <span class="text-[8px] font-black text-blue-400 uppercase tracking-widest">SENTIMENT ALPHA</span>
+                            <span class="text-[10px] font-black text-white font-mono">{fmtPct((aiVerdict()?.agents?.sentiment?.score + 1) * 50)}</span>
+                          </div>
+                          <div class="h-1.5 bg-white/5 rounded-full overflow-hidden"><div class="h-full bg-blue-500 transition-all duration-1000" style={{ width: `${(aiVerdict()?.agents?.sentiment?.score + 1) * 50}%` }}></div></div>
+                        </div>
+                        <div class="flex flex-col gap-2">
+                          <div class="flex justify-between items-end">
+                            <span class="text-[8px] font-black text-red-500 uppercase tracking-widest">VOLATILITY RISK</span>
+                            <span class="text-[10px] font-black text-white font-mono">{aiVerdict()?.agents?.risk?.volatility_annual}%</span>
+                          </div>
+                          <div class="h-1.5 bg-white/5 rounded-full overflow-hidden"><div class="h-full bg-red-500 transition-all duration-1000" style={{ width: `${Math.min(100, aiVerdict()?.agents?.risk?.volatility_annual)}%` }}></div></div>
+                        </div>
+                      </div>
+                    </Show>
                   </div>
                 </div>
 
-                {/* SIDEBAR: COMPACT DOSSIER & AGENT FEEDS */}
-                <div class="col-span-12 lg:col-span-4 flex flex-col gap-6">
-
-                  {/* COMPACT AI DOSSIER */}
-                  <div class="flex flex-col border-2 border-border_main bg-black/40 overflow-hidden">
-                    <SectionHeader title="ANALYTICS SUMMARY" />
-                    <div class="p-4 flex flex-col gap-4">
-                      <Show when={!aiLoading()} fallback={<div class="py-4 flex flex-col items-center gap-2"><div class="w-5 h-5 border-2 border-text_accent border-t-transparent animate-spin rounded-full"></div><span class="text-[7px] font-black text-text_accent uppercase">ANALYZING...</span></div>}>
-                        <div class="flex items-center gap-2 mb-1">
-                          <div class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
-                          <span class="text-[8px] font-black text-green-500 tracking-widest uppercase">SYSTEM STATUS: NORMAL</span>
-                        </div>
-                        <p class="text-[11px] font-bold text-text_primary leading-tight italic border-l-2 border-text_accent pl-3 py-1 mb-2 bg-text_accent/5">
-                          "{aiVerdict()?.summary}"
-                        </p>
-                        <div class="grid grid-cols-1 gap-3">
-                          <div class="flex flex-col gap-1.5">
-                            <div class="flex justify-between items-end">
-                              <span class="text-[7px] font-black text-blue-400 uppercase">SENTIMENT</span>
-                              <span class="text-[9px] font-black text-white">{fmtPct((aiVerdict()?.agents?.sentiment?.score + 1) * 50)}</span>
-                            </div>
-                            <div class="h-1 bg-white/5"><div class="h-full bg-blue-500" style={{ width: `${(aiVerdict()?.agents?.sentiment?.score + 1) * 50}%` }}></div></div>
-                          </div>
-                          <div class="flex flex-col gap-1.5">
-                            <div class="flex justify-between items-end">
-                              <span class="text-[7px] font-black text-red-500 uppercase">RISK</span>
-                              <span class="text-[9px] font-black text-white">{aiVerdict()?.agents?.risk?.volatility_annual}%</span>
-                            </div>
-                            <div class="h-1 bg-white/5"><div class="h-full bg-red-500" style={{ width: `${Math.min(100, aiVerdict()?.agents?.risk?.volatility_annual)}%` }}></div></div>
-                          </div>
-                        </div>
-                      </Show>
-                    </div>
-                  </div>
-
-                  {/* AGENT FEEDS (Combined) */}
-                  <div class="flex flex-col border-2 border-border_main bg-black/40 overflow-hidden h-full">
-                    <SectionHeader title="AI ANALYSIS FEED" />
-                    <div class="flex-1 flex flex-col divide-y divide-border_main/10 overflow-y-auto max-h-[400px]">
+                {/* AGENT FEEDS (Scrollable) */}
+                <div class="col-span-12 lg:col-span-8 flex flex-col border-2 border-border_main bg-black/40 overflow-hidden">
+                  <SectionHeader title="AI MULTI-AGENT ANALYSIS FEED" />
+                  <div class="flex-1 overflow-y-auto max-h-[300px] win-scroll">
+                    <div class="grid grid-cols-2 divide-x divide-y divide-border_main/10">
                       <For each={Object.entries(aiVerdict()?.agents || {})}>
                         {([name, val]) => (
-                          <div class="px-3 py-2 flex items-center justify-between hover:bg-white/5 transition-all group">
-                            <span class="text-[8px] font-black text-text_secondary group-hover:text-text_primary text-left uppercase">{name}</span>
-                            <span class={`text-[9px] font-black ${val.signal === 'BULLISH' ? 'text-green-400' : val.signal === 'BEARISH' ? 'text-red-400' : 'text-text_accent'}`}>
+                          <div class="px-5 py-3 flex items-center justify-between hover:bg-white/[0.03] transition-all group">
+                            <span class="text-[9px] font-black text-text_secondary group-hover:text-text_primary uppercase tracking-tighter">{name}</span>
+                            <span class={`text-[10px] font-black tabular-nums ${val.signal === 'BULLISH' ? 'text-green-400' : val.signal === 'BEARISH' ? 'text-red-400' : 'text-text_accent'}`}>
                               {val.signal || val.status || val.pressure || val.action || val.verdict || val.next_move || 'NEUTRAL'}
                             </span>
                           </div>
@@ -729,40 +732,43 @@ export default function CryptoIntelligenceView(props) {
               </div>
 
 
-              {/* NEWS SUMMARY ROW */}
-              <div class="grid grid-cols-2 gap-6 h-[400px]">
-                <div class="flex flex-col border-2 border-border_main bg-black/40 overflow-hidden">
-                  <SectionHeader title="MARKET NEWS" />
+              {/* NEWS & IMPACT (HIGH DENSITY) */}
+              <div class="grid grid-cols-12 gap-6 h-[400px]">
+                <div class="col-span-12 lg:col-span-8 flex flex-col border-2 border-border_main bg-black/40 overflow-hidden">
+                  <SectionHeader title="MARKET NEWS INTELLIGENCE" />
                   <div class="flex-1 overflow-y-auto p-2 space-y-1 win-scroll">
-                    <For each={detail()?.news?.slice(0, 8)}>
+                    <For each={detail()?.news?.slice(0, 12)}>
                       {(n) => (
-                        <a href={n.url} target="_blank" class="flex items-center gap-4 px-4 py-2.5 hover:bg-white/[0.03] transition-all group border-b border-border_main/5 last:border-0">
-                          <div class="flex flex-col shrink-0 w-24">
-                            <span class="text-[8px] font-black text-text_accent uppercase tracking-tighter opacity-60">{n.source}</span>
-                            <span class="text-[7px] font-bold text-text_secondary opacity-30 tabular-nums">{n.date}</span>
+                        <a href={n.url} target="_blank" class="flex items-center gap-6 px-5 py-3 hover:bg-white/[0.04] transition-all group border-b border-white/[0.02] last:border-0">
+                          <div class="flex flex-col shrink-0 w-28">
+                            <span class="text-[9px] font-black text-text_accent uppercase tracking-tighter opacity-70 group-hover:opacity-100">{n.source}</span>
+                            <span class="text-[8px] font-bold text-text_secondary opacity-30 tabular-nums">{n.date}</span>
                           </div>
-                          <h4 class="text-[10px] font-black text-text_primary group-hover:text-text_accent transition-colors truncate uppercase tracking-tight">{n.title}</h4>
-                          <div class="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
-                            <svg class="w-3 h-3 text-text_accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6m4-3h6v6m-11 5L21 3" /></svg>
+                          <h4 class="text-[11px] font-black text-text_primary group-hover:text-text_accent transition-colors truncate uppercase tracking-tight flex-1">{n.title}</h4>
+                          <div class="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <svg class="w-3.5 h-3.5 text-text_accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6m4-3h6v6m-11 5L21 3" /></svg>
                           </div>
                         </a>
                       )}
                     </For>
                   </div>
                 </div>
-                <div class="flex flex-col border-2 border-border_main bg-black/40 overflow-hidden">
-                  <SectionHeader title="GLOBAL ECONOMIC IMPACT" />
-                  <div class="flex-1 overflow-y-auto p-4 space-y-3 win-scroll">
-                    <For each={detail()?.metadata?.tags?.slice(0, 10)}>
-                      {(tag) => (
-                        <div class="px-3 py-1.5 bg-text_accent/5 border border-text_accent/20 text-[9px] font-black text-text_accent tracking-widest inline-block mr-2 mb-2 uppercase hover:bg-text_accent hover:text-bg_main transition-all cursor-default">
-                          # {tag}
-                        </div>
-                      )}
-                    </For>
-                    <div class="mt-4 p-4 border border-border_main/20 bg-white/2">
-                      <h5 class="text-[9px] font-black text-white/40 uppercase mb-3 tracking-widest border-b border-border_main/10 pb-2">ASSET DATA</h5>
-                      <p class="text-[10px] text-text_secondary leading-relaxed text-justify">
+                <div class="col-span-12 lg:col-span-4 flex flex-col border-2 border-border_main bg-black/40 overflow-hidden">
+                  <SectionHeader title="GLOBAL IMPACT & METADATA" />
+                  <div class="flex-1 overflow-y-auto p-5 space-y-4 win-scroll bg-black/20">
+                    <div class="flex flex-wrap gap-2">
+                      <For each={detail()?.metadata?.tags?.slice(0, 8)}>
+                        {(tag) => (
+                          <div class="px-2 py-1 bg-text_accent/5 border border-text_accent/20 text-[8px] font-black text-text_accent tracking-widest uppercase hover:bg-text_accent hover:text-bg_main transition-all cursor-default">
+                            # {tag}
+                          </div>
+                        )}
+                      </For>
+                    </div>
+                    <div class="p-4 border border-border_main/10 bg-black/40 relative">
+                      <div class="absolute top-0 left-0 w-1 h-full bg-text_accent/30" />
+                      <h5 class="text-[9px] font-black text-text_accent/50 uppercase mb-3 tracking-widest">DOSSIER_DESC</h5>
+                      <p class="text-[10px] text-text_secondary leading-relaxed text-justify opacity-80 line-clamp-[10]">
                         {detail()?.metadata?.description || 'No additional data available for this asset.'}
                       </p>
                     </div>
@@ -773,13 +779,27 @@ export default function CryptoIntelligenceView(props) {
           </Show>
 
           <Show when={activeTab() === 'technical'}>
-            <div class="h-full flex flex-col gap-6 animate-in fade-in duration-500 overflow-y-auto win-scroll pr-2">
-              <div class="flex flex-col border-2 border-border_main bg-black/40 h-[400px] shrink-0">
-                <SectionHeader title={`SEASONALITY HEATMAP (${selectedSymbol()})`} />
-                <div ref={seasChartDom} class="flex-1"></div>
+            <div class="h-full flex flex-col gap-6 animate-in fade-in duration-500 overflow-y-auto win-scroll pr-2 pb-10">
+              
+              {/* TOP ROW: HEATMAPS (SIDE-BY-SIDE) */}
+              <div class="grid grid-cols-12 gap-6 h-[450px] shrink-0">
+                {/* SEASONALITY */}
+                <div class="col-span-12 lg:col-span-5 flex flex-col border-2 border-border_main bg-black/40 overflow-hidden">
+                  <SectionHeader title={`SEASONALITY HEATMAP (${selectedSymbol()})`} />
+                  <div ref={seasChartDom} class="flex-1 min-h-0"></div>
+                </div>
+
+                {/* GLOBAL MARKET HEATMAP */}
+                <div class="col-span-12 lg:col-span-7 flex flex-col border-2 border-border_main bg-black/40 group overflow-hidden">
+                  <SectionHeader title="GLOBAL MARKET HEATMAP (TV)" />
+                  <div class="flex-1 relative overflow-hidden min-h-0">
+                    <TradingViewHeatmap theme={props.theme?.()} />
+                  </div>
+                </div>
               </div>
 
-              <div class="h-[700px] shrink-0 border border-border_main mb-10">
+              {/* BOTTOM ROW: FULL WIDTH TECHNICAL ANALYSIS */}
+              <div class="h-[800px] shrink-0 border border-border_main">
                 <TechnicalAnalysisPanel symbol={selectedSymbol() + '-USD'} showToolbar={false} />
               </div>
             </div>
@@ -891,6 +911,30 @@ export default function CryptoIntelligenceView(props) {
             </div>
           </Show>
 
+          <Show when={activeTab() === 'onchain'}>
+            <div class="h-full overflow-y-auto win-scroll pr-2">
+              <CryptoOnChainPanel symbol={selectedSymbol()} />
+            </div>
+          </Show>
+
+          <Show when={activeTab() === 'derivatives'}>
+            <div class="h-full overflow-y-auto win-scroll pr-2">
+              <CryptoDerivativesPanel symbol={selectedSymbol()} />
+            </div>
+          </Show>
+
+          <Show when={activeTab() === 'quant'}>
+            <div class="h-full overflow-y-auto win-scroll pr-2">
+              <CryptoQuantPanel symbol={selectedSymbol()} />
+            </div>
+          </Show>
+
+          <Show when={activeTab() === 'macro'}>
+            <div class="h-full overflow-y-auto win-scroll pr-2">
+              <CryptoMacroPanel symbol={selectedSymbol()} />
+            </div>
+          </Show>
+
           <Show when={activeTab() === 'news'}>
             <div class="flex flex-col gap-6 animate-in slide-in-from-right-4 duration-500">
               <div class="grid grid-cols-12 gap-6">
@@ -980,11 +1024,6 @@ export default function CryptoIntelligenceView(props) {
             </div>
           </Show>
 
-          <Show when={activeTab() === 'live'}>
-            <div class="h-full animate-in fade-in duration-500">
-               <LiveMarketTerminal />
-            </div>
-          </Show>
 
         </div>
 
@@ -1003,7 +1042,7 @@ export default function CryptoIntelligenceView(props) {
             </div>
           </div>
           <div class="text-[10px] font-black text-text_primary skew-x-[-12deg] tracking-tighter italic">
-            ENQY TERMINAL // CRYPTO ANALYTICS
+          ENQY TERMINAL // INSTITUTIONAL CRYPTO ANALYTICS v10
           </div>
         </div>
 
