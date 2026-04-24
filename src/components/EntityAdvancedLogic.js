@@ -12,13 +12,13 @@ export const fetchPRISMAnalysis = async (symbol, period, signal) => (await fetch
 // Centralized Request Manager to prevent "Zombie Fetches"
 const controllers = new Map();
 const getSignal = (key) => {
-    if (controllers.has(key)) controllers.get(key).abort();
+    if (controllers.has(key)) controllers.get(key).abort("REPLACED_BY_NEW_REQUEST");
     const controller = new AbortController();
     controllers.set(key, controller);
     return controller.signal;
 };
 const clearControllers = () => {
-    controllers.forEach(c => c.abort());
+    controllers.forEach(c => c.abort("WORKSPACE_CLEANUP"));
     controllers.clear();
 };
 
@@ -42,13 +42,28 @@ export const stopDeep = () => { shouldStopDeep = true; };
 window.stopDeep = stopDeep;
 
 export const initAdvancedAnalysis = (data, symbol) => {
+    // GUARD: Prevent "Back-overwriting". 
+    // If we are already on this symbol and have a manually fetched custom period (like 6mo),
+    // don't let the parent's initial "fast-load" data (usually 1w) overwrite the workstation.
+    if (currentSymbol === symbol && fullData.length >= data.length && localPeriod !== '1w') {
+        return;
+    }
+
     clearControllers();
-    fullData = [...data].sort((a, b) => new Date(a.Date) - new Date(b.Date));
-    currentSymbol = symbol; mlData = null; akftData = null; ampaData = null; fahmaData = null; prismData = null;
+    
+    // Reset period to default only if the symbol has actually changed
+    if (currentSymbol !== symbol) {
+        localPeriod = '6mo';
+    }
+    
+    currentSymbol = symbol;
+    const historyData = data?.history ? data.history : (Array.isArray(data) ? data : []);
+    fullData = [...historyData].sort((a, b) => new Date(a.Date) - new Date(b.Date));
+    mlData = null; akftData = null; ampaData = null; fahmaData = null; prismData = null;
 
     document.querySelectorAll('.adv-period-btn').forEach(btn => {
         btn.removeAttribute('data-active');
-        if (btn.dataset.range === '6mo') btn.setAttribute('data-active', 'true');
+        if (btn.dataset.range === localPeriod) btn.setAttribute('data-active', 'true');
     });
     
     // Update labels in advanced view
@@ -74,7 +89,6 @@ const setupPeriodSelectors = () => {
 
             try {
                 const headSignal = getSignal('history');
-                // Fetch direct from API for the specifically requested period interval!
                 const res = await fetch(`${import.meta.env.VITE_ENTITY_URL}/api/entity/history/${currentSymbol}?period=${localPeriod}`, { signal: headSignal });
                 const data = await res.json();
                 
@@ -82,26 +96,41 @@ const setupPeriodSelectors = () => {
                     fullData = [...data.history].sort((a, b) => new Date(a.Date) - new Date(b.Date));
                 }
 
-                // If deep components are active, re-fetch their predictions with the new period
+                // Parallel fetch for all active deep analytical nodes to ensure "100% GET" before rendering
+                const deepFetches = [];
                 if (activeIndicators.has('ml-hurst') || activeIndicators.has('ml-montecarlo') || activeIndicators.has('ml-apef') || activeIndicators.has('ml-arima') || activeIndicators.has('zscore') || activeIndicators.has('ml-sera')) {
-                    mlData = await fetchMLAnalysis(currentSymbol, localPeriod, getSignal('ml')); mlData.period = localPeriod;
+                    deepFetches.push(fetchMLAnalysis(currentSymbol, localPeriod, getSignal('ml')).then(d => { mlData = d; mlData.period = localPeriod; }).catch(e => e.name !== 'AbortError' && console.error(e)));
                 }
-                if (activeIndicators.has('nt-akft')) { akftData = await fetchAKFTAnalysis(currentSymbol, localPeriod, getSignal('akft')); akftData.period = localPeriod; }
-                if (activeIndicators.has('nt-ampa')) { ampaData = await fetchAMPAAnalysis(currentSymbol, ampaParams, localPeriod, getSignal('ampa')); ampaData.period = localPeriod; }
-                if (activeIndicators.has('nt-fahma')) { fahmaData = await fetchFAHMAAnalysis(currentSymbol, localPeriod, getSignal('fahma')); fahmaData.period = localPeriod; }
-                if (activeIndicators.has('nt-prism')) { prismData = await fetchPRISMAnalysis(currentSymbol, localPeriod, getSignal('prism')); prismData.period = localPeriod; }
+                if (activeIndicators.has('nt-akft')) {
+                    deepFetches.push(fetchAKFTAnalysis(currentSymbol, localPeriod, getSignal('akft')).then(d => { akftData = d; akftData.period = localPeriod; }).catch(e => e.name !== 'AbortError' && console.error(e)));
+                }
+                if (activeIndicators.has('nt-ampa')) {
+                    deepFetches.push(fetchAMPAAnalysis(currentSymbol, ampaParams, localPeriod, getSignal('ampa')).then(d => { ampaData = d; ampaData.period = localPeriod; }).catch(e => e.name !== 'AbortError' && console.error(e)));
+                }
+                if (activeIndicators.has('nt-fahma')) {
+                    deepFetches.push(fetchFAHMAAnalysis(currentSymbol, localPeriod, getSignal('fahma')).then(d => { fahmaData = d; fahmaData.period = localPeriod; }).catch(e => e.name !== 'AbortError' && console.error(e)));
+                }
+                if (activeIndicators.has('nt-prism')) {
+                    deepFetches.push(fetchPRISMAnalysis(currentSymbol, localPeriod, getSignal('prism')).then(d => { prismData = d; prismData.period = localPeriod; }).catch(e => e.name !== 'AbortError' && console.error(e)));
+                }
+
+                await Promise.all(deepFetches);
+
+                updateLocalData();
+                renderAdvancedWorkstation();
+                renderAdvancedTable();
+                
+                if (deepActiveList.length > 0) {
+                    await showDeepAnalysis(deepActiveList[deepActiveList.length - 1]);
+                }
 
             } catch (err) {
-                console.error("Failed to fetch historical data from backend:", err);
+                if (err.name !== 'AbortError') {
+                    console.error("Failed to fetch historical data stream:", err);
+                }
+            } finally {
+                toggleAdvancedLoading(false);
             }
-
-            updateLocalData();
-            renderAdvancedWorkstation();
-            renderAdvancedTable();
-            
-            toggleAdvancedLoading(false);
-
-            if (deepActiveList.length > 0) renderDeepView(deepActiveList[deepActiveList.length - 1]);
         };
     });
 };
@@ -118,13 +147,13 @@ const renderAdvancedTable = () => {
     const displayData = [...localPeriodData].reverse();
     for (const row of displayData) {
         rows += `
-            <tr class="hover:bg-bg_main/50">
-                <td class="p-2 pl-4 text-text_secondary whitespace-nowrap">${row.Date}</td>
-                <td class="p-2 text-right">${row.Open.toFixed(2)}</td>
-                <td class="p-2 text-right">${row.High.toFixed(2)}</td>
-                <td class="p-2 text-right">${row.Low.toFixed(2)}</td>
-                <td class="p-2 text-right text-text_main font-bold">${row.Close.toFixed(2)}</td>
-                <td class="p-2 pr-4 text-right opacity-60">${row.Volume.toLocaleString()}</td>
+            <tr class="hover:bg-green-500/5 transition-colors border-b border-border_main/5 group">
+                <td class="p-4 pl-8 text-text_secondary whitespace-nowrap border-r border-border_main/10 font-bold group-hover:text-text_main">${row.Date}</td>
+                <td class="p-4 text-right border-r border-border_main/10 tabular-nums">${row.Open.toFixed(2)}</td>
+                <td class="p-4 text-right border-r border-border_main/10 tabular-nums text-green-500/70">${row.High.toFixed(2)}</td>
+                <td class="p-4 text-right border-r border-border_main/10 tabular-nums text-red-500/70">${row.Low.toFixed(2)}</td>
+                <td class="p-4 text-right border-r border-border_main/10 tabular-nums text-text_main font-black bg-white/5">${row.Close.toFixed(2)}</td>
+                <td class="p-4 pr-8 text-right tabular-nums opacity-40 group-hover:opacity-100 transition-opacity">${row.Volume.toLocaleString()}</td>
             </tr>
         `;
     }
@@ -335,14 +364,16 @@ const showDeepAnalysis = async (id) => {
                         ampaParams.forecast_len = parseInt(document.getElementById('param-forecast-len').value);
 
                         try {
-                            ampaData = await fetchAMPAAnalysis(currentSymbol, ampaParams, localPeriod); ampaData.period = localPeriod;
+                            ampaData = await fetchAMPAAnalysis(currentSymbol, ampaParams, localPeriod, getSignal('ampa')); ampaData.period = localPeriod;
                             const chartDom = document.getElementById(`chart-nt-ampa`);
                             renderDeepView('nt-ampa', chartDom);
                             btn.textContent = 'PROTOCOL_SYNCED';
                             setTimeout(() => { btn.textContent = 'SYNCHRONIZE_PROTOCOL'; }, 2000);
                         } catch (err) {
-                            console.error(err);
-                            btn.textContent = 'SYNC_FAILED';
+                            if (err.name !== 'AbortError') {
+                                console.error(err);
+                                btn.textContent = 'SYNC_FAILED';
+                            }
                         }
                     };
                 }

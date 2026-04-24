@@ -733,17 +733,19 @@ export default function CryptoIntelligenceView(props) {
               <div class="grid grid-cols-2 gap-6 h-[400px]">
                 <div class="flex flex-col border-2 border-border_main bg-black/40 overflow-hidden">
                   <SectionHeader title="MARKET NEWS" />
-                  <div class="flex-1 overflow-y-auto p-4 space-y-4 win-scroll">
-                    <For each={detail()?.news?.slice(0, 5)}>
+                  <div class="flex-1 overflow-y-auto p-2 space-y-1 win-scroll">
+                    <For each={detail()?.news?.slice(0, 8)}>
                       {(n) => (
-                        <div class="p-4 bg-white/3 border border-border_main/30 hover:border-text_accent/20 transition-all flex flex-col gap-2 group">
-                          <div class="flex justify-between text-[8px] font-bold text-text_secondary opacity-40 uppercase tracking-widest mb-1">
-                            <span>{n.source}</span>
-                            <span>{n.date}</span>
+                        <a href={n.url} target="_blank" class="flex items-center gap-4 px-4 py-2.5 hover:bg-white/[0.03] transition-all group border-b border-border_main/5 last:border-0">
+                          <div class="flex flex-col shrink-0 w-24">
+                            <span class="text-[8px] font-black text-text_accent uppercase tracking-tighter opacity-60">{n.source}</span>
+                            <span class="text-[7px] font-bold text-text_secondary opacity-30 tabular-nums">{n.date}</span>
                           </div>
-                          <h4 class="text-[11px] font-black text-text_primary leading-tight group-hover:text-text_accent transition-colors">{n.title}</h4>
-                          <p class="text-[9px] text-text_secondary leading-relaxed line-clamp-2 italic">"{n.body}"</p>
-                        </div>
+                          <h4 class="text-[10px] font-black text-text_primary group-hover:text-text_accent transition-colors truncate uppercase tracking-tight">{n.title}</h4>
+                          <div class="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
+                            <svg class="w-3 h-3 text-text_accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6m4-3h6v6m-11 5L21 3" /></svg>
+                          </div>
+                        </a>
                       )}
                     </For>
                   </div>
@@ -895,26 +897,26 @@ export default function CryptoIntelligenceView(props) {
                 {/* LIVE INTEL STREAM */}
                 <div class="col-span-12 xl:col-span-8 flex flex-col border-2 border-border_main bg-black/40 max-h-[800px]">
                   <SectionHeader title="LIVE NEWS FEED // RSS FEED" />
-                  <div class="flex-1 overflow-y-auto p-6 space-y-6 win-scroll">
+                  <div class="flex-1 overflow-y-auto p-4 space-y-1 win-scroll">
                     <For each={detail()?.news}>
                       {(item) => (
-                        <div class="group p-6 bg-white/3 border border-border_main/30 hover:border-text_accent/30 transition-all flex flex-col gap-3 relative overflow-hidden">
-                          <div class="absolute top-0 right-0 w-12 h-12 bg-text_accent/5 origin-top-right rotate-45 group-hover:bg-text_accent/10 transition-all"></div>
-                          <div class="flex justify-between items-start mb-1">
-                            <div class="flex items-center gap-3">
-                              <div class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                              <span class="text-[9px] font-black text-blue-400 uppercase tracking-widest">{item.source}</span>
+                        <a href={item.url} target="_blank" class="flex items-center gap-6 px-6 py-3.5 hover:bg-white/[0.03] transition-all group border-b border-border_main/5 last:border-0 relative overflow-hidden">
+                          <div class="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-text_accent scale-y-0 group-hover:scale-y-100 transition-transform"></div>
+                          <div class="flex flex-col shrink-0 w-32">
+                            <div class="flex items-center gap-2">
+                               <div class="w-1 h-1 rounded-full bg-blue-500"></div>
+                               <span class="text-[9px] font-black text-blue-400 uppercase tracking-widest">{item.source}</span>
                             </div>
-                            <span class="text-[8px] font-black text-text_secondary opacity-40 uppercase tracking-tighter">{item.date}</span>
+                            <span class="text-[8px] font-black text-text_secondary opacity-30 uppercase mt-0.5 tabular-nums">{item.date}</span>
                           </div>
-                          <h3 class="text-[14px] font-black text-text_primary group-hover:text-text_accent transition-colors leading-tight tracking-tight uppercase">{item.title}</h3>
-                          <p class="text-[11px] text-text_secondary leading-relaxed italic border-l-2 border-border_main/30 pl-4 py-1">
-                            "{item.body}"
-                          </p>
-                          <div class="flex justify-end mt-2">
-                            <a href={item.url} target="_blank" class="px-3 py-1 bg-white/5 border border-border_main/20 text-[8px] font-black text-text_secondary hover:bg-text_accent hover:text-bg_main hover:border-text_accent transition-all uppercase tracking-widest">VIEW FULL ARTICLE</a>
+                          <div class="flex-1 min-w-0">
+                            <h3 class="text-[13px] font-black text-text_primary group-hover:text-text_accent transition-colors leading-tight tracking-tight uppercase truncate">{item.title}</h3>
                           </div>
-                        </div>
+                          <div class="shrink-0 flex items-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                             <span class="text-[8px] font-black text-text_accent tracking-[0.2em]">ACCESS_INTEL</span>
+                             <svg class="w-3.5 h-3.5 text-text_accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6m4-3h6v6m-11 5L21 3" /></svg>
+                          </div>
+                        </a>
                       )}
                     </For>
                   </div>

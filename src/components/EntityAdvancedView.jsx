@@ -13,11 +13,7 @@ export default function EntityAdvancedView(props) {
     };
 
     onMount(() => {
-        // initAdvancedAnalysis expects fullData and symbol
-        // Since props.fullHistory is passed from parents, we initialize it
-        if (props.fullHistory && props.symbol) {
-            initAdvancedAnalysis(props.fullHistory, props.symbol);
-        }
+        // Any initial mount logic if needed
     });
 
     createEffect(() => {
@@ -70,9 +66,43 @@ export default function EntityAdvancedView(props) {
     ];
 
     return (
-        <div id="advancedView" class="view-pane flex-1 overflow-y-auto win-scroll h-full">
-            {/* Advanced Analytical Workstation */}
-            <div class="flex h-[calc(100vh-280px)] min-h-[500px] gap-6 relative">
+        <div id="advancedView" class="view-pane flex-1 overflow-y-auto win-scroll h-full p-6 space-y-6 bg-[#050505]">
+            {/* Minimalist Strategic News Ticker */}
+            <div class="bg-bg_header/30 border border-border_main/20 rounded-md py-2.5 px-6 overflow-hidden relative flex items-center gap-6 group backdrop-blur-sm">
+                <div class="shrink-0 flex items-center gap-3 border-r border-border_main/30 pr-6 z-10 bg-bg_header/50">
+                    <div class={`w-2 h-2 rounded-full ${props.newsLoading ? 'bg-amber-500 animate-pulse' : 'bg-green-500'} shadow-[0_0_10px_currentColor]`}></div>
+                    <span class="text-[10px] font-black text-text_main uppercase tracking-[0.3em]">LIVE_INTEL_STREAM</span>
+                </div>
+                <div class="flex-1 overflow-hidden relative h-4">
+                    <div 
+                        class="absolute inset-y-0 left-0 flex items-center gap-16 whitespace-nowrap hover:[animation-play-state:paused]"
+                        style="animation: advancedTicker 80s linear infinite; display: flex; width: max-content;"
+                    >
+                        <style>{`
+                            @keyframes advancedTicker {
+                                0% { transform: translateX(0); }
+                                100% { transform: translateX(-50%); }
+                            }
+                        `}</style>
+                        <Show when={props.news && props.news.length > 0} fallback={<span class="text-[9px] text-text_dim italic uppercase opacity-40 tracking-widest">SYNCHRONIZING WITH GLOBAL RSS NODES...</span>}>
+                            {/* Double the list for seamless loop */}
+                            {[...props.news, ...props.news].map((item, idx) => (
+                                <a href={item.link} target="_blank" class="flex items-center gap-3 hover:text-amber-500 transition-colors group/news">
+                                    <span class="text-[10px] font-black text-text_secondary group-hover/news:text-text_main uppercase tracking-tight">{item.title}</span>
+                                    <span class="text-[8px] font-bold text-text_dim opacity-40 uppercase tabular-nums">[{item.publisher} // {new Date(item.time * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}]</span>
+                                    <div class="w-1.5 h-1.5 bg-border_main rotate-45 opacity-20"></div>
+                                </a>
+                            ))}
+                        </Show>
+                    </div>
+                    {/* Fades for smooth edge transition */}
+                    <div class="absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-bg_header/80 to-transparent z-10 pointer-events-none"></div>
+                    <div class="absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-bg_header/80 to-transparent z-10 pointer-events-none"></div>
+                </div>
+            </div>
+
+            {/* Advanced Analytical Workstation Card */}
+            <div class="flex h-[calc(100vh-400px)] min-h-[600px] gap-6 relative">
                 
                 {/* Sidebar Toggle Button (Floating) */}
                 <button 
@@ -216,29 +246,6 @@ export default function EntityAdvancedView(props) {
                     {/* Chart Layers */}
                     <div id="advancedChart" class="flex-1 w-full bg-[#030303] z-0"></div>
 
-                    {/* Advanced Data Table (Hidden by Default, Dynamically Populated) */}
-                    <div id="advancedTablePanel" class="border-t border-border_main h-[30%] bg-bg_header overflow-y-auto scrollbar-thin hidden">
-                        <div class="sticky top-0 bg-bg_main px-4 py-2 border-b border-border_main flex justify-between items-center z-10">
-                            <h3 class="text-[11px] font-black text-text_accent uppercase tracking-widest">HISTORICAL DATA BUFFER</h3>
-                            <button onClick={() => document.getElementById('advancedTablePanel').classList.add('hidden')} class="text-[9px] hover:text-red-500 font-bold uppercase transition-colors">CLOSE TABLE</button>
-                        </div>
-                        <table class="w-full text-left text-[10px] border-collapse font-mono">
-                            <thead class="bg-bg_header sticky top-[33px] text-text_secondary opacity-60 uppercase font-bold">
-                                <tr>
-                                    <th class="p-2 pl-4 border-b border-border_main uppercase">DATETIME</th>
-                                    <th class="p-2 border-b border-border_main text-right uppercase">OPEN</th>
-                                    <th class="p-2 border-b border-border_main text-right uppercase">HIGH</th>
-                                    <th class="p-2 border-b border-border_main text-right uppercase">LOW</th>
-                                    <th class="p-2 border-b border-border_main text-right text-text_main uppercase">CLOSE</th>
-                                    <th class="p-2 pr-4 border-b border-border_main text-right uppercase">VOLUME</th>
-                                </tr>
-                            </thead>
-                            <tbody id="advancedTableBody" class="divide-y divide-border_main/30">
-                                {/* Handled natively by Logic JS */}
-                            </tbody>
-                        </table>
-                    </div>
-
                     {/* Deep Analysis Overlay Panel */}
                     <div id="deepAnalysisPanel" class="absolute inset-0 bg-[#050505] z-50 overflow-y-auto scrollbar-thin hidden">
                          <div class="sticky top-0 bg-bg_header/95 backdrop-blur-md px-10 py-6 border-b border-white/5 flex justify-between items-center z-[100]">
@@ -267,6 +274,43 @@ export default function EntityAdvancedView(props) {
                         </div>
                     </div>
                 </main>
+            </div>
+
+            {/* Separate Historical Data Table Card */}
+            <div id="advancedTablePanel" class="bg-bg_main border border-border_main rounded-lg overflow-hidden hidden animate-in fade-in slide-in-from-bottom-4 duration-700 shadow-2xl">
+                <div class="bg-bg_header px-8 py-5 border-b border-border_main flex justify-between items-center">
+                    <div class="flex items-center gap-4">
+                        <div class="w-2 h-8 bg-green-500 rounded-full shadow-[0_0_15px_rgba(34,197,94,0.5)]"></div>
+                        <div>
+                            <h3 class="text-[13px] font-black text-text_main uppercase tracking-[0.3em]">HISTORICAL DATA BUFFER</h3>
+                            <p class="text-[9px] text-text_dim font-bold uppercase opacity-50">Operational Stream Matrix — <span class="active-ticker">---</span></p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-6">
+                        <span class="text-[9px] font-black text-green-500/60 uppercase tracking-widest animate-pulse">STREAM_READY</span>
+                        <button onClick={() => document.getElementById('advancedTablePanel').classList.add('hidden')} class="px-4 py-2 bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all rounded flex items-center gap-2 group">
+                            <span>TERMINATE_BUFFER</span>
+                            <svg class="w-3 h-3 group-hover:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="max-h-[600px] overflow-y-auto scrollbar-thin">
+                    <table class="w-full text-left text-[11px] border-collapse font-mono">
+                        <thead class="bg-[#0a0a0a] sticky top-0 text-text_secondary text-[9px] uppercase font-black z-20">
+                            <tr class="border-b border-border_main/50">
+                                <th class="p-4 pl-8 border-r border-border_main/20">DATETIME_STAMP</th>
+                                <th class="p-4 border-r border-border_main/20 text-right">OPEN_VAL</th>
+                                <th class="p-4 border-r border-border_main/20 text-right">HIGH_VAL</th>
+                                <th class="p-4 border-r border-border_main/20 text-right">LOW_VAL</th>
+                                <th class="p-4 border-r border-border_main/20 text-right text-text_main">CLOSE_VAL</th>
+                                <th class="p-4 pr-8 text-right">VOL_MATRIX</th>
+                            </tr>
+                        </thead>
+                        <tbody id="advancedTableBody" class="divide-y divide-border_main/10 bg-[#020202]">
+                            {/* Handled natively by Logic JS */}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );

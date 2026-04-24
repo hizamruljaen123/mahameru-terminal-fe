@@ -998,7 +998,7 @@ const EntityAnalysisView = (props) => {
                             </Show>
 
                             <Show when={activeTab() === 'advanced'}>
-                                <EntityAdvancedView symbol={selectedEntity()} fullHistory={profile()?.history} />
+                                <EntityAdvancedView symbol={selectedEntity()} fullHistory={profile()?.history} news={profile()?.news} newsLoading={newsLoading()} />
                             </Show>
 
                             <Show when={activeTab() === 'report'}>
