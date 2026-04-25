@@ -1,0 +1,14 @@
+User-agent: *
+Disallow: /.env
+Disallow: /.git/
+Disallow: /node_modules/
+Disallow: /package.json
+Disallow: /package-lock.json
+Disallow: /vite.config.js
+Disallow: /tailwind.config.js
+Disallow: /postcss.config.js
+Disallow: /composer.json
+Disallow: /wp-config.php
+Disallow: /config.php
+
+Sitemap: https://terminal.asetpedia.online/sitemap.xml

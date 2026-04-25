@@ -4,6 +4,15 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Security Headers -->
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' unpkg.com cdn.jsdelivr.net cdnjs.cloudflare.com cdn.plot.ly code.jquery.com; style-src 'self' 'unsafe-inline' unpkg.com fonts.googleapis.com; img-src 'self' data: blob: unpkg.com cdn.jsdelivr.net *.tile.openstreetmap.org; connect-src 'self' api.asetpedia.online *.api.asetpedia.online wss://api.asetpedia.online; font-src 'self' fonts.gstatic.com; frame-src 'self' youtube.com *.youtube.com;">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
+  <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(self), display-capture=()">
+
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
@@ -15,7 +24,7 @@
   <script src="https://unpkg.com/globe.gl"></script>
   <script src="https://code.jquery.com/jquery-3.7.1.js"></script>
   <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
-  <title>MAHAMERU TERMINAL</title>
+  <title>Mahameru Terminal | Asetpedia Technologies</title>
 </head>
 
 <body class="h-screen overflow-hidden">
