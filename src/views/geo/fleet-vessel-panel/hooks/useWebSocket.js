@@ -57,7 +57,7 @@ export function useWebSocket(state) {
         bufferTimer = setInterval(flushBuffer, 5000);
 
         if (ws) ws.close();
-        const aisApi = import.meta.env.VITE_AIS_API || 'http://2.24.223.76:8080';
+        const aisApi = import.meta.env.VITE_AIS_API || 'https://api.asetpedia.online/ais';
         const wsProtocol = aisApi.startsWith('https') ? 'wss' : 'ws';
         const wsHost = aisApi.replace(/^https?:\/\//, '');
         ws = new WebSocket(`${wsProtocol}://${wsHost}/ws/ships`);

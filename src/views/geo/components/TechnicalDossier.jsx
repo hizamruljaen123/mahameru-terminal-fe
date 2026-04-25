@@ -16,8 +16,8 @@ const countryToCurrency = {
   'India': 'INR'
 };
 
-const COMMODITY_API = import.meta.env.VITE_COMMODITY_API || 'http://2.24.223.76:8087';
-const DISASTER_API = import.meta.env.VITE_DISASTER_API || 'http://2.24.223.76:8095';
+const COMMODITY_API = import.meta.env.VITE_COMMODITY_API || 'https://api.asetpedia.online/commodity';
+const DISASTER_API = import.meta.env.VITE_DISASTER_API || 'https://api.asetpedia.online/disaster';
 
 export default function TechnicalDossier(props) {
   const [marketData, setMarketData] = createSignal(null);

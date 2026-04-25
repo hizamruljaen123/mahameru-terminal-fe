@@ -384,7 +384,7 @@ export default function CryptoIntelligenceView(props) {
     window.addEventListener('resize', handleResize);
 
     // INTEGRATE LIVE STREAMING FOR SIDEBAR & HEADER
-    const wsUrl = import.meta.env.VITE_CRYPTO_STREAM_WS || 'ws://2.24.223.76:8092/ws/crypto';
+    const wsUrl = import.meta.env.VITE_CRYPTO_STREAM_WS || 'wss://api.asetpedia.online/ws/crypto';
     const ws = new WebSocket(wsUrl);
 
     ws.onmessage = (e) => {

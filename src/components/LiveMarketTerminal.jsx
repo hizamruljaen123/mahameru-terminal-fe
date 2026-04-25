@@ -97,7 +97,7 @@ export default function LiveMarketTerminal(props) {
 
   const connectWS = () => {
     if (ws) ws.close();
-    const wsUrl = import.meta.env.VITE_CRYPTO_STREAM_WS || 'ws://2.24.223.76:8092/ws/crypto';
+    const wsUrl = import.meta.env.VITE_CRYPTO_STREAM_WS || 'wss://api.asetpedia.online/ws/crypto';
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => setWsStatus('LIVE');
