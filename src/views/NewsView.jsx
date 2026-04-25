@@ -5,7 +5,7 @@ import CategoryDetailView from './CategoryDetailView';
 // ============================================================
 // CONFIG — Fix Kritis #11: centralized API base URL
 // ============================================================
-const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_BASE;
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 const PAGE_SIZE = 20;
 
@@ -62,7 +62,6 @@ Object.entries(NEWS_GROUPS).forEach(([group, cats]) => {
 // ============================================================
 export default function NewsView(props) {
   const [pagination, setPagination] = createSignal({});
-  const [fetchedArchive, setFetchedArchive] = createSignal(new Set());
   const [expandedGroups, setExpandedGroups] = createSignal(
     new Set(['STRATEGIC', 'FINANCE', 'INTELLIGENCE & RISK'])
   );
@@ -70,58 +69,84 @@ export default function NewsView(props) {
   const [activeGroupFilter, setActiveGroupFilter] = createSignal('ALL');
 
   // ============================================================
-  // FIX KRITIS #10: Archive fallback with AbortController
-  // Menggunakan onMount, bukan createEffect + async (SolidJS anti-pattern)
+  // PROGRESSIVE SSE LOADING
+  // Opens a single SSE stream to the backend which sends category
+  // data one-by-one as each DB query completes.
+  // This replaces the old per-category fetch polling approach.
   // ============================================================
   onMount(() => {
-    const controllers = {};
+    let preloadES = null;
+    let liveES = null;
 
-    const tryFetchArchive = async (cat) => {
-      const data = props.data();
-      const existing = data[cat] || [];
-      // If we already have data (from initial load) or already fetched, skip
-      if (existing.length > 0 || fetchedArchive().has(cat)) return;
+    const startLiveStream = () => {
+      if (liveES) liveES.close();
+      liveES = new EventSource(`${API_BASE}/stream`);
 
-      setFetchedArchive(prev => {
-        const next = new Set(prev);
-        next.add(cat);
-        return next;
-      });
-
-      controllers[cat] = new AbortController();
-      try {
-        const res = await fetch(`${API_BASE}/api/news/archive/${encodeURIComponent(cat.toLowerCase())}`, {
-          signal: controllers[cat].signal
-        });
-        const json = await res.json();
-        if (json.success && json.news?.length > 0) {
-          props.onArchiveFetch(cat, json.news);
+      liveES.onmessage = (e) => {
+        // SSE comment lines (heartbeats) don't trigger onmessage — safe to parse
+        if (!e.data || e.data.startsWith(':')) return;
+        try {
+          const msg = JSON.parse(e.data);
+          // msg.updates = { CATEGORY: [articles...], ... }
+          if (msg.updates && typeof msg.updates === 'object') {
+            Object.entries(msg.updates).forEach(([cat, articles]) => {
+              if (Array.isArray(articles) && articles.length > 0) {
+                props.onArchiveFetch(cat.toUpperCase(), articles);
+              }
+            });
+          }
+        } catch (err) {
+          console.warn('[LiveStream] parse error:', err);
         }
-      } catch (err) {
-        if (err.name !== 'AbortError') {
-          console.warn(`[Progressive Load] ${cat}: ${err.message}`);
-        }
-      }
+      };
+
+      liveES.onerror = () => {
+        liveES.close();
+        // Reconnect after 5s on error
+        setTimeout(startLiveStream, 5000);
+      };
     };
 
-    // STRICT SEQUENTIAL LOADING STRATEGY:
-    // We fetch one category, wait for it to finish, then move to the next.
-    const loadSequentially = async () => {
-      for (const cat of PRIORITY_CATEGORIES) {
-        // Check if component was unmounted/aborted mid-loop
-        if (controllers[cat]?.signal.aborted) break;
-        
-        await tryFetchArchive(cat);
-        
-        // Small 50ms breather between requests to keep the UI thread smooth
-        await new Promise(r => setTimeout(r, 50));
-      }
+    const startPreload = () => {
+      if (preloadES) preloadES.close();
+
+      const url = `${API_BASE}/api/news/stream-categories?limit=100`;
+      preloadES = new EventSource(url);
+
+      preloadES.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+
+          if (msg.done) {
+            // Preload complete — switch to live stream
+            preloadES.close();
+            startLiveStream();
+            return;
+          }
+
+          const { category, news } = msg;
+          if (category && Array.isArray(news) && news.length > 0) {
+            props.onArchiveFetch(category.toUpperCase(), news);
+          }
+        } catch (err) {
+          console.warn('[Preload] parse error:', err);
+        }
+      };
+
+      preloadES.onerror = () => {
+        preloadES.close();
+        // Preload failed — go straight to live stream
+        startLiveStream();
+      };
     };
 
-    loadSequentially();
+    // 100ms head start for component to mount before streaming
+    const timer = setTimeout(startPreload, 100);
 
     return () => {
-      Object.values(controllers).forEach(c => c.abort());
+      clearTimeout(timer);
+      if (preloadES) preloadES.close();
+      if (liveES) liveES.close();
     };
   });
 
