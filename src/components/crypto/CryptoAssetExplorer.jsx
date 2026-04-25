@@ -1,4 +1,5 @@
-import { createSignal, onMount, For, Show } from 'solid-js';
+import { createSignal, onMount, onCleanup, For, Show, createEffect } from 'solid-js';
+import * as echarts from 'echarts';
 
 const fmt = (v, d = 2) => (v == null || isNaN(v)) ? 'N/A' : Number(v).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
 const fmtMln = (v) => {
@@ -11,12 +12,113 @@ const fmtMln = (v) => {
 const fmtPct = (v) => (v == null || isNaN(v)) ? 'N/A' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`;
 const signColor = (v) => v > 0 ? 'text-green-400' : v < 0 ? 'text-red-400' : 'text-text_secondary';
 
+function Sparkline({ klines }) {
+  let ref;
+  let chart;
+
+  const render = () => {
+    if (!ref || !klines || klines.length === 0) return;
+    if (!chart) chart = echarts.init(ref);
+    
+    const data = klines.map(d => d.close);
+    const isUp = data[data.length - 1] >= data[0];
+    
+    chart.setOption({
+      backgroundColor: 'transparent',
+      animation: false,
+      grid: { left: 2, right: 2, top: 2, bottom: 2 },
+      xAxis: { type: 'category', show: false },
+      yAxis: { type: 'value', scale: true, show: false },
+      series: [{
+        type: 'line',
+        data: data,
+        symbol: 'none',
+        smooth: true,
+        lineStyle: { 
+          width: 1.5, 
+          color: isUp ? '#0ecb81' : '#f6465d' 
+        },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: isUp ? 'rgba(14,203,129,0.1)' : 'rgba(246,70,93,0.1)' },
+            { offset: 1, color: 'transparent' }
+          ])
+        }
+      }]
+    });
+  };
+
+  onMount(() => {
+    render();
+    const ro = new ResizeObserver(() => chart?.resize());
+    if (ref) ro.observe(ref);
+    onCleanup(() => { ro.disconnect(); chart?.dispose(); });
+  });
+
+  createEffect(() => { klines; render(); });
+
+  return <div ref={ref} class="w-full h-8" />;
+}
+
 export default function CryptoAssetExplorer(props) {
   const [coins, setCoins] = createSignal([]);
   const [loading, setLoading] = createSignal(true);
   const [search, setSearch] = createSignal("");
+  const [prices, setPrices] = createSignal({});
+  const [klineStore, setKlineStore] = createSignal({});
+  const [wsStatus, setWsStatus] = createSignal("CONNECTING");
+  let ws = null;
+
+  const connectWS = () => {
+    if (ws) ws.close();
+    const wsUrl = import.meta.env.VITE_CRYPTO_STREAM_WS || 'ws://2.24.223.76:8092/ws/crypto';
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => setWsStatus("LIVE");
+    ws.onclose = () => { setWsStatus("OFFLINE"); setTimeout(connectWS, 5000); };
+    ws.onerror = () => setWsStatus("ERROR");
+
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'snapshot') {
+        const newKlines = {};
+        const newPrices = {};
+        Object.entries(msg.data).forEach(([s, data]) => {
+          const klines = (data.klines || []).sort((a, b) => a.time - b.time);
+          newKlines[s] = klines;
+          if (klines.length > 0) {
+            newPrices[s] = { price: klines[klines.length - 1].close, side: 'neutral' };
+          }
+        });
+        setKlineStore(prev => ({ ...prev, ...newKlines }));
+        setPrices(prev => ({ ...prev, ...newPrices }));
+      } else if (msg.type === 'kline') {
+        const s = msg.symbol;
+        const d = msg.data;
+        setKlineStore(prev => {
+          const existing = prev[s] || [];
+          const idx = existing.findIndex(k => k.time === d.time);
+          let updated;
+          if (idx !== -1) {
+            updated = [...existing];
+            updated[idx] = d;
+          } else {
+            updated = [...existing, d];
+            if (updated.length > 100) updated.shift();
+          }
+          return { ...prev, [s]: updated };
+        });
+        setPrices(prev => {
+          const lastPrice = prev[s]?.price || d.close;
+          const side = d.close > lastPrice ? 'up' : d.close < lastPrice ? 'down' : 'neutral';
+          return { ...prev, [s]: { price: d.close, side } };
+        });
+      }
+    };
+  };
 
   onMount(async () => {
+    connectWS();
     try {
       const resp = await fetch(`${import.meta.env.VITE_CRYPTO_API}/api/crypto/cmc/list`);
       const json = await resp.json();
@@ -28,6 +130,10 @@ export default function CryptoAssetExplorer(props) {
     } finally {
       setLoading(false);
     }
+  });
+
+  onCleanup(() => {
+    if (ws) ws.close();
   });
 
   const filteredCoins = () => {
@@ -67,6 +173,7 @@ export default function CryptoAssetExplorer(props) {
               <th class="px-4 py-3 border-r border-border_main text-right">Price (USD)</th>
               <th class="px-4 py-3 border-r border-border_main text-right">24h %</th>
               <th class="px-4 py-3 border-r border-border_main text-right">7d %</th>
+              <th class="px-4 py-3 border-r border-border_main w-32">Live Trend</th>
               <th class="px-4 py-3 border-r border-border_main text-right">Market Cap</th>
               <th class="px-4 py-3 border-r border-border_main text-right">Volume (24h)</th>
               <th class="px-4 py-3 text-center">Action</th>
@@ -75,7 +182,7 @@ export default function CryptoAssetExplorer(props) {
           <tbody class="divide-y divide-border_main/30">
             <Show when={!loading()} fallback={
               <tr>
-                <td colspan="8" class="py-20 text-center">
+                <td colspan="9" class="py-20 text-center">
                   <div class="flex flex-col items-center gap-3">
                     <div class="w-8 h-8 border-2 border-text_accent/20 border-t-text_accent animate-spin rounded-full" />
                     <span class="text-[10px] font-mono text-text_secondary animate-pulse">QUERYING CMC INFRASTRUCTURE...</span>
@@ -103,14 +210,23 @@ export default function CryptoAssetExplorer(props) {
                           </div>
                         </div>
                       </td>
-                      <td class="px-4 py-3 text-right font-mono text-[11px] text-text_primary">
-                        ${fmt(quote.price, quote.price < 1 ? 4 : 2)}
+                      <td class="px-4 py-3 text-right font-mono text-[11px]">
+                        <span class={
+                          prices()[coin.symbol + 'USDT']?.side === 'up' ? 'text-green-400' : 
+                          prices()[coin.symbol + 'USDT']?.side === 'down' ? 'text-red-400' : 
+                          'text-text_primary'
+                        }>
+                          ${fmt(prices()[coin.symbol + 'USDT']?.price || quote.price, quote.price < 1 ? 4 : 2)}
+                        </span>
                       </td>
                       <td class={`px-4 py-3 text-right font-mono text-[10px] ${signColor(quote.percent_change_24h)}`}>
                         {fmtPct(quote.percent_change_24h)}
                       </td>
                       <td class={`px-4 py-3 text-right font-mono text-[10px] ${signColor(quote.percent_change_7d)}`}>
                         {fmtPct(quote.percent_change_7d)}
+                      </td>
+                      <td class="px-2 py-1">
+                        <Sparkline klines={klineStore()[coin.symbol + 'USDT'] || []} />
                       </td>
                       <td class="px-4 py-3 text-right font-mono text-[10px] text-text_secondary">
                         ${fmtMln(quote.market_cap)}
@@ -132,6 +248,12 @@ export default function CryptoAssetExplorer(props) {
                           >
                             + Live
                           </button>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); window.open(`https://www.binance.com/en/trade/${coin.symbol}_USDT`, '_blank'); }}
+                            class="bg-yellow-500/10 hover:bg-yellow-500/30 border border-yellow-500/20 text-yellow-500 text-[8px] font-black px-2 py-1 uppercase tracking-tighter transition-all"
+                          >
+                            Binance
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -150,8 +272,8 @@ export default function CryptoAssetExplorer(props) {
           <span>Filtered: {filteredCoins().length}</span>
         </div>
         <div class="flex items-center gap-2">
-          <div class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-          <span>Real-time Stream Connected</span>
+          <div class={`w-1.5 h-1.5 rounded-full animate-pulse ${wsStatus() === 'LIVE' ? 'bg-green-500' : 'bg-red-500'}`} />
+          <span>{wsStatus()} // BINANCE DATA STREAM</span>
         </div>
       </div>
     </div>
