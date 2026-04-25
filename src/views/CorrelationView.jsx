@@ -1,7 +1,7 @@
 import { createSignal, onMount, onCleanup, For, Show, createEffect, createMemo } from 'solid-js';
 import * as echarts from 'echarts';
 
-const MARKET_API = import.meta.env.VITE_MARKET_API || 'http://localhost:8088';
+const MARKET_API = import.meta.env.VITE_MARKET_API || 'https://api.asetpedia.online/market';
 
 const DEFAULT_UNIVERSE = [
   { symbol: 'BTC-USD', name: 'Bitcoin', group: 'CRYPTO' },
