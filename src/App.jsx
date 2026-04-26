@@ -156,34 +156,35 @@ function App() {
 
     // ================================================================
     // SOCKET.IO — Real-time live stream from backup_service (port 5004)
+    // This runs IN PARALLEL with SSE stream from news_service (port 5101)
+    // SSE = batched full refresh every 3s
+    // SocketIO = instant push on each new DB insert
     // ================================================================
-    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_BACKUP_URL;
+    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_BACKUP_URL || 'https://api.asetpedia.online/backup';
     
-    // Parse path if present in SOCKET_URL (e.g. https://api.asetpedia.online/backup)
-    let socketPath = "/socket.io";
-    let socketBaseUrl = SOCKET_URL;
-    
-    try {
-      const urlObj = new URL(SOCKET_URL);
-      if (urlObj.pathname && urlObj.pathname !== '/') {
-        socketPath = urlObj.pathname.replace(/\/$/, "") + "/socket.io";
-        socketBaseUrl = urlObj.origin;
-      }
-    } catch (e) {
-      console.warn("[SOCKET] Invalid URL in env, falling back to default path");
-    }
-
-    const socket = io(socketBaseUrl, {
-      path: socketPath,
+    // Improved Socket.io initialization with explicit path handling
+    let socketOptions = {
       transports: ['websocket', 'polling'],
       reconnectionAttempts: Infinity,
       reconnectionDelay: 3000,
       timeout: 10000,
-    });
+    };
+
+    // If the URL has a path (like /backup), we might need to specify it for Socket.io
+    try {
+      const urlObj = new URL(SOCKET_URL);
+      if (urlObj.pathname && urlObj.pathname !== '/') {
+        socketOptions.path = `${urlObj.pathname.replace(/\/$/, '')}/socket.io/`;
+      }
+    } catch (e) {
+      console.warn("[SOCKET] URL parsing failed for", SOCKET_URL);
+    }
+
+    const socket = io(SOCKET_URL, socketOptions);
 
     socket.on('connect', () => {
       setSocketConnected(true);
-      console.log(`[SOCKET] Connected to live stream (${socket.id})`);
+      console.log(`[SOCKET] Connected successfully to live stream (${socket.id})`);
       // Subscribe to all categories
       socket.emit('subscribe', { categories: [] });
     });
@@ -191,6 +192,14 @@ function App() {
     socket.on('disconnect', () => {
       setSocketConnected(false);
       console.warn('[SOCKET] Disconnected from live stream');
+    });
+
+    socket.on('connect_error', (err) => {
+      console.error(`[SOCKET] Connection Error: ${err.message}`);
+    });
+
+    socket.on('error', (err) => {
+      console.error(`[SOCKET] General Error: ${err}`);
     });
 
     socket.on('new_articles', (payload) => {

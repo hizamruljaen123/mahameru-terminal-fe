@@ -50,7 +50,7 @@ class AlertManager {
         });
       });
     });
-    console.log('[ALERT_MGR] Socket connected for keyword alerts');
+    console.log('[ALERT_MGR] Socket registered for keyword alerts');
   }
 
   // ─── PRICE POLL ─────────────────────────────────────────────────────────────
