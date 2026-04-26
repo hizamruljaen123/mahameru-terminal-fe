@@ -75,7 +75,10 @@ const IndexAnalysisView = (props) => {
                             </Show>
                             <For each={movers().gainers}>
                                 {(item) => (
-                                    <div class="flex justify-between items-center p-3 bg-bg_main/30 border border-white/5 rounded hover:border-emerald-500/30 transition-all group cursor-pointer">
+                                    <div 
+                                        onClick={() => props.onSelectEntity?.(item.symbol)}
+                                        class="flex justify-between items-center p-3 bg-bg_main/30 border border-white/5 rounded hover:border-emerald-500/30 transition-all group cursor-pointer"
+                                    >
                                         <div>
                                             <p class="text-[12px] font-black text-text_primary group-hover:text-emerald-500">{item.symbol}</p>
                                             <p class="text-[8px] text-text_secondary opacity-40 uppercase">Vol: {formatNumber(item.volume)}</p>
@@ -105,7 +108,10 @@ const IndexAnalysisView = (props) => {
                             </Show>
                             <For each={movers().losers}>
                                 {(item) => (
-                                    <div class="flex justify-between items-center p-3 bg-bg_main/30 border border-white/5 rounded hover:border-red-500/30 transition-all group cursor-pointer">
+                                    <div 
+                                        onClick={() => props.onSelectEntity?.(item.symbol)}
+                                        class="flex justify-between items-center p-3 bg-bg_main/30 border border-white/5 rounded hover:border-red-500/30 transition-all group cursor-pointer"
+                                    >
                                         <div>
                                             <p class="text-[12px] font-black text-text_primary group-hover:text-red-500">{item.symbol}</p>
                                             <p class="text-[8px] text-text_secondary opacity-40 uppercase">Vol: {formatNumber(item.volume)}</p>

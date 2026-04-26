@@ -147,11 +147,13 @@ function CandlestickChart({ data }) {
         backgroundColor: '#111', borderColor: '#333',
         textStyle: { color: '#ccc', fontSize: 9, fontFamily: 'monospace' },
         formatter: (params) => {
-          const d = params[0];
-          if (!d) return '';
-          const [o, c, lo, hi] = d.value || [];
-          const vol = volumes[d.dataIndex];
-          return `<b>${d.axisValue}</b><br/>O:${fmt(o)} H:${fmt(hi)} L:${fmt(lo)} C:${fmt(c)}<br/>Vol:${fmtBig(vol)}`;
+          const p = params.find(x => x.seriesName === 'Price') || params[0];
+          if (!p) return '';
+          const vals = Array.isArray(p.value) ? p.value : [];
+          // ECharts candlestick value is [index, open, close, low, high]
+          const [open, close, low, high] = vals.length >= 5 ? vals.slice(1) : vals;
+          const vol = volumes[p.dataIndex];
+          return `<b>${p.axisValue}</b><br/>O:${fmt(open)} H:${fmt(high)} L:${fmt(low)} C:${fmt(close)}<br/>Vol:${fmtBig(vol)}`;
         },
       },
       axisPointer: { link: [{ xAxisIndex: 'all' }] },

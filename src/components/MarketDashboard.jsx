@@ -1,6 +1,6 @@
 import { createSignal, onMount, For, Show, createEffect } from 'solid-js';
 import * as echarts from 'echarts';
-import InfraMacroProxy from './institutional/InfraMacroProxy';
+
 
 // --- SERVICE RECTORS ---
 const SENTIMENT_API = import.meta.env.VITE_SENTIMENT_API || `${import.meta.env.VITE_SENTIMENT_URL}/api/sentiment/summary-all`;
@@ -144,13 +144,15 @@ function IndustryHeatmap(props) {
           trigger: 'item',
           formatter: (info) => {
             const d = info.data;
+            if (!d || d.return === undefined) return '';
+            const ret = d.return || 0;
             return `
               <div style="font-family: 'Inter', sans-serif; font-size: 11px; color: #fff; background: #000; border: 1px solid #333; padding: 8px; border-radius: 2px;">
                 <div style="font-weight: 900; color: #aaa; margin-bottom: 4px; font-size: 9px; letter-spacing: 0.1em; border-bottom: 1px solid #222; padding-bottom: 4px;">${d.isSector ? 'SECTOR' : d.sector}</div>
                 <div style="font-weight: bold; color: #fff; margin-bottom: 8px;">${d.name}</div>
                 <div style="display: flex; justify-content: space-between; gap: 20px;">
                   <span style="opacity: 0.6">YTD PERFORMANCE:</span>
-                  <span style="color: ${d.return >= 0 ? '#10b981' : '#ef4444'}; font-weight: 900;">${d.return >= 0 ? '+' : ''}${d.return.toFixed(2)}%</span>
+                  <span style="color: ${ret >= 0 ? '#10b981' : '#ef4444'}; font-weight: 900;">${ret >= 0 ? '+' : ''}${ret.toFixed(2)}%</span>
                 </div>
                 ${d.isSector ? '<div style="margin-top: 5px; font-size: 8px; color: #text_accent; opacity: 0.6;">CLICK FOR DETAILS</div>' : ''}
               </div>
@@ -582,14 +584,17 @@ export default function MarketDashboard(props) {
                   <div class="w-1 h-3 bg-amber-500"></div>
                 </div>
                 <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-4 scrollbar-thin">
-                  <For each={macroNews()}>
-                    {(news) => (
-                      <div class="flex flex-col gap-1 group cursor-pointer border-l border-amber-500/20 pl-3 hover:border-amber-500 transition-all">
-                        <span class="text-[7px] text-amber-500 font-black uppercase tracking-widest">{news.source}</span>
-                        <h4 class="text-[10px] text-text_primary font-bold leading-tight group-hover:text-amber-200 transition-colors uppercase">{news.title}</h4>
-                      </div>
-                    )}
-                  </For>
+                   <For each={macroNews()}>
+                     {(news) => (
+                       <div 
+                         onClick={() => news.link && window.open(news.link, '_blank')}
+                         class="flex flex-col gap-1 group cursor-pointer border-l border-amber-500/20 pl-3 hover:border-amber-500 transition-all"
+                       >
+                         <span class="text-[7px] text-amber-500 font-black uppercase tracking-widest">{news.source}</span>
+                         <h4 class="text-[10px] text-text_primary font-bold leading-tight group-hover:text-amber-200 transition-colors uppercase">{news.title}</h4>
+                       </div>
+                     )}
+                   </For>
                   <Show when={macroNews().length === 0 && !isLoading()}>
                     <div class="text-[9px] text-text_secondary/40 italic p-10 text-center">AWAITING DATA FEED...</div>
                   </Show>
@@ -700,9 +705,7 @@ export default function MarketDashboard(props) {
             </div>
 
             {/* ROW 4: INSTITUTIONAL INFRASTRUCTURE PROXY */}
-            <div class="h-[300px]">
-              <InfraMacroProxy />
-            </div>
+
 
             {/* ROW 5: MARKET BULLETINS & MACRO CHART */}
             <div class="grid grid-cols-12 gap-4">

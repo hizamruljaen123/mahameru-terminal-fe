@@ -585,17 +585,9 @@ export default function MainDashboardView(props) {
                                           <td class="p-3">
                                              <span class="px-1 py-0.5 border border-border_main text-[7px] font-black uppercase opacity-60 group-hover:border-text_accent/40 group-hover:text-text_accent">{news.category}</span>
                                           </td>
-                                          <td class="p-3 flex items-center gap-3">
-                                             <Show when={news.imageUrl}>
-                                                <img src={news.imageUrl} class="w-8 h-8 rounded-sm object-cover border border-border_main shrink-0" alt="intel" />
-                                             </Show>
-                                             <div class="flex flex-col overflow-hidden">
-                                                <div class="text-[10px] font-black text-text_primary group-hover:text-text_accent leading-tight line-clamp-1 truncate max-w-[400px] uppercase">
-                                                   {news.title}
-                                                </div>
-                                                <div class="text-[8px] text-text_secondary/40 line-clamp-1 truncate opacity-0 group-hover:opacity-100 transition-opacity whitespace-normal">
-                                                   {news.description?.replace(/<[^>]*>?/gm, '').slice(0, 80)}...
-                                                </div>
+                                          <td class="p-3">
+                                             <div class="text-[10px] font-black text-text_primary group-hover:text-text_accent leading-tight line-clamp-2 uppercase">
+                                                {news.description?.replace(/<[^>]*>?/gm, '') || news.title}
                                              </div>
                                           </td>
                                           <td class="p-3 text-right text-[8px] font-black opacity-40 group-hover:opacity-60 whitespace-nowrap">{news.source || 'SYSTEM'}</td>

@@ -368,6 +368,40 @@ function EntityRealTimeChart(props) {
                         </span>
                     </div>
                 </div>
+
+                {/* News Feed for Index */}
+                <div class="lg:col-span-12">
+                    <div class="bg-bg_header border border-border_main rounded overflow-hidden flex flex-col max-h-[500px] shadow-2xl">
+                        <div class="bg-bg_main px-4 py-2 border-b border-amber-500/30 flex justify-between items-center text-text_accent">
+                            <h3 class="text-[11px] font-black uppercase tracking-widest text-amber-500">MARKET INTELLIGENCE — {props.symbol}</h3>
+                            <Show when={props.newsLoading}>
+                                <span class="text-[8px] animate-pulse font-mono font-black uppercase text-amber-500/60">NODE_SEARCH_ACTIVE...</span>
+                            </Show>
+                        </div>
+                        <div class="flex-1 overflow-auto scrollbar-thin p-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <For each={props.news}>
+                                    {(item) => (
+                                        <a href={item.link} target="_blank" class="block group bg-bg_main/30 border border-white/5 p-4 rounded hover:border-amber-500/30 transition-all">
+                                            <div class="flex flex-col h-full justify-between">
+                                                <div>
+                                                    <h4 class="text-[12px] font-bold text-text_primary group-hover:text-amber-500 transition-colors uppercase leading-tight line-clamp-3 mb-2">{item.title}</h4>
+                                                </div>
+                                                <div class="flex justify-between items-center mt-2 pt-2 border-t border-white/5">
+                                                    <span class="text-[8px] text-text_secondary opacity-60 font-black uppercase">{item.publisher}</span>
+                                                    <span class="text-[8px] text-text_secondary opacity-40 font-mono">{new Date(item.time * 1000).toLocaleDateString()}</span>
+                                                </div>
+                                            </div>
+                                        </a>
+                                    )}
+                                </For>
+                                <Show when={!props.newsLoading && (!props.news || props.news.length === 0)}>
+                                    <div class="col-span-full py-10 text-center text-text_secondary opacity-30 uppercase text-[10px] tracking-[0.3em]">No intelligence nodes found for this index.</div>
+                                </Show>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );
@@ -512,7 +546,10 @@ const EntityAnalysisView = (props) => {
                 { url: `${import.meta.env.VITE_API_BASE}/api/news/search?q=${encodeURIComponent(companyName)}`, key: 'results' },
                 { url: `${import.meta.env.VITE_GNEWS_API}/api/gnews/search?q=${encodeURIComponent(symbol)}`, key: 'news' },
                 { url: `${import.meta.env.VITE_GNEWS_API}/api/gnews/search?q=${encodeURIComponent(companyName)}`, key: 'news' }
-            ];
+            ].map(src => ({
+                ...src,
+                url: src.url.replace('https://api.asetpedia.online', '/api-proxy')
+            }));
 
             let pending = fetchSources.length;
             fetchSources.forEach(src => {
@@ -683,32 +720,34 @@ const EntityAnalysisView = (props) => {
 
 
                     {/* Entity Sub-Navigation Tabs */}
-                    <div class="flex gap-1 border-b border-border_main/50 shrink-0 p-1 bg-bg_header/20 rounded-t-lg">
-                        <button
-                            onClick={() => setActiveTab('profile')}
-                            class={`px-6 py-2 font-black uppercase tracking-widest text-[10px] transition-all rounded ${activeTab() === 'profile' ? 'bg-text_accent text-bg_main' : 'text-text_secondary hover:bg-bg_main/10'}`}
-                        >
-                            ASSET PROFILE
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('technical')}
-                            class={`px-6 py-2 font-black uppercase tracking-widest text-[10px] transition-all rounded ${activeTab() === 'technical' ? 'bg-cyan-500 text-bg_main' : 'text-text_secondary hover:bg-bg_main/10'}`}
-                        >
-                            TECHNICAL ANALYSIS
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('report')}
-                            class={`px-6 py-2 font-black uppercase tracking-widest text-[10px] transition-all rounded ${activeTab() === 'report' ? 'bg-emerald-500 text-bg_main' : 'text-text_secondary hover:bg-bg_main/10'}`}
-                        >
-                            RESEARCH REPORT
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('advanced')}
-                            class={`px-6 py-2 font-black uppercase tracking-widest text-[10px] transition-all rounded ${activeTab() === 'advanced' ? 'bg-amber-500 text-bg_main' : 'text-text_secondary hover:bg-bg_main/10'}`}
-                        >
-                            QUANTITATIVE ANALYSIS
-                        </button>
-                    </div>
+                    <Show when={!(selectedEntity()?.startsWith('^') || selectedEntity() === '000001.SS' || selectedEntity() === 'VNI.HM' || selectedEntity() === 'VNINDEX.VN')}>
+                        <div class="flex gap-1 border-b border-border_main/50 shrink-0 p-1 bg-bg_header/20 rounded-t-lg">
+                            <button
+                                onClick={() => setActiveTab('profile')}
+                                class={`px-6 py-2 font-black uppercase tracking-widest text-[10px] transition-all rounded ${activeTab() === 'profile' ? 'bg-text_accent text-bg_main' : 'text-text_secondary hover:bg-bg_main/10'}`}
+                            >
+                                ASSET PROFILE
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('technical')}
+                                class={`px-6 py-2 font-black uppercase tracking-widest text-[10px] transition-all rounded ${activeTab() === 'technical' ? 'bg-cyan-500 text-bg_main' : 'text-text_secondary hover:bg-bg_main/10'}`}
+                            >
+                                TECHNICAL ANALYSIS
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('report')}
+                                class={`px-6 py-2 font-black uppercase tracking-widest text-[10px] transition-all rounded ${activeTab() === 'report' ? 'bg-emerald-500 text-bg_main' : 'text-text_secondary hover:bg-bg_main/10'}`}
+                            >
+                                RESEARCH REPORT
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('advanced')}
+                                class={`px-6 py-2 font-black uppercase tracking-widest text-[10px] transition-all rounded ${activeTab() === 'advanced' ? 'bg-amber-500 text-bg_main' : 'text-text_secondary hover:bg-bg_main/10'}`}
+                            >
+                                QUANTITATIVE ANALYSIS
+                            </button>
+                        </div>
+                    </Show>
 
 
                     <Show when={profile()}>
@@ -718,6 +757,55 @@ const EntityAnalysisView = (props) => {
                                 <>
                                     <Show when={activeTab() === 'profile'}>
                                         <div class="flex-1 overflow-auto space-y-6 scrollbar-thin pr-2">
+                                            {/* Hero Branding & Strategic Overview Section */}
+                                            <div class="bg-bg_header/60 border border-border_main p-6 rounded shadow-2xl relative overflow-hidden group">
+                                                <div class="absolute top-0 right-0 p-4 opacity-5 pointer-events-none uppercase font-black text-6xl tracking-tighter">{profile().symbol}</div>
+                                                <div class="flex flex-col lg:flex-row gap-8 relative z-10">
+                                                    {/* Left Column: Identity & Pulse */}
+                                                    <div class="flex-1 min-w-0 flex flex-col justify-between py-2">
+                                                        <div class="flex items-center gap-4">
+                                                            <div class="w-1.5 h-12 bg-text_accent"></div>
+                                                            <div class="flex flex-col">
+                                                                <h2 class="text-3xl font-black text-text_primary leading-tight tracking-tight uppercase truncate">{profile().name || profile().symbol}</h2>
+                                                                <div class="flex items-center gap-3 mt-1">
+                                                                    <span class="text-xs font-black text-text_accent tracking-[0.3em] uppercase">{profile().symbol}</span>
+                                                                    <span class="text-[9px] px-2 py-0.5 bg-white/5 border border-white/10 text-text_secondary rounded uppercase font-black tracking-widest">{profile().metrics.exchange}</span>
+                                                                    <Show when={profile().metrics.sector}>
+                                                                        <span class="text-[9px] px-2 py-0.5 bg-white/5 border border-white/10 text-text_secondary rounded uppercase font-black tracking-widest">{profile().metrics.sector}</span>
+                                                                    </Show>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="flex flex-wrap items-center gap-4 mt-6">
+                                                            <Show when={profile().news?.length > 0}>
+                                                                <div class="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded animate-in fade-in duration-700">
+                                                                    <div class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></div>
+                                                                    <span class="text-[9px] font-black text-amber-500 uppercase tracking-widest">{profile().news.length} INTEL NODES FOUND</span>
+                                                                </div>
+                                                            </Show>
+                                                            <Show when={newsLoading()}>
+                                                                <div class="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded">
+                                                                    <div class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-spin"></div>
+                                                                    <span class="text-[9px] font-black text-blue-400 uppercase tracking-widest">SCANNING_FEEDS...</span>
+                                                                </div>
+                                                            </Show>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Right Column: Strategic Insight */}
+                                                    <div class="lg:w-1/2 min-w-0 lg:border-l lg:border-white/5 lg:pl-8 flex flex-col">
+                                                        <div class="flex items-center gap-2 mb-3">
+                                                            <span class="text-[10px] font-black text-text_accent uppercase tracking-[0.2em]">STRATEGIC_OVERVIEW</span>
+                                                            <div class="h-px bg-text_accent/20 flex-1"></div>
+                                                        </div>
+                                                        <p class="text-[13px] text-text_secondary/80 leading-relaxed font-medium line-clamp-5 group-hover:line-clamp-none transition-all duration-700">
+                                                            {profile().metrics.longBusinessSummary || "No strategic overview available in current intelligence node."}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
                                             {/* Real-Time Pulse Monitoring Node */}
                                             <div class="grid grid-cols-1 gap-4">
                                                 <div class="min-h-[450px] shrink-0">
@@ -903,13 +991,10 @@ const EntityAnalysisView = (props) => {
 
                                                 {/* Sidebar Intel Pane */}
                                                 <div class="lg:col-span-4 space-y-6">
-                                                    {/* Strategic Profile */}
+                                                    {/* Operational Context */}
                                                     <div class="bg-bg_header border border-border_main p-6 rounded shadow-xl">
-                                                        <h3 class="text-[12px] font-black text-text_accent uppercase tracking-[0.2em] mb-4 border-l-2 border-text_accent pl-4">STRATEGIC PROFILE</h3>
-                                                        <p class="text-[14px] text-text_secondary leading-relaxed mb-6 font-medium line-clamp-6 hover:line-clamp-none transition-all">
-                                                            {profile().metrics.longBusinessSummary || "No strategic overview available in current intelligence node."}
-                                                        </p>
-                                                        <div class="space-y-3 pt-4 border-t border-border_main">
+                                                        <h3 class="text-[12px] font-black text-text_accent uppercase tracking-[0.2em] mb-4 border-l-2 border-text_accent pl-4">OPERATIONAL_CONTEXT</h3>
+                                                        <div class="space-y-3">
                                                             <div class="flex justify-between items-center">
                                                                 <span class="text-[10px] text-text_secondary opacity-60 font-black uppercase">Sector</span>
                                                                 <span class="text-[11px] font-bold text-text_primary">{profile().metrics.sector || "N/A"}</span>
@@ -975,7 +1060,15 @@ const EntityAnalysisView = (props) => {
                                 </>
                             }
                         >
-                            <IndexAnalysisView symbol={selectedEntity()} />
+                            <IndexAnalysisView 
+                                symbol={selectedEntity()} 
+                                news={profile()?.news || []}
+                                newsLoading={newsLoading()}
+                                onSelectEntity={(sym) => {
+                                    setSelectedEntity(sym);
+                                    setActiveTab('profile');
+                                }} 
+                            />
                         </Show>
                     </Show>
                 </div>
