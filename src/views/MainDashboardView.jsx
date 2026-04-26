@@ -578,7 +578,10 @@ export default function MainDashboardView(props) {
                               <tbody class="divide-y divide-border_main">
                                  <For each={liveNews().length > 0 ? liveNews() : (intelData()?.top_news || [])}>
                                     {(news) => (
-                                       <tr class="hover:bg-text_accent/10 group cursor-pointer animate-in fade-in slide-in-from-left duration-300">
+                                       <tr 
+                                          onClick={() => news.url && window.open(news.url, '_blank')}
+                                          class="hover:bg-text_accent/10 group cursor-pointer animate-in fade-in slide-in-from-left duration-300"
+                                       >
                                           <td class="p-3 opacity-20 text-[8px] font-bold">
                                              {news.timestamp ? new Date(news.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--'}
                                           </td>
