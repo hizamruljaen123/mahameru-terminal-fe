@@ -53,6 +53,11 @@ export default function ReconPanel(props) {
                                             class={`px-4 py-1.5 text-[9px] font-black uppercase tracking-widest border-b-2 transition-all ${dossierTab() === 'REPORT' ? 'border-orange-500 text-orange-500 shadow-[0_5px_15px_rgba(249,115,22,0.2)]' : 'border-transparent text-white/40 hover:text-white'}`}
                                         >2. ANALYSIS</button>
                                     </Show>
+
+                                    <button
+                                        onClick={() => setDossierTab('NEARBY')}
+                                        class={`px-4 py-1.5 text-[9px] font-black uppercase tracking-widest border-b-2 transition-all ${dossierTab() === 'NEARBY' ? 'border-blue-500 text-blue-500 shadow-[0_5px_15px_rgba(59,130,246,0.2)]' : 'border-transparent text-white/40 hover:text-white'}`}
+                                    >3. PORT NEARBY</button>
                                 </div>
 
                                 <Switch>
@@ -154,7 +159,6 @@ export default function ReconPanel(props) {
                                             </div>
                                         </div>
                                     </Match>
-
                                     <Match when={dossierTab() === 'REPORT'}>
                                         <div class="space-y-6">
                                             <Show when={props.intelLoading()}>
@@ -194,6 +198,57 @@ export default function ReconPanel(props) {
                                                             </p>
                                                         </div>
                                                     </Show>
+                                                </div>
+                                            </Show>
+                                        </div>
+                                    </Match>
+
+                                    <Match when={dossierTab() === 'NEARBY'}>
+                                        <div class="space-y-6">
+                                            <Show when={props.nearbyLoading()}>
+                                                <div class="py-20 flex flex-col items-center justify-center gap-3 opacity-40">
+                                                    <div class="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                                                    <span class="text-[9px] font-black uppercase tracking-widest text-blue-400">Scanning Proximity...</span>
+                                                </div>
+                                            </Show>
+
+                                            <Show when={!props.nearbyLoading()}>
+                                                <div class="space-y-4">
+                                                    <div class="flex items-center justify-between">
+                                                        <span class="text-[10px] font-black text-blue-400 uppercase tracking-widest">ASSETS WITHIN 20KM RADIUS</span>
+                                                        <span class="text-[8px] font-mono text-white/40">{props.nearbyInfrastructure()?.length || 0} DETECTED</span>
+                                                    </div>
+
+                                                    <div class="space-y-2">
+                                                        <For each={props.nearbyInfrastructure()} fallback={
+                                                            <div class="p-8 text-center border border-dashed border-white/5 opacity-20 text-[9px] uppercase font-black">
+                                                                No significant infrastructure detected in radius
+                                                            </div>
+                                                        }>
+                                                            {(infra) => (
+                                                                <div 
+                                                                    class="group p-3 bg-white/5 border border-white/10 hover:border-blue-500/50 transition-all cursor-pointer flex justify-between items-center"
+                                                                    onClick={() => {
+                                                                        if (infra.infra_type === 'port') props.onPortSelect?.({ id: infra.id, latitude: infra.latitude, longitude: infra.longitude });
+                                                                        if (infra.infra_type === 'refinery') props.onSelectRefinery?.(infra);
+                                                                    }}
+                                                                >
+                                                                    <div class="flex flex-col gap-1">
+                                                                        <div class="flex items-center gap-2">
+                                                                            <div class={`w-1.5 h-1.5 rounded-full ${infra.infra_type === 'port' ? 'bg-blue-400' : 'bg-orange-500'}`}></div>
+                                                                            <span class="text-[10px] font-black text-white group-hover:text-blue-400 transition-colors uppercase">{infra.name}</span>
+                                                                        </div>
+                                                                        <span class="text-[8px] font-bold text-white/30 uppercase tracking-widest">{infra.infra_type} // {infra.distance.toFixed(2)} KM AWAY</span>
+                                                                    </div>
+                                                                    <div class="text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                                                        </svg>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </For>
+                                                    </div>
                                                 </div>
                                             </Show>
                                         </div>

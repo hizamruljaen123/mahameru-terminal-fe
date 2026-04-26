@@ -59,8 +59,10 @@ export function useWebSocket(state) {
         if (ws) ws.close();
         const aisApi = import.meta.env.VITE_AIS_API || 'https://api.asetpedia.online/ais';
         const wsProtocol = aisApi.startsWith('https') ? 'wss' : 'ws';
-        const wsHost = aisApi.replace(/^https?:\/\//, '');
-        ws = new WebSocket(`${wsProtocol}://${wsHost}/ws/ships`);
+        const urlObj = new URL(aisApi);
+        const wsHost = urlObj.host;
+        const wsPath = urlObj.pathname.replace(/\/$/, ''); // Remove trailing slash
+        ws = new WebSocket(`${wsProtocol}://${wsHost}${wsPath}/ws/ships`);
 
         ws.onopen = () => {
             state.setStatus('CONNECTED');

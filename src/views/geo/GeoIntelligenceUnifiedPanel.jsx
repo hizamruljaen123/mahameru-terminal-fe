@@ -29,9 +29,9 @@ export default function GeoIntelligenceUnifiedPanel(props) {
   const fetchTrends = async () => {
     setLoading(true);
     try {
-      let url = `${import.meta.env.VITE_GEO_DATA_API}/api/geo/db-recap?days=1`;
+      let url = `${import.meta.env.VITE_GEO_DATA_API}/api/db-recap?days=1`;
       if (selectedDate()) {
-        url = `${import.meta.env.VITE_GEO_DATA_API}/api/geo/archive-trends?date=${selectedDate()}`;
+        url = `${import.meta.env.VITE_GEO_DATA_API}/api/archive-trends?date=${selectedDate()}`;
       }
 
       const res = await fetch(url);

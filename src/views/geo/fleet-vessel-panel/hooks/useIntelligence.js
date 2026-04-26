@@ -65,6 +65,23 @@ export function useIntelligence(state) {
         }
     };
 
+    const fetchNearbyInfrastructure = async (lat, lon) => {
+        if (!lat || !lon) return;
+        state.setNearbyLoading(true);
+        try {
+            const res = await fetch(`${import.meta.env.VITE_REFINERY_API}/api/infrastructure/nearby?lat=${lat}&lon=${lon}&radius=20`);
+            const json = await res.json();
+            if (json.status === 'success') {
+                state.setNearbyInfrastructure(json.data);
+            }
+        } catch (e) {
+            console.warn("[SYSTEM] Infrastructure Service Unreachable.");
+            state.setNearbyInfrastructure([]);
+        } finally {
+            state.setNearbyLoading(false);
+        }
+    };
+
 
     const fetchDisasterAlerts = async () => {
         try {
@@ -119,7 +136,10 @@ export function useIntelligence(state) {
         createEffect(() => {
             const ship = state.activeShip();
             if (ship) {
-                fetchAtmosphericData(ship.lat || ship.latitude, ship.lon || ship.longitude);
+                const lat = ship.lat || ship.latitude;
+                const lon = ship.lon || ship.longitude;
+                fetchAtmosphericData(lat, lon);
+                fetchNearbyInfrastructure(lat, lon);
                 triggerTacticalRecon(ship);
             } else if (state.selectedRefinery()) {
                 fetchAtmosphericData(state.selectedRefinery().latitude, state.selectedRefinery().longitude);

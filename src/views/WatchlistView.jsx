@@ -3,6 +3,7 @@ import * as echarts from 'echarts';
 import { alertManager } from '../utils/alertManager';
 import { getAssetUnitDef, formatQuantity, getTotalUnits, FOREX_LOT_TYPES } from '../utils/assetUnits';
 import { fetchRates } from '../utils/currencyApi';
+import PriceIntelPanel from './PriceIntelPanel';
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const MARKET_API = import.meta.env.VITE_MARKET_API || import.meta.env.VITE_MARKET_API;
@@ -868,6 +869,7 @@ function AnalyticsPanel({ positions, liveData, usdIdrRate }) {
             { id: 'RISK', label: '🛡️ RISK' },
             { id: 'COMPARE', label: '📊 COMPARE' },
             { id: 'FUNDAMENTAL', label: '🏦 FUNDAMENTAL' },
+            { id: 'PRICE_INTEL', label: '🧠 PRICE INTEL' },
           ]}>
             {(cat) => (
               <button
@@ -900,8 +902,9 @@ function AnalyticsPanel({ positions, liveData, usdIdrRate }) {
               {activeCategory() === 'PERFORMANCE' ? 'I. PERFORMANCE ANALYSIS' :
                 activeCategory() === 'RISK' ? 'II. RISK ANALYSIS' :
                   activeCategory() === 'COMPARE' ? 'III. PORTFOLIO COMPARISON' :
-                    'IV. FUNDAMENTAL ANALYSIS'} //
-              {m() ? ` ${m().dataPoints} data points` : ' LOADING...'}
+                    activeCategory() === 'PRICE_INTEL' ? 'V. PRICE INTELLIGENCE' :
+                      'IV. FUNDAMENTAL ANALYSIS'} //
+              {m() || activeCategory() === 'PRICE_INTEL' ? ` ${m()?.dataPoints || ''} data points` : ' LOADING...'}
             </span>
           </div>
 
@@ -1087,6 +1090,13 @@ function AnalyticsPanel({ positions, liveData, usdIdrRate }) {
                   </div>
                 </div>
               </Show>
+            </Show>
+
+            {/* ── PRICE INTEL TAB ── */}
+            <Show when={activeCategory() === 'PRICE_INTEL'}>
+                <div class="px-3 pb-3 h-[800px]">
+                    <PriceIntelPanel symbol={activeSymbol()} />
+                </div>
             </Show>
 
             {/* ── FUNDAMENTAL TAB ── */}

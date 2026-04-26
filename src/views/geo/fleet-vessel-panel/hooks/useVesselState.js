@@ -13,6 +13,7 @@ export function useVesselState() {
     const [isOperational, setIsOperational] = createSignal(false);
     const [lastSignalTime, setLastSignalTime] = createSignal('--:--:--');
     const [vesselCount, setVesselCount] = createSignal(0);
+    const [operatingMode, setOperatingMode] = createSignal('MAP'); // MAP or RADAR
 
     // UI state
     const [showRegistry, setShowRegistry] = createSignal(false);
@@ -40,6 +41,8 @@ export function useVesselState() {
     const [intelLoading, setIntelLoading] = createSignal(false);
     const [selectedRefinery, setSelectedRefinery] = createSignal(null);
     const [showAllFlows, setShowAllFlows] = createSignal(false);
+    const [nearbyInfrastructure, setNearbyInfrastructure] = createSignal([]);
+    const [nearbyLoading, setNearbyLoading] = createSignal(false);
 
 
     // External data state
@@ -106,6 +109,7 @@ export function useVesselState() {
         isOperational, setIsOperational,
         lastSignalTime, setLastSignalTime,
         vesselCount, setVesselCount,
+        operatingMode, setOperatingMode,
         showRegistry, setShowRegistry,
         selectedMmsi, setSelectedMmsi,
         reconTab, setReconTab,
@@ -130,6 +134,8 @@ export function useVesselState() {
 
         mapMode, setMapMode,
         viewPerspective, setViewPerspective,
+        nearbyInfrastructure, setNearbyInfrastructure,
+        nearbyLoading, setNearbyLoading,
 
         // Non-reactive
         vesselRegistry,

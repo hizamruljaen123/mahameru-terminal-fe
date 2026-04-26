@@ -39,7 +39,6 @@ export default function GeoIntelView(props) {
           <Match when={activeModule() === 'oil-facility'}><OilFacilityPanel /></Match>
           <Match when={activeModule() === 'oil-refinery'}><OilRefineryPanel /></Match>
           <Match when={activeModule() === 'submarine-cable'}><SubmarineCablePanel /></Match>
-          <Match when={activeModule() === 'tech-infra'}><TechInfraPanel /></Match>
           <Match when={activeModule() === 'infra-cctv'}><InfraCCTVPanel /></Match>
           <Match when={activeModule() === 'weather'}><WeatherPanel /></Match>
           <Match when={activeModule() === 'global-economy'}><GlobalEconomyPanel /></Match>

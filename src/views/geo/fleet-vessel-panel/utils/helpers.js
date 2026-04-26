@@ -5,7 +5,8 @@ import { TYPE_COLORS } from '../constants/colors';
  */
 export const getVesselColor = (type) => {
     if (!type) return TYPE_COLORS.Other;
-    const match = Object.keys(TYPE_COLORS).find(k => type.includes(k));
+    const typeLower = type.toLowerCase();
+    const match = Object.keys(TYPE_COLORS).find(k => typeLower.includes(k.toLowerCase()));
     return match ? TYPE_COLORS[match] : TYPE_COLORS.Other;
 };
 

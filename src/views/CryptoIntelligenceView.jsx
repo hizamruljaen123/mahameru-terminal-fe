@@ -9,6 +9,11 @@ import CryptoQuantPanel from '../components/crypto/CryptoQuantPanel';
 import CryptoMacroPanel from '../components/crypto/CryptoMacroPanel';
 import CryptoAssetExplorer from '../components/crypto/CryptoAssetExplorer';
 import LiquidityHeatmap from '../components/institutional/LiquidityHeatmap';
+import VaRDashboard from '../components/institutional/VaRDashboard';
+import PolicyDivergenceTracker from '../components/institutional/PolicyDivergenceTracker';
+import RiskOverlayChart from '../components/institutional/RiskOverlayChart';
+import SupplyChainIntel from '../components/institutional/SupplyChainIntel';
+import InfraMacroProxy from '../components/institutional/InfraMacroProxy';
 
 // --- CONFIG & CONSTANTS ---
 const CRYPTO_API = import.meta.env.VITE_CRYPTO_API;
@@ -445,7 +450,8 @@ export default function CryptoIntelligenceView(props) {
     { id: 'news', label: '08 NEWS' },
     { id: 'advanced', label: '09 ADVANCED' },
     { id: 'live', label: '10 LIVE' },
-    { id: 'explorer', label: '11 EXPLORER' }
+    { id: 'explorer', label: '11 EXPLORER' },
+    { id: 'institutional', label: '12 INSTITUTIONAL' }
   ];
 
   return (
@@ -1038,6 +1044,32 @@ export default function CryptoIntelligenceView(props) {
 
 
         </div>
+
+        <Show when={activeTab() === 'institutional'}>
+          <div class="h-full flex flex-col gap-6 animate-in zoom-in duration-500 overflow-y-auto win-scroll pr-2 pb-10">
+            <div class="grid grid-cols-12 gap-6">
+              <div class="col-span-12 lg:col-span-6 h-[400px]">
+                <VaRDashboard symbol={selectedSymbol()} />
+              </div>
+              <div class="col-span-12 lg:col-span-6 h-[400px]">
+                <RiskOverlayChart symbol={selectedSymbol()} />
+              </div>
+            </div>
+            <div class="grid grid-cols-12 gap-6">
+              <div class="col-span-12 lg:col-span-6 h-[400px]">
+                <PolicyDivergenceTracker symbol={selectedSymbol()} />
+              </div>
+              <div class="col-span-12 lg:col-span-6 h-[400px]">
+                <InfraMacroProxy symbol={selectedSymbol()} />
+              </div>
+            </div>
+            <div class="grid grid-cols-12 gap-6">
+              <div class="col-span-12 h-[400px]">
+                <SupplyChainIntel symbol={selectedSymbol()} />
+              </div>
+            </div>
+          </div>
+        </Show>
 
         {/* FOOTER STATUS BAR */}
         <div class="h-10 border-t border-border_main bg-bg_header/20 shrink-0 flex items-center justify-between px-6">

@@ -7,6 +7,7 @@ import { getVesselColor, getRouteLabel } from '../utils/helpers';
  */
 export function useMapController(state) {
     let mapInstance = null;
+    let resizeObserver = null;
     let isolatedMarkers = [];
     let refineryMarkers = [];
 
@@ -154,27 +155,35 @@ export function useMapController(state) {
             type: 'circle',
             source: 'vessels',
             paint: {
-                'circle-radius': 5,
+                'circle-radius': [
+                    'interpolate', ['linear'], ['zoom'],
+                    1, 3,
+                    5, 5,
+                    10, 8,
+                    15, 12
+                ],
                 'circle-color': ['get', 'color'],
-                'circle-stroke-width': 1.5,
-                'circle-stroke-color': '#06070a'
+                'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 1, 0.5, 5, 1.5, 10, 2],
+                'circle-stroke-color': '#ffffff',
+                'circle-opacity': 0.9
             }
         });
         mapInstance.addLayer({
             id: 'vessels-labels',
             type: 'symbol',
             source: 'vessels',
+            minzoom: 6,
             layout: {
                 'text-field': ['get', 'name'],
-                'text-font': ['Open Sans Regular'],
+                'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
                 'text-size': 9,
-                'text-offset': [0, 1.2],
+                'text-offset': [0, 1.5],
                 'text-anchor': 'top'
             },
             paint: {
                 'text-color': ['get', 'color'],
-                'text-halo-color': '#06070a',
-                'text-halo-width': 1.2
+                'text-halo-color': '#000000',
+                'text-halo-width': 2
             }
         });
     };
@@ -240,6 +249,43 @@ export function useMapController(state) {
 
     const [isMapReady, setIsMapReady] = createSignal(false);
 
+    const addNearbyLayers = () => {
+        if (!mapInstance) return;
+        mapInstance.addSource('nearby', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+        });
+
+        mapInstance.addLayer({
+            id: 'nearby-connections',
+            type: 'line',
+            source: 'nearby',
+            layout: {
+                'line-cap': 'round',
+                'line-join': 'round'
+            },
+            paint: {
+                'line-color': '#00f2ff',
+                'line-width': 1.5,
+                'line-dasharray': [2, 2],
+                'line-opacity': 0.6
+            }
+        });
+
+        mapInstance.addLayer({
+            id: 'nearby-points',
+            type: 'circle',
+            source: 'nearby',
+            filter: ['==', '$type', 'Point'],
+            paint: {
+                'circle-radius': 4,
+                'circle-color': '#00f2ff',
+                'circle-stroke-width': 1,
+                'circle-stroke-color': '#ffffff'
+            }
+        });
+    };
+
     const setupClickHandlers = () => {
         mapInstance.on('mouseenter', 'vessels-point', () =>
             mapInstance.getCanvas().style.cursor = 'pointer');
@@ -276,10 +322,20 @@ export function useMapController(state) {
                 window.__mapInstance = null;
                 setIsMapReady(false);
             }
+            if (resizeObserver) {
+                resizeObserver.disconnect();
+                resizeObserver = null;
+            }
             return;
         }
 
         if (mapInstance) return;
+
+        // Create ResizeObserver to handle container size changes
+        resizeObserver = new ResizeObserver(() => {
+            if (mapInstance) mapInstance.resize();
+        });
+        resizeObserver.observe(el);
 
         mapInstance = new window.maplibregl.Map({
             container: el,
@@ -295,7 +351,6 @@ export function useMapController(state) {
         window.__mapInstance = mapInstance;
 
         mapInstance.on('load', () => {
-            setIsMapReady(true);
             Object.entries(HARBOR_PALETTE).forEach(([key, color]) =>
                 registerSquareIcon(`sq-${key}`, color));
 
@@ -304,11 +359,19 @@ export function useMapController(state) {
             addVesselLayers();
             addPortLayers();
             addSelectionLayer();
+            addNearbyLayers();
+
+            // Mark as ready ONLY after all sources/layers are added
+            setIsMapReady(true);
+
+            // Perform initial sync immediately
             syncPortsOnMap();
+            syncMap();
+
             setupClickHandlers();
 
             setTimeout(() => mapInstance?.resize(), 100);
-            
+
             mapInstance.on('styleimagemissing', (e) => {
                 const data = new Uint8Array(1 * 1 * 4);
                 mapInstance.addImage(e.id, { width: 1, height: 1, data });
@@ -406,6 +469,20 @@ export function useMapController(state) {
                     isolatedMarkers.push(createIsolatedMarker(refHtml, [refinery.lon || refinery.longitude, refinery.lat || refinery.latitude]));
                 }
             }
+        } else if (state.selectedPortId()) {
+            const port = state.activePort();
+            if (port && port.longitude != null && port.latitude != null) {
+                const portHtml = `
+          <div class="flex flex-col items-center gap-1">
+            <div class="bg-blue-600 p-2.5 rounded-full border-2 border-white shadow-[0_0_30px_#3b82f6] animate-bounce">
+              <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+            </div>
+            <div class="px-2 py-0.5 bg-black/90 border border-blue-400 text-[10px] font-black text-blue-400 whitespace-nowrap uppercase tracking-widest">SELECTED PORT: ${port.name}</div>
+          </div>`;
+                isolatedMarkers.push(createIsolatedMarker(portHtml, [port.longitude, port.latitude]));
+            }
         } else {
             syncRefineryMarkers();
         }
@@ -498,20 +575,26 @@ export function useMapController(state) {
 
     const syncSelection = () => {
         const target = state.activeShip();
+        const port = state.activePort();
         if (!mapInstance?.getSource('selection')) return;
 
+        const features = [];
         if (target && target.lon != null && target.lat != null) {
-            mapInstance.getSource('selection').setData({
-                type: 'FeatureCollection',
-                features: [{
-                    type: 'Feature',
-                    geometry: { type: 'Point', coordinates: [target.lon, target.lat] },
-                    properties: { mmsi: target.mmsi }
-                }]
+            features.push({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [target.lon, target.lat] },
+                properties: { mmsi: target.mmsi, type: 'ship' }
             });
-        } else {
-            mapInstance.getSource('selection').setData({ type: 'FeatureCollection', features: [] });
         }
+        if (port && port.longitude != null && port.latitude != null) {
+            features.push({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [port.longitude, port.latitude] },
+                properties: { id: port.id, type: 'port' }
+            });
+        }
+
+        mapInstance.getSource('selection').setData({ type: 'FeatureCollection', features });
     };
 
     const jumpTo = (center, zoom) => {
@@ -531,28 +614,28 @@ export function useMapController(state) {
         const isTop = state.viewPerspective() === 'top';
         const newPersp = isTop ? 'tilt' : 'top';
         state.setViewPerspective(newPersp);
-        
+
         const ship = state.activeShip();
         const port = state.activePort();
         const targetCoord = ship ? [ship.lon || ship.longitude, ship.lat || ship.latitude] : (port ? [port.longitude, port.latitude] : null);
 
         if (newPersp === 'top') {
-            mapInstance.flyTo({ 
+            mapInstance.flyTo({
                 center: targetCoord || mapInstance.getCenter(),
                 zoom: targetCoord ? 14 : Math.max(mapInstance.getZoom(), 4),
-                pitch: 0, 
-                bearing: 0, 
+                pitch: 0,
+                bearing: 0,
                 duration: 2000,
-                essential: true 
+                essential: true
             });
         } else {
-            mapInstance.flyTo({ 
+            mapInstance.flyTo({
                 center: targetCoord || mapInstance.getCenter(),
                 zoom: targetCoord ? 16.5 : (mapInstance.getZoom() < 12 ? 14 : mapInstance.getZoom()),
-                pitch: 65, 
-                bearing: 45, 
+                pitch: 65,
+                bearing: 45,
                 duration: 2500,
-                essential: true 
+                essential: true
             });
         }
     };
@@ -560,7 +643,17 @@ export function useMapController(state) {
     const setupReactiveEffects = () => {
         createEffect(() => { isMapReady(); syncSelection(); });
         createEffect(() => { isMapReady(); state.ships(); state.vesselFilter(); syncMap(); });
-        createEffect(() => { isMapReady(); state.portFilter(); syncPortsOnMap(); });
+        createEffect(() => { isMapReady(); state.ports(); state.portFilter(); syncPortsOnMap(); });
+        createEffect(() => { isMapReady(); state.nearbyInfrastructure(); syncNearbyInfrastructure(); });
+
+        // Trigger resize when switching modes or toggling registry to ensure map fills container
+        createEffect(() => {
+            const mode = state.operatingMode();
+            const showRegistry = state.showRegistry();
+            if (isMapReady() && mode === 'MAP') {
+                setTimeout(() => mapInstance?.resize(), 100);
+            }
+        });
 
         // Map Style Switching (Ported from IndustrialZonePanel)
         createEffect(() => {
@@ -595,11 +688,16 @@ export function useMapController(state) {
                 });
 
                 // Add at the bottom
+                // Add below tactical layers but above base satellite
+                const tacticalLayer = mapInstance.getStyle().layers.find(l =>
+                    l.id.includes('vessels') || l.id.includes('ports') || l.id.includes('route')
+                );
+
                 mapInstance.addLayer({
                     id: 'osm',
                     type: 'raster',
                     source: 'osm'
-                }, mapInstance.getStyle().layers[0]?.id);
+                }, tacticalLayer?.id);
             } catch (e) {
                 console.warn("Style update skipped:", e);
             }

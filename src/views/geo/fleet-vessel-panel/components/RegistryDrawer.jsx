@@ -4,6 +4,7 @@ import PortList from './PortList';
 import AnalyticsPanel from './AnalyticsPanel';
 import ReconPanel from './ReconPanel';
 import DisasterPanel from './DisasterPanel';
+import VesselIntelPanel from './VesselIntelPanel';
 
 /**
  * Registry drawer component with dual-pane layout
@@ -19,7 +20,7 @@ export default function RegistryDrawer(props) {
                     <div class="p-4 border-b border-[#00f2ff]/10 bg-[#0b0c10]">
                         <div class="flex gap-4 h-8 items-center justify-between mb-4">
                             <div class="flex gap-2 h-full">
-                                <For each={['VESSELS', 'PORTS', 'HAZARDS', 'ANALYTICS']}>
+                                <For each={['VESSELS', 'PORTS', 'HAZARDS', 'ANALYTICS', 'INTEL']}>
                                     {(tab) => (
                                          <button
                                              onClick={() => props.onTabChange(tab)}
@@ -105,6 +106,11 @@ export default function RegistryDrawer(props) {
                                     />
                                 </div>
                             </Match>
+                            <Match when={props.activeTab() === 'INTEL'}>
+                                <div class="flex-1 overflow-y-auto tactical-scrollbar">
+                                    <VesselIntelPanel />
+                                </div>
+                            </Match>
                         </Switch>
                     </div>
                 </div>
@@ -114,6 +120,8 @@ export default function RegistryDrawer(props) {
                     ship={props.activeShip}
                     activePort={props.activePort}
                     activeRefinery={props.activeRefinery}
+                    nearbyInfrastructure={props.state.nearbyInfrastructure}
+                    nearbyLoading={props.state.nearbyLoading}
                     dossierTabState={[props.dossierTab, props.onDossierTabChange]}
                     reconTabState={[props.reconTab, props.onReconTabChange]}
                     portReconTabState={[props.portReconTab, props.onPortReconTabChange]}
