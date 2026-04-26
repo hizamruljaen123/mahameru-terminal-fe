@@ -126,6 +126,25 @@ export function useIntelligence(state) {
         }
     };
 
+    const fetchNearestPortToHazard = async (lat, lon) => {
+        if (!lat || !lon) return;
+        try {
+            const res = await fetch(`${import.meta.env.VITE_PORT_API}/api/infra/ports/nearby?lat=${lat}&lon=${lon}&limit=10`);
+            const data = await res.json();
+            if (data && data.length > 0) {
+                state.setNearestPortToHazard(data[0]);
+                state.setHazardNearbyInfras(data);
+            } else {
+                state.setNearestPortToHazard(null);
+                state.setHazardNearbyInfras([]);
+            }
+        } catch (e) {
+            console.error("Infrastructure Search Failure:", e);
+            state.setNearestPortToHazard(null);
+            state.setHazardNearbyInfras([]);
+        }
+    };
+
     const triggerTacticalRecon = (ship) => {
         // Tactical reconnaissance logic involving correlation service removed.
         // Ready for new correlation engine implementation.
@@ -167,6 +186,14 @@ export function useIntelligence(state) {
     onMount(() => {
         setupShipIntelligenceEffect();
         startPeriodicFetches();
+
+        // New: Watch for active hazard selection to fetch nearest infrastructure
+        createEffect(() => {
+            const hazard = state.activeHazard();
+            if (hazard) {
+                fetchNearestPortToHazard(hazard.lat, hazard.lon);
+            }
+        });
     });
 
     onCleanup(() => cleanup());
@@ -174,6 +201,7 @@ export function useIntelligence(state) {
     return {
         fetchDisasterAlerts,
         fetchMarketIntelligence,
-        fetchTheaterPorts
+        fetchTheaterPorts,
+        fetchNearestPortToHazard
     };
 }

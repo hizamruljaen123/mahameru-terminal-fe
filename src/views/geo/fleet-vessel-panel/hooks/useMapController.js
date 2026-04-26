@@ -1,6 +1,6 @@
 import { createSignal, createEffect, onMount, onCleanup } from 'solid-js';
 import { HARBOR_PALETTE } from '../constants/colors';
-import { getVesselColor, getRouteLabel } from '../utils/helpers';
+import { getVesselColor, getRouteLabel, calculateHaversineDistance } from '../utils/helpers';
 
 /**
  * MapLibre GL map controller
@@ -10,6 +10,185 @@ export function useMapController(state) {
     let resizeObserver = null;
     let isolatedMarkers = [];
     let refineryMarkers = [];
+    let disasterMarkers = [];
+    let routeLabels = [];
+    let meshLabels = [];
+    let hazardLabels = [];
+    let hazardPortMarkers = [];
+
+    const clearGroup = (group) => {
+        group.forEach(m => m.remove());
+        group.length = 0;
+    };
+
+    const addLabel = (lngLat, text, color = '#00f2ff', size = '8px', group = routeLabels) => {
+        const el = document.createElement('div');
+        el.className = 'tactical-label';
+        el.innerHTML = `
+            <div class="px-1.5 py-0.5 bg-black/80 backdrop-blur-sm border border-${color}/30 text-[${size}] font-black text-${color} whitespace-nowrap uppercase tracking-tighter shadow-2xl" 
+                 style="color: ${color}; border-color: ${color}40; font-family: Inter, system-ui, sans-serif;">
+                ${text}
+            </div>
+        `;
+        const marker = new window.maplibregl.Marker({ element: el, anchor: 'center' })
+            .setLngLat(lngLat)
+            .addTo(mapInstance);
+        group.push(marker);
+    };
+
+    const getDisasterIconHtml = (type, level) => {
+        const color = String(level).toUpperCase() === 'RED' ? '#ff1744' : 
+                      String(level).toUpperCase() === 'ORANGE' ? '#ff9100' : '#00e676';
+        
+        const icons = {
+            'EQ': '<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>', // Bolt
+            'QUAKE': '<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>',
+            'FIRE_ANOMALY': '<path d="M12 2c0 10-4 12-4 12s8-3 8-12c0 0-4.5 1.5-4 4.5 0 0-4.5-1.5-4-4.5z"/>', // Flame
+            'FL': '<path d="M2 12s3-4 10-4 10 4 10 4-3 4-10 4-10-4-10-4z"/><path d="M7 12c0 1 1 2 5 2s5-1 5-2"/>', // Wave
+            'TC': '<path d="M21 4H3l2 16h14l2-16zM12 11h-2v2h2v-2z"/>', // Cyclone
+            'TS': '<path d="M21 4H3l2 16h14l2-16zM12 11h-2v2h2v-2z"/>',
+            'VO': '<path d="M2 20L12 4l10 16H2z"/>' // Volcano
+        };
+
+        const names = {
+            'EQ': 'EARTHQUAKE',
+            'QUAKE': 'EARTHQUAKE',
+            'FIRE_ANOMALY': 'FIRE DETECTED',
+            'FL': 'FLOODING',
+            'TC': 'CYCLONE',
+            'TS': 'STORM',
+            'VO': 'VOLCANO',
+            'DR': 'DROUGHT'
+        };
+
+        const glyph = icons[type] || '<circle cx="12" cy="12" r="5"/>';
+        const typeName = names[type] || type.toUpperCase();
+
+        return `
+            <div class="relative flex items-center justify-center pointer-events-auto cursor-pointer" title="${typeName}">
+                <div class="absolute w-8 h-8 rounded border border-white/20 bg-black/60 backdrop-blur-md"></div>
+                <div class="absolute w-6 h-6 rounded rotate-45 border border-${color}" style="border-color: ${color}; background-color: ${color}20"></div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="${color}" style="filter: drop-shadow(0 0 4px ${color})">
+                    ${glyph}
+                </svg>
+                <div class="absolute -bottom-6 px-1.5 py-0.5 bg-black/90 border border-white/10 text-[7px] font-black text-white whitespace-nowrap uppercase tracking-tighter shadow-xl">
+                    HAZARD: ${typeName}
+                </div>
+            </div>
+        `;
+    };
+
+    const syncDisasterMarkers = () => {
+        if (!mapInstance) return;
+        disasterMarkers.forEach(m => m.remove());
+        disasterMarkers = [];
+
+        const alerts = state.disasterAlerts() || [];
+        alerts.forEach(alert => {
+            const el = document.createElement('div');
+            el.innerHTML = getDisasterIconHtml(alert.type, alert.level);
+            
+            // Add click handler to marker
+            el.onclick = () => {
+                state.setActiveHazard(alert);
+                mapInstance.flyTo({
+                    center: [alert.lon, alert.lat],
+                    zoom: 10,
+                    pitch: 45,
+                    essential: true
+                });
+            };
+
+            const marker = new window.maplibregl.Marker({ element: el })
+                .setLngLat([alert.lon, alert.lat])
+                .addTo(mapInstance);
+            
+            disasterMarkers.push(marker);
+        });
+    };
+
+    const addDisasterProximityLayers = () => {
+        mapInstance.addSource('hazard-proximity', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+        });
+        mapInstance.addLayer({
+            id: 'layer-hazard-proximity',
+            type: 'line',
+            source: 'hazard-proximity',
+            paint: {
+                'line-color': '#ffffff',
+                'line-width': 2,
+                'line-dasharray': [2, 2],
+                'line-opacity': 0.8
+            }
+        });
+    };
+
+    const syncDisasterProximity = () => {
+        if (!mapInstance || !mapInstance.getSource('hazard-proximity')) return;
+        clearGroup(hazardLabels);
+        clearGroup(hazardPortMarkers);
+        
+        const hazard = state.activeHazard();
+        const infras = state.hazardNearbyInfras() || [];
+
+        if (!hazard || infras.length === 0) {
+            mapInstance.getSource('hazard-proximity').setData({ type: 'FeatureCollection', features: [] });
+            return;
+        }
+
+        const features = infras.map(port => {
+            const distText = `${port.distance_km?.toFixed(1)} KM`;
+            const label = `${distText} TO ${port.name.toUpperCase()}`;
+            
+            // Standard Pin Marker with Label Above
+            const el = document.createElement('div');
+            el.className = 'hazard-port-pin';
+            el.innerHTML = `
+                <div class="flex flex-col items-center group pointer-events-auto cursor-pointer">
+                    <div class="px-2 py-1 bg-black/90 border border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)] text-white mb-1 flex flex-col items-center">
+                        <span class="text-[8px] font-black tracking-tighter leading-tight">${port.name.toUpperCase()}</span>
+                        <span class="text-[7px] font-bold text-blue-400 mt-0.5">${distText} FROM HAZARD</span>
+                    </div>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 0 4px rgba(59,130,246,0.5))">
+                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#3b82f6" stroke="white" stroke-width="1.5"/>
+                        <circle cx="12" cy="9" r="2.5" fill="white"/>
+                    </svg>
+                </div>
+            `;
+            
+            // Add click to select port
+            el.onclick = () => {
+                state.setSelectedPortId(port.id);
+                state.setActiveTab('PORTS');
+                state.setShowRegistry(true);
+            };
+
+            const marker = new window.maplibregl.Marker({ element: el, anchor: 'bottom' })
+                .setLngLat([port.longitude, port.latitude])
+                .addTo(mapInstance);
+            hazardPortMarkers.push(marker);
+
+            const midLon = (hazard.lon + port.longitude) / 2;
+            const midLat = (hazard.lat + port.latitude) / 2;
+            
+            if (!isNaN(midLon) && !isNaN(midLat)) {
+                addLabel([midLon, midLat], distText, '#ffffff', '7px', hazardLabels);
+            }
+
+            return {
+                type: 'Feature',
+                geometry: {
+                    type: 'LineString',
+                    coordinates: [[hazard.lon, hazard.lat], [port.longitude, port.latitude]]
+                },
+                properties: { distance: label }
+            };
+        });
+
+        mapInstance.getSource('hazard-proximity').setData({ type: 'FeatureCollection', features });
+    };
 
     const registerSquareIcon = (id, color) => {
         const canvas = document.createElement('canvas');
@@ -29,7 +208,6 @@ export function useMapController(state) {
 
     const createBaseStyle = () => ({
         version: 8,
-        glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
         sources: {
             'satellite': {
                 type: 'raster',
@@ -82,31 +260,6 @@ export function useMapController(state) {
             }
         });
 
-        // Route labels
-        const addRouteLabels = (sourceId, layerId, color) => {
-            mapInstance.addLayer({
-                id: layerId,
-                type: 'symbol',
-                source: sourceId,
-                layout: {
-                    'text-field': ['get', 'label'],
-                    'symbol-placement': 'line-center',
-                    'text-font': ['Open Sans Regular'],
-                    'text-size': 9,
-                    'text-offset': [0, -1],
-                    'text-allow-overlap': true,
-                    'text-keep-upright': true
-                },
-                paint: {
-                    'text-color': color,
-                    'text-halo-color': '#000000',
-                    'text-halo-width': 2
-                }
-            });
-        };
-
-        addRouteLabels('route-port', 'layer-route-port-labels', '#00f2ff');
-        addRouteLabels('route-refinery', 'layer-route-refinery-labels', '#ff9d00');
     };
 
     const addTankerMeshLayers = () => {
@@ -124,23 +277,6 @@ export function useMapController(state) {
                 'circle-opacity': 0.8,
                 'circle-stroke-width': 1.5,
                 'circle-stroke-color': '#ffffff'
-            }
-        });
-        mapInstance.addLayer({
-            id: 'layer-tanker-mesh-labels',
-            type: 'symbol',
-            source: 'tanker-mesh-dots',
-            layout: {
-                'text-field': ['get', 'name'],
-                'text-font': ['Open Sans Regular'],
-                'text-size': 8,
-                'text-offset': [0, 1.2],
-                'text-anchor': 'top'
-            },
-            paint: {
-                'text-color': '#ffffff',
-                'text-halo-color': '#000000',
-                'text-halo-width': 1
             }
         });
     };
@@ -168,24 +304,6 @@ export function useMapController(state) {
                 'circle-opacity': 0.9
             }
         });
-        mapInstance.addLayer({
-            id: 'vessels-labels',
-            type: 'symbol',
-            source: 'vessels',
-            minzoom: 6,
-            layout: {
-                'text-field': ['get', 'name'],
-                'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
-                'text-size': 9,
-                'text-offset': [0, 1.5],
-                'text-anchor': 'top'
-            },
-            paint: {
-                'text-color': ['get', 'color'],
-                'text-halo-color': '#000000',
-                'text-halo-width': 2
-            }
-        });
     };
 
     const addPortLayers = () => {
@@ -195,35 +313,25 @@ export function useMapController(state) {
         });
         mapInstance.addLayer({
             id: 'ports-layer',
-            type: 'symbol',
+            type: 'circle',
             source: 'ports',
-            minzoom: 3,
-            layout: {
-                'icon-image': [
-                    'match', ['get', 'type'],
-                    'CN', 'sq-CN', 'CB', 'sq-CB', 'CT', 'sq-CT',
-                    'RN', 'sq-RN', 'RB', 'sq-RB', 'RT', 'sq-RT',
-                    'LC', 'sq-LC', 'OR', 'sq-OR', 'TH', 'sq-TH',
-                    'sq-DEFAULT'
-                ],
-                'icon-size': 1,
-                'icon-allow-overlap': true,
-                'text-field': ['get', 'name'],
-                'text-font': ['Open Sans Regular'],
-                'text-size': 8.5,
-                'text-offset': [0, 1.2],
-                'text-anchor': 'top'
-            },
+            minzoom: 5,
             paint: {
-                'text-color': [
+                'circle-radius': [
+                    'interpolate', ['linear'], ['zoom'],
+                    5, 2,
+                    10, 5,
+                    15, 8
+                ],
+                'circle-color': [
                     'match', ['get', 'type'],
                     'CN', '#3b82f6', 'CB', '#0ea5e9', 'CT', '#00f2ff',
                     'RN', '#10b981', 'RB', '#059669', 'RT', '#34d399',
                     'LC', '#8b5cf6', 'OR', '#f43f5e', 'TH', '#f59e0b',
                     '#ffffff'
                 ],
-                'text-halo-color': '#06070a',
-                'text-halo-width': 1.5
+                'circle-stroke-width': 1.5,
+                'circle-stroke-color': '#ffffff'
             }
         });
     };
@@ -247,7 +355,73 @@ export function useMapController(state) {
         });
     };
 
+    const addMeshLayers = () => {
+        if (!mapInstance) return;
+        mapInstance.addSource('tactical-mesh', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+        });
+
+        mapInstance.addLayer({
+            id: 'mesh-lines',
+            type: 'line',
+            source: 'tactical-mesh',
+            layout: { 'line-cap': 'round', 'line-join': 'round' },
+            paint: {
+                'line-color': '#00f2ff',
+                'line-width': 1,
+                'line-dasharray': [4, 4],
+                'line-opacity': 0.4
+            }
+        });
+
+    };
+
     const [isMapReady, setIsMapReady] = createSignal(false);
+    
+    // Helper for mesh sync
+    const syncMeshNetwork = () => {
+        if (!mapInstance || !mapInstance.getSource('tactical-mesh')) return;
+        clearGroup(meshLabels);
+        
+        const port = state.activePort();
+        const active = state.isMeshActive();
+        const radius = state.meshRadius();
+
+        if (!active || !port) {
+            mapInstance.getSource('tactical-mesh').setData({ type: 'FeatureCollection', features: [] });
+            return;
+        }
+
+        const features = [];
+        const portLat = port.latitude;
+        const portLon = port.longitude;
+        const ships = Array.from(state.vesselRegistry.values());
+
+        ships.forEach(ship => {
+            const shipLat = ship.lat || ship.latitude;
+            const shipLon = ship.lon || ship.longitude;
+            if (shipLat == null || shipLon == null) return;
+
+            const dist = calculateHaversineDistance(portLat, portLon, shipLat, shipLon);
+            if (dist <= radius) {
+                const label = `${dist.toFixed(1)}KM`;
+                features.push({
+                    type: 'Feature',
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: [[portLon, portLat], [shipLon, shipLat]]
+                    },
+                    properties: { distance: label }
+                });
+
+                // Add HTML label at midpoint
+                addLabel([(portLon + shipLon) / 2, (portLat + shipLat) / 2], label, '#00f2ff', '6px', meshLabels);
+            }
+        });
+
+        mapInstance.getSource('tactical-mesh').setData({ type: 'FeatureCollection', features });
+    };
 
     const addNearbyLayers = () => {
         if (!mapInstance) return;
@@ -293,18 +467,22 @@ export function useMapController(state) {
             mapInstance.getCanvas().style.cursor = '');
 
         mapInstance.on('click', (e) => {
-            const layers = ['vessels-point', 'ports-layer'];
-            const features = mapInstance.queryRenderedFeatures(e.point, { layers });
+            const availableLayers = ['vessels-point', 'ports-layer'].filter(l => mapInstance.getLayer(l));
+            if (availableLayers.length === 0) return;
+
+            const features = mapInstance.queryRenderedFeatures(e.point, { layers: availableLayers });
             if (features.length > 0) {
                 const f = features[0];
                 if (f.layer.id === 'vessels-point') {
                     state.setSelectedMmsi(f.properties.mmsi);
                     state.setSelectedPortId(null);
                     state.setShowRegistry(true);
+                    state.setActiveTab('VESSELS');
                 } else if (f.layer.id === 'ports-layer') {
                     state.setSelectedPortId(f.properties.id);
                     state.setSelectedMmsi(null);
                     state.setShowRegistry(true);
+                    state.setActiveTab('PORTS');
                 }
             }
         });
@@ -345,7 +523,14 @@ export function useMapController(state) {
             attributionControl: false,
             antialias: true,
             fadeDuration: 300,
-            trackResize: true
+            trackResize: true,
+            dragPan: true,
+            scrollZoom: true,
+            boxZoom: true,
+            dragRotate: true,
+            keyboard: true,
+            doubleClickZoom: true,
+            touchZoomRotate: true
         });
 
         window.__mapInstance = mapInstance;
@@ -360,6 +545,8 @@ export function useMapController(state) {
             addPortLayers();
             addSelectionLayer();
             addNearbyLayers();
+            addMeshLayers();
+            addDisasterProximityLayers();
 
             // Mark as ready ONLY after all sources/layers are added
             setIsMapReady(true);
@@ -441,7 +628,12 @@ export function useMapController(state) {
           </div>`;
                 isolatedMarkers.push(createIsolatedMarker(shipHtml, [sLon, sLat]));
 
-                const port = state.ports().find(p => p.name === ship.destination_port);
+                const destName = (ship.destination || '').toUpperCase().trim();
+                const port = state.ports().find(p => 
+                    (p.name || '').toUpperCase().trim() === destName || 
+                    destName.includes((p.name || '').toUpperCase().trim()) && (p.name || '').length > 3
+                );
+                
                 if (port) {
                     const portHtml = `
             <div class="flex flex-col items-center gap-1">
@@ -450,7 +642,7 @@ export function useMapController(state) {
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15l-4-4 4-4M17 15l4-4-4-4" />
                 </svg>
               </div>
-              <div class="px-2 py-0.5 bg-black/90 border border-cyan-400 text-[9px] font-black text-cyan-400 whitespace-nowrap">PORT: ${port.name}</div>
+              <div class="px-2 py-0.5 bg-black/90 border border-cyan-400 text-[9px] font-black text-cyan-400 whitespace-nowrap">DESTINATION: ${port.name}</div>
             </div>`;
                     isolatedMarkers.push(createIsolatedMarker(portHtml, [port.longitude, port.latitude]));
                 }
@@ -522,30 +714,39 @@ export function useMapController(state) {
         const ship = state.activeShip();
         let portFeatures = [];
         let refineryFeatures = [];
+        clearGroup(routeLabels);
 
         const drawShipFlow = (targetShip, opacity = 1.0) => {
             const port = state.ports().find(p => p.name === targetShip.destination_port);
+            const shipPos = [targetShip.lon || targetShip.longitude, targetShip.lat || targetShip.latitude];
+
             if (port) {
+                const portPos = [port.longitude, port.latitude];
+                const label = getRouteLabel(targetShip.distance_port_km, targetShip.speed);
                 portFeatures.push({
                     type: 'Feature',
-                    properties: { opacity, label: getRouteLabel(targetShip.distance_port_km, targetShip.speed) },
-                    geometry: {
-                        type: 'LineString',
-                        coordinates: [[targetShip.lon || targetShip.longitude, targetShip.lat || targetShip.latitude], [port.longitude, port.latitude]]
-                    }
+                    properties: { opacity, label },
+                    geometry: { type: 'LineString', coordinates: [shipPos, portPos] }
                 });
+                
+                if (opacity === 1.0) {
+                    addLabel([(shipPos[0] + portPos[0]) / 2, (shipPos[1] + portPos[1]) / 2], label, '#00f2ff');
+                }
             }
 
             const refinery = targetShip.closest_refinery;
             if (refinery) {
+                const refPos = [refinery.lon || refinery.longitude, refinery.lat || refinery.latitude];
+                const label = getRouteLabel(refinery.distance_km, targetShip.speed);
                 refineryFeatures.push({
                     type: 'Feature',
-                    properties: { opacity, label: getRouteLabel(refinery.distance_km, targetShip.speed) },
-                    geometry: {
-                        type: 'LineString',
-                        coordinates: [[targetShip.lon || targetShip.longitude, targetShip.lat || targetShip.latitude], [refinery.lon || refinery.longitude, refinery.lat || refinery.latitude]]
-                    }
+                    properties: { opacity, label },
+                    geometry: { type: 'LineString', coordinates: [shipPos, refPos] }
                 });
+
+                if (opacity === 1.0) {
+                    addLabel([(shipPos[0] + refPos[0]) / 2, (shipPos[1] + refPos[1]) / 2], label, '#ff9d00');
+                }
             }
         };
 
@@ -571,6 +772,45 @@ export function useMapController(state) {
 
         mapInstance.getSource('route-port')?.setData({ type: 'FeatureCollection', features: portFeatures });
         mapInstance.getSource('route-refinery')?.setData({ type: 'FeatureCollection', features: refineryFeatures });
+    };
+
+    const syncNearbyInfrastructure = () => {
+        if (!mapInstance || !mapInstance.getSource('nearby')) return;
+
+        const ship = state.activeShip();
+        const data = state.nearbyInfrastructure();
+        
+        if (!ship || !data || data.length === 0) {
+            mapInstance.getSource('nearby').setData({ type: 'FeatureCollection', features: [] });
+            return;
+        }
+
+        const features = [];
+        const shipCoord = [ship.lon || ship.longitude, ship.lat || ship.latitude];
+
+        data.forEach(infra => {
+            const infraCoord = [infra.lon || infra.longitude, infra.lat || infra.latitude];
+            if (infraCoord[0] == null || infraCoord[1] == null) return;
+
+            // Point feature for infrastructure
+            features.push({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: infraCoord },
+                properties: { name: infra.name, type: infra.infra_type }
+            });
+
+            // Connection line from ship to infrastructure
+            features.push({
+                type: 'Feature',
+                geometry: {
+                    type: 'LineString',
+                    coordinates: [shipCoord, infraCoord]
+                },
+                properties: { type: 'connection' }
+            });
+        });
+
+        mapInstance.getSource('nearby').setData({ type: 'FeatureCollection', features });
     };
 
     const syncSelection = () => {
@@ -603,6 +843,14 @@ export function useMapController(state) {
 
     const flyTo = (center, zoom) => {
         mapInstance?.flyTo({ center, zoom, duration: 2000 });
+    };
+
+    const zoomIn = () => {
+        mapInstance?.zoomIn({ duration: 300 });
+    };
+
+    const zoomOut = () => {
+        mapInstance?.zoomOut({ duration: 300 });
     };
 
     const clearVessels = () => {
@@ -645,6 +893,9 @@ export function useMapController(state) {
         createEffect(() => { isMapReady(); state.ships(); state.vesselFilter(); syncMap(); });
         createEffect(() => { isMapReady(); state.ports(); state.portFilter(); syncPortsOnMap(); });
         createEffect(() => { isMapReady(); state.nearbyInfrastructure(); syncNearbyInfrastructure(); });
+        createEffect(() => { isMapReady(); state.isMeshActive(); syncMeshNetwork(); });
+        createEffect(() => { isMapReady(); state.disasterAlerts(); syncDisasterMarkers(); });
+        createEffect(() => { isMapReady(); state.activeHazard(); state.nearestPortToHazard(); syncDisasterProximity(); });
 
         // Trigger resize when switching modes or toggling registry to ensure map fills container
         createEffect(() => {
@@ -713,7 +964,15 @@ export function useMapController(state) {
 
     onCleanup(() => {
         window.removeEventListener('resize', handleResize);
-        if (mapInstance) mapInstance.remove();
+        if (mapInstance) {
+            isolatedMarkers.forEach(m => m.remove());
+            refineryMarkers.forEach(m => m.remove());
+            disasterMarkers.forEach(m => m.remove());
+            clearGroup(routeLabels);
+            clearGroup(meshLabels);
+            clearGroup(hazardLabels);
+            mapInstance.remove();
+        }
     });
 
     const hardReset = () => {
@@ -731,6 +990,8 @@ export function useMapController(state) {
         togglePerspective,
         jumpTo,
         flyTo,
+        zoomIn,
+        zoomOut,
         clearVessels,
         hardReset,
         getMap: () => mapInstance

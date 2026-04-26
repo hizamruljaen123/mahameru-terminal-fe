@@ -11,6 +11,7 @@ export default function ReconPanel(props) {
     const ship = () => props.ship?.();
     const port = () => props.activePort?.();
     const refinery = () => props.activeRefinery?.();
+    const hazard = () => props.hazard?.();
 
     // Internal tab states for sub-sections
     const [dossierTab, setDossierTab] = props.dossierTabState || [() => 'SUMMARY', () => {}];
@@ -324,6 +325,98 @@ export default function ReconPanel(props) {
                         )}
                     </Match>
 
+                    <Match when={hazard()}>
+                        {(h) => (
+                            <div class="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                                <div class="flex border-b border-white/10 sticky top-0 bg-[#0b0c10] z-30 pt-2 pb-0.5">
+                                    <button
+                                        onClick={() => setDossierTab('SUMMARY')}
+                                        class={`px-4 py-1.5 text-[9px] font-black uppercase tracking-widest border-b-2 transition-all ${dossierTab() === 'SUMMARY' ? 'border-red-500 text-red-500' : 'border-transparent text-white/40 hover:text-white'}`}
+                                    >1. HAZARD INFO</button>
+                                    <button
+                                        onClick={() => setDossierTab('IMPACT')}
+                                        class={`px-4 py-1.5 text-[9px] font-black uppercase tracking-widest border-b-2 transition-all ${dossierTab() === 'IMPACT' ? 'border-yellow-500 text-yellow-500' : 'border-transparent text-white/40 hover:text-white'}`}
+                                    >2. IMPACT ANALYSIS</button>
+                                </div>
+
+                                <Switch>
+                                    <Match when={dossierTab() === 'SUMMARY'}>
+                                        <div class="space-y-6">
+                                            <div class="flex justify-between items-start border-b border-red-500/20 pb-4">
+                                                <div>
+                                                    <h2 class="text-xl font-black uppercase tracking-tighter leading-none text-red-500">{h().name}</h2>
+                                                    <span class="text-[9px] font-mono tracking-widest opacity-60 text-red-400">HAZARD EVENT // {h().source} // {h().type}</span>
+                                                </div>
+                                                <div class={`px-2 py-1 text-[8px] font-black border ${h().level === 'RED' ? 'bg-red-500/20 border-red-500 text-red-500' : 'bg-orange-500/20 border-orange-500 text-orange-500'}`}>
+                                                    LEVEL: {h().level}
+                                                </div>
+                                            </div>
+
+                                            <div class="p-4 bg-red-500/5 border-l-2 border-red-500 space-y-4">
+                                                <div class="text-[8px] font-black opacity-40 uppercase tracking-widest text-red-400">EVENT DESCRIPTION</div>
+                                                <div class="text-[12px] font-medium leading-relaxed text-white/80 italic">
+                                                    "{h().description}"
+                                                </div>
+                                            </div>
+
+                                            <div class="space-y-3">
+                                                <div class="text-[10px] font-black opacity-30 uppercase tracking-widest text-red-400">LOCATION COORDINATES</div>
+                                                <div class="grid grid-cols-2 gap-4">
+                                                    <div class="p-3 bg-black/40 border border-white/5 rounded">
+                                                        <div class="text-[7px] opacity-40 font-bold uppercase">LATITUDE</div>
+                                                        <div class="text-[12px] font-mono font-black">{h().lat.toFixed(6)}</div>
+                                                    </div>
+                                                    <div class="p-3 bg-black/40 border border-white/5 rounded">
+                                                        <div class="text-[7px] opacity-40 font-bold uppercase">LONGITUDE</div>
+                                                        <div class="text-[12px] font-mono font-black">{h().lon.toFixed(6)}</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="space-y-3">
+                                                <div class="text-[10px] font-black opacity-30 uppercase tracking-widest text-red-400">SATELLITE RECON</div>
+                                                <div class="border border-red-500/20 p-1 bg-black shadow-2xl relative">
+                                                    <iframe
+                                                        width="100%" height="250" frameborder="0" scrolling="no" class="grayscale brightness-75"
+                                                        src={`https://maps.google.com/maps?q=${h().lat},${h().lon}&hl=id&z=12&t=k&output=embed`}>
+                                                    </iframe>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </Match>
+
+                                    <Match when={dossierTab() === 'IMPACT'}>
+                                        <div class="space-y-4">
+                                            <div class="flex items-center justify-between">
+                                                <h3 class="text-[10px] font-black tracking-widest text-white uppercase">Threatened Infrastructure</h3>
+                                                <span class="text-[8px] text-white/20 font-mono italic">Sorted by proximity</span>
+                                            </div>
+
+                                            <div class="space-y-2 overflow-y-auto max-h-[600px] tactical-scrollbar pr-2">
+                                                <For each={props.hazardNearbyInfras() || []}>{(infra) => (
+                                                    <div class="p-3 bg-[#0b0c10] border border-white/5 hover:border-yellow-500/30 transition-all group relative overflow-hidden">
+                                                        <div class="absolute top-0 right-0 p-2 bg-yellow-500/10 border-l border-b border-yellow-500/20">
+                                                            <span class="text-[11px] font-black text-yellow-500">{infra.distance_km?.toFixed(1)} KM</span>
+                                                        </div>
+                                                        <div class="flex flex-col gap-1">
+                                                            <span class="text-[10px] font-black text-white group-hover:text-yellow-500 transition-colors">{infra.name.toUpperCase()}</span>
+                                                            <div class="flex gap-2 text-[7px] font-bold text-white/30 uppercase tracking-widest">
+                                                                <span>TYPE: {infra.harbor_type || 'BERTH'}</span>
+                                                                <span>SIZE: {infra.harbor_size || 'N/A'}</span>
+                                                            </div>
+                                                            <div class="text-[7px] text-yellow-500/50 mt-1 uppercase font-mono">
+                                                                WPI: {infra.wpi_id || 'UNK'} // {infra.country_name}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}</For>
+                                            </div>
+                                        </div>
+                                    </Match>
+                                </Switch>
+                            </div>
+                        )}
+                    </Match>
                     <Match when={refinery()}>
                         {(ref) => (
                             <div class="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">

@@ -120,6 +120,8 @@ export default function RegistryDrawer(props) {
                     ship={props.activeShip}
                     activePort={props.activePort}
                     activeRefinery={props.activeRefinery}
+                    hazard={props.activeHazard}
+                    hazardNearbyInfras={props.hazardNearbyInfras}
                     nearbyInfrastructure={props.state.nearbyInfrastructure}
                     nearbyLoading={props.state.nearbyLoading}
                     dossierTabState={[props.dossierTab, props.onDossierTabChange]}

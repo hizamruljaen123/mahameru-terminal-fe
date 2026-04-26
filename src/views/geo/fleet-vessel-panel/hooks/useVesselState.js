@@ -8,9 +8,9 @@ import { HARBOR_TYPE_NAMES } from '../constants/colors';
 export function useVesselState() {
     // Core signals
     const [ships, setShips] = createSignal([]);
-    const [status, setStatus] = createSignal('OFFLINE');
+    const [status, setStatus] = createSignal('SCANNING');
     const [activeTheater, setActiveTheater] = createSignal('GLOBAL');
-    const [isOperational, setIsOperational] = createSignal(false);
+    const [isOperational, setIsOperational] = createSignal(true);
     const [lastSignalTime, setLastSignalTime] = createSignal('--:--:--');
     const [vesselCount, setVesselCount] = createSignal(0);
     const [operatingMode, setOperatingMode] = createSignal('MAP'); // MAP or RADAR
@@ -44,6 +44,10 @@ export function useVesselState() {
     const [nearbyInfrastructure, setNearbyInfrastructure] = createSignal([]);
     const [nearbyLoading, setNearbyLoading] = createSignal(false);
 
+    // Mesh state
+    const [meshRadius, setMeshRadius] = createSignal(15);
+    const [isMeshActive, setIsMeshActive] = createSignal(false);
+
 
     // External data state
     const [marketData, setMarketData] = createSignal({
@@ -53,6 +57,9 @@ export function useVesselState() {
     const [weatherLoading, setWeatherLoading] = createSignal(false);
 
     const [disasterAlerts, setDisasterAlerts] = createSignal([]);
+    const [activeHazard, setActiveHazard] = createSignal(null);
+    const [nearestPortToHazard, setNearestPortToHazard] = createSignal(null);
+    const [hazardNearbyInfras, setHazardNearbyInfras] = createSignal([]);
 
     // Map & Perspective state
     const [mapMode, setMapMode] = createSignal('satellite'); // dark, terrain, satellite
@@ -65,7 +72,8 @@ export function useVesselState() {
     const activeShip = () => {
         const mmsi = selectedMmsi();
         if (!mmsi) return null;
-        return vesselRegistry.get(mmsi) || null;
+        // Robust lookup for both string and number keys in the registry
+        return vesselRegistry.get(mmsi) || vesselRegistry.get(Number(mmsi)) || null;
     };
 
     const activePort = () => selectedPortId()
@@ -131,11 +139,16 @@ export function useVesselState() {
         weatherData, setWeatherData,
         weatherLoading, setWeatherLoading,
         disasterAlerts, setDisasterAlerts,
+        activeHazard, setActiveHazard,
+        nearestPortToHazard, setNearestPortToHazard,
+        hazardNearbyInfras, setHazardNearbyInfras,
 
         mapMode, setMapMode,
         viewPerspective, setViewPerspective,
         nearbyInfrastructure, setNearbyInfrastructure,
         nearbyLoading, setNearbyLoading,
+        meshRadius, setMeshRadius,
+        isMeshActive, setIsMeshActive,
 
         // Non-reactive
         vesselRegistry,

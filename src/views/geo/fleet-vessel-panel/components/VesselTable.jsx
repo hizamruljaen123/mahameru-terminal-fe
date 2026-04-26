@@ -36,7 +36,7 @@ export default function VesselTable(props) {
                             {(ship) => (
                                 <tr
                                     onClick={() => props.onSelect(ship)}
-                                    class={`text-[10px] border-b border-white/5 hover:bg-[#00f2ff]/5 cursor-pointer transition-colors ${props.selectedMmsi === ship.mmsi ? 'bg-[#00f2ff]/10' : ''}`}
+                                    class={`text-[10px] border-b border-white/5 hover:bg-[#00f2ff]/5 cursor-pointer transition-colors ${String(props.selectedMmsi?.() || '') === String(ship.mmsi) ? 'bg-[#00f2ff]/10' : ''}`}
                                 >
                                     <td class="px-6 py-1.5 font-black uppercase text-white/90">
                                         <div class="flex items-center gap-2">

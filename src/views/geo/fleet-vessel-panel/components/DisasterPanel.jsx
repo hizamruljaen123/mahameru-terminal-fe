@@ -57,7 +57,20 @@ export default function DisasterPanel(props) {
                 }>
                     <For each={sortedDisasters()}>
                         {(hazard) => (
-                            <div class="group border border-white/5 bg-white/5 p-4 relative overflow-hidden transition-all hover:border-red-500/40 hover:bg-red-500/5">
+                            <div 
+                                onClick={() => {
+                                    if (window.__mapInstance) {
+                                        window.__mapInstance.flyTo({
+                                            center: [hazard.lon, hazard.lat],
+                                            zoom: 7,
+                                            pitch: 45,
+                                            duration: 2000
+                                        });
+                                    }
+                                    if (props.onHazardSelect) props.onHazardSelect(hazard);
+                                }}
+                                class="group border border-white/5 bg-white/5 p-4 relative overflow-hidden transition-all hover:border-red-500/40 hover:bg-red-500/5 cursor-pointer"
+                            >
                                 <div class="flex justify-between items-start mb-3">
                                     <div class="flex items-center gap-3">
                                         <span class="text-2xl">{getIcon(hazard.type)}</span>
@@ -89,6 +102,24 @@ export default function DisasterPanel(props) {
                                 <div class="text-[9px] text-white/60 leading-relaxed line-clamp-2 uppercase italic mb-3 opacity-80">
                                     {hazard.description || 'Global observation data pending detailed atmospheric analysis.'}
                                 </div>
+
+                                <Show when={props.state.activeHazard()?.id === hazard.id && props.state.nearestPortToHazard()}>
+                                    <div class="bg-white/5 border-l-2 border-white px-3 py-2 mb-3 animate-in fade-in slide-in-from-right duration-500">
+                                        <div class="flex justify-between items-center">
+                                            <div class="flex flex-col">
+                                                <span class="text-[7px] text-white/50 font-bold uppercase tracking-widest">NEAREST CRITICAL PORT</span>
+                                                <span class="text-[10px] font-black text-[#00f2ff] uppercase tracking-tighter">
+                                                    {props.state.nearestPortToHazard().name}
+                                                </span>
+                                            </div>
+                                            <div class="text-right">
+                                                <span class="text-[14px] font-black text-white">
+                                                    {props.state.nearestPortToHazard().distance_km} KM
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Show>
 
                                 <div class="flex items-center justify-between pt-3 border-t border-white/5">
                                     <div class="text-[8px] font-mono text-white/20">
