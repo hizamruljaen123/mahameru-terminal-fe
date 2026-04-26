@@ -2,6 +2,7 @@ import { createSignal, onMount, createEffect, For, Show, onCleanup as solidOnCle
 import * as echarts from 'echarts';
 import TechnicalAnalysisPanel from '../components/TechnicalAnalysisPanel';
 import EntityAdvancedView from '../components/EntityAdvancedView';
+import PolicyDivergenceTracker from '../components/institutional/PolicyDivergenceTracker';
 
 // --- CONFIG & CONSTANTS ---
 const FOREX_API = import.meta.env.VITE_FOREX_API;
@@ -524,6 +525,13 @@ export default function ForexIntelligenceView(props) {
                       </p>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Institutional Analytics Integrations */}
+              <div class="grid grid-cols-12 gap-6">
+                <div class="col-span-12 h-[350px]">
+                  <PolicyDivergenceTracker />
                 </div>
               </div>
 

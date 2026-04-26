@@ -2,6 +2,8 @@ import { createSignal, onMount, createEffect, For, Show, onCleanup as solidOnCle
 import * as echarts from 'echarts';
 import TechnicalAnalysisPanel from '../components/TechnicalAnalysisPanel';
 import EntityAdvancedView from '../components/EntityAdvancedView';
+import SupplyChainIntel from '../components/institutional/SupplyChainIntel';
+import RiskOverlayChart from '../components/institutional/RiskOverlayChart';
 
 // --- CONFIG & CONSTANTS ---
 const COMMODITY_API = import.meta.env.VITE_COMMODITY_API;
@@ -491,6 +493,16 @@ export default function CommoditiesIntelligenceView(props) {
                       </p>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Institutional Analytics Integrations */}
+              <div class="grid grid-cols-12 gap-6">
+                <div class="col-span-12 lg:col-span-6 h-[400px]">
+                  <SupplyChainIntel />
+                </div>
+                <div class="col-span-12 lg:col-span-6 h-[400px]">
+                  <RiskOverlayChart symbol={selectedSymbol()} />
                 </div>
               </div>
 

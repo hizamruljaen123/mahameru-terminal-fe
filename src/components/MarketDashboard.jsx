@@ -1,5 +1,6 @@
 import { createSignal, onMount, For, Show, createEffect } from 'solid-js';
 import * as echarts from 'echarts';
+import InfraMacroProxy from './institutional/InfraMacroProxy';
 
 // --- SERVICE RECTORS ---
 const SENTIMENT_API = import.meta.env.VITE_SENTIMENT_API || `${import.meta.env.VITE_SENTIMENT_URL}/api/sentiment/summary-all`;
@@ -698,7 +699,12 @@ export default function MarketDashboard(props) {
               </div>
             </div>
 
-            {/* ROW 4: MARKET BULLETINS & MACRO CHART */}
+            {/* ROW 4: INSTITUTIONAL INFRASTRUCTURE PROXY */}
+            <div class="h-[300px]">
+              <InfraMacroProxy />
+            </div>
+
+            {/* ROW 5: MARKET BULLETINS & MACRO CHART */}
             <div class="grid grid-cols-12 gap-4">
               {/* MARKET NEWS BULLETINS */}
               <div class="col-span-12 xl:col-span-3 bg-bg_header/30 border border-border_main flex flex-col h-[400px]">

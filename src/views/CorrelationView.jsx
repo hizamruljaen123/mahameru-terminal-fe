@@ -1,5 +1,6 @@
 import { createSignal, onMount, onCleanup, For, Show, createEffect, createMemo } from 'solid-js';
 import * as echarts from 'echarts';
+import VaRDashboard from '../components/institutional/VaRDashboard';
 
 const MARKET_API = import.meta.env.VITE_MARKET_API || 'https://api.asetpedia.online/market';
 
@@ -451,7 +452,7 @@ export default function CorrelationView() {
         </div>
 
         {/* ── HEATMAP AREA ── */}
-        <div class="flex-1 flex flex-col bg-bg_main relative z-10">
+        <div class="flex-1 flex flex-col bg-bg_main relative z-10 overflow-y-auto win-scroll">
           
           <Show when={error()}>
             <div class="absolute top-4 left-1/2 -transform-x-1/2 px-6 py-3 bg-red-500/10 border border-red-500/30 text-red-400 text-[10px] font-black tracking-widest shadow-2xl z-50 rounded-sm flex items-center gap-3 backdrop-blur-sm">
@@ -486,6 +487,12 @@ export default function CorrelationView() {
             
              <div ref={chartRef} class="w-full h-full min-h-[500px] z-10 transition-opacity duration-500" style={{ opacity: loading() ? 0.3 : 1 }}></div>
           </div>
+          
+          <Show when={corrData()}>
+             <div class="px-6 pb-6">
+                <VaRDashboard symbols={corrData()?.symbols} window={window_()} />
+             </div>
+          </Show>
 
           <div class="px-6 py-2 border-t border-border_main bg-bg_header/40 flex items-center justify-between text-text_secondary/40 shrink-0">
              <div class="flex gap-4 items-center">

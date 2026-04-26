@@ -8,6 +8,7 @@ import CryptoDerivativesPanel from '../components/crypto/CryptoDerivativesPanel'
 import CryptoQuantPanel from '../components/crypto/CryptoQuantPanel';
 import CryptoMacroPanel from '../components/crypto/CryptoMacroPanel';
 import CryptoAssetExplorer from '../components/crypto/CryptoAssetExplorer';
+import LiquidityHeatmap from '../components/institutional/LiquidityHeatmap';
 
 // --- CONFIG & CONSTANTS ---
 const CRYPTO_API = import.meta.env.VITE_CRYPTO_API;
@@ -678,6 +679,13 @@ export default function CryptoIntelligenceView(props) {
                     </div>
                   </div>
                 </div>
+              </div>
+
+              <div class="grid grid-cols-12 gap-6">
+                 {/* LIQUIDITY HEATMAP (Institutional Class) */}
+                 <div class="col-span-12 h-[350px]">
+                   <LiquidityHeatmap symbol={selectedSymbol()} />
+                 </div>
               </div>
 
               {/* AI MULTI-AGENT DOSSIER (HIGH DENSITY) */}
