@@ -37,21 +37,42 @@ export default function FleetVesselPanel() {
     };
 
     const abortSurveillance = () => {
+    const abortSurveillance = () => {
         state.setIsOperational(false);
         ws.cleanup();
         map.clearVessels();
     };
 
-    const handleVesselSearch = () => {
-        const term = state.vesselSearchTerm().toLowerCase().trim();
-        if (!term) {
+    // FIXED: Add debouncing to search
+    let searchTimeout;
+    const handleVesselSearchInput = (term) => {
+        state.setVesselSearchTerm(term);
+        
+        // Clear previous timeout
+        if (searchTimeout) clearTimeout(searchTimeout);
+        
+        // If term is empty, clear results immediately
+        if (!term.trim()) {
+            state.setVesselSearchResults([]);
+            return;
+        }
+        
+        // Debounce actual search by 300ms
+        searchTimeout = setTimeout(() => {
+            handleVesselSearch(term);
+        }, 300);
+    };
+
+    const handleVesselSearch = (term) => {
+        const searchTerm = term.toLowerCase().trim();
+        if (!searchTerm) {
             state.setVesselSearchResults([]);
             return;
         }
 
         const results = [];
         state.vesselRegistry.forEach((v) => {
-            if (String(v.mmsi).includes(term) || (v.name || '').toLowerCase().includes(term)) {
+            if (String(v.mmsi).includes(searchTerm) || (v.name || '').toLowerCase().includes(searchTerm)) {
                 results.push(v);
             }
         });
@@ -155,12 +176,9 @@ export default function FleetVesselPanel() {
                                         placeholder="SEARCH MMSI/NAME..."
                                         value={state.vesselSearchTerm()}
                                         class="w-full bg-black/80 backdrop-blur-md border border-[#00f2ff]/20 px-3 py-2 text-[10px] text-[#00f2ff] focus:border-[#00f2ff] outline-none placeholder:text-[#00f2ff]/20 font-bold shadow-2xl"
-                                        onInput={(e) => {
-                                            state.setVesselSearchTerm(e.currentTarget.value);
-                                            if (!e.currentTarget.value) state.setVesselSearchResults([]);
-                                        }}
+                                        onInput={(e) => handleVesselSearchInput(e.currentTarget.value)}
                                         onKeyDown={(e) => {
-                                            if (e.key === 'Enter') handleVesselSearch();
+                                            if (e.key === 'Enter') handleVesselSearch(state.vesselSearchTerm());
                                         }}
                                     />
                                     <div class="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] opacity-20 pointer-events-none font-black italic">SEARCH ↵</div>
