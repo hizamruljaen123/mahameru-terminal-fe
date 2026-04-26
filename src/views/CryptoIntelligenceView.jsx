@@ -482,15 +482,19 @@ export default function CryptoIntelligenceView(props) {
                     <span class="text-[8px] text-text_secondary font-bold group-hover:text-text_accent/60 transition-colors">{coin.symbol}</span>
                   </div>
                 </div>
-                <div class="flex flex-col items-end shrink-0">
-                  <div class="flex items-center gap-1.5">
-                    <span class={`text-[7px] font-black px-1 rounded-[1px] ${coins().find(x=>x.symbol === coin.symbol)?.sentiment === 'BEARISH' ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}`}>
-                      {coins().find(x=>x.symbol === coin.symbol)?.sentiment || 'BULL'}
+                  <div class="flex flex-col items-end shrink-0">
+                    <div class="flex items-center gap-1.5">
+                      <span class={`text-[7px] font-black px-1 rounded-[1px] ${coins().find(x=>x.symbol === coin.symbol)?.sentiment === 'BEARISH' ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}`}>
+                        {coins().find(x=>x.symbol === coin.symbol)?.sentiment || 'BULL'}
+                      </span>
+                      <span class="text-[10px] font-bold font-mono">
+                        ${fmt(coin.price || coin.quote?.USD?.price, (coin.price || coin.quote?.USD?.price) < 1 ? 4 : 2)}
+                      </span>
+                    </div>
+                    <span class={`text-[8px] font-black ${signColor(coin.change_24h || coin.quote?.USD?.percent_change_24h)}`}>
+                      {fmtPct(coin.change_24h || coin.quote?.USD?.percent_change_24h)}
                     </span>
-                    <span class="text-[10px] font-bold font-mono">${fmt(coin.price, coin.price < 1 ? 4 : 2)}</span>
                   </div>
-                  <span class={`text-[8px] font-black ${signColor(coin.change_24h)}`}>{fmtPct(coin.change_24h)}</span>
-                </div>
               </button>
             )}
           </For>
