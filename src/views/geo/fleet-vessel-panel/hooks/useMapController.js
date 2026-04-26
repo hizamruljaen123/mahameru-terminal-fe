@@ -601,18 +601,38 @@ export function useMapController(state) {
             vessels = vessels.filter(v => (v.type || '').toLowerCase() === f);
         }
 
+        const features = vessels
+            .filter(v => {
+                const lat = Number(v.lat || v.latitude);
+                const lon = Number(v.lon || v.longitude);
+                // Filter out 0,0 which is often a sign of invalid data in AIS
+                return !isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0;
+            })
+            .map(v => ({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [Number(v.lon || v.longitude), Number(v.lat || v.latitude)] },
+                properties: {
+                    mmsi: v.mmsi,
+                    name: v.name || 'UNKNOWN',
+                    color: getVesselColor(v.type),
+                    speed: v.speed || 0,
+                    course: v.course || 0
+                }
+            }));
+
+        if (features.length > 0 || vessels.length === 0) {
+            mapInstance.getSource('vessels').setData({ type: 'FeatureCollection', features });
+            if (vessels.length > 0) {
+                console.log(`[MAP] Synced ${features.length}/${vessels.length} vessels to tactical layer`);
+            }
+        }
+
         const mmsi = state.selectedMmsi();
         isolatedMarkers.forEach(m => m.remove());
         isolatedMarkers = [];
 
         // Always sync basic sources to maintain context and use normal pin styles
         syncPortsOnMap();
-        const features = vessels.map(v => ({
-            type: 'Feature',
-            geometry: { type: 'Point', coordinates: [v.lon, v.lat] },
-            properties: { name: v.name, mmsi: v.mmsi, color: getVesselColor(v.type) }
-        }));
-        mapInstance.getSource('vessels').setData({ type: 'FeatureCollection', features });
 
         if (mmsi) {
             const ship = state.vesselRegistry.get(mmsi);
@@ -949,9 +969,28 @@ export function useMapController(state) {
                     type: 'raster',
                     source: 'osm'
                 }, tacticalLayer?.id);
+
+                ensureTacticalOnTop();
+                // Re-sync data to ensure it appears on new style
+                syncMap();
+                syncPortsOnMap();
+                syncDisasterMarkers();
             } catch (e) {
                 console.warn("Style update skipped:", e);
             }
+        });
+    };
+
+    const ensureTacticalOnTop = () => {
+        if (!mapInstance) return;
+        const tacticalLayers = [
+            'mesh-lines', 'layer-route-port', 'layer-route-refinery', 
+            'layer-hazard-proximity', 'ports-layer', 'vessels-point', 
+            'selection-halo', 'nearby-connections', 'nearby-points',
+            'layer-tanker-mesh-dots'
+        ];
+        tacticalLayers.forEach(id => {
+            if (mapInstance.getLayer(id)) mapInstance.moveLayer(id);
         });
     };
 
