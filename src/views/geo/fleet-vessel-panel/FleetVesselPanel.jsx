@@ -1,4 +1,4 @@
-import { onCleanup, Show, createSignal } from 'solid-js';
+import { onCleanup, Show } from 'solid-js';
 import { useVesselState } from './hooks/useVesselState';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useMapController } from './hooks/useMapController';
@@ -36,7 +36,6 @@ export default function FleetVesselPanel() {
         intel.fetchTheaterPorts(theater);
     };
 
-    const abortSurveillance = () => {
     const abortSurveillance = () => {
         state.setIsOperational(false);
         ws.cleanup();
