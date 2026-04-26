@@ -164,11 +164,13 @@ function App() {
     
     // Improved Socket.io initialization with explicit path handling
     let socketOptions = {
-      transports: ['polling', 'websocket'], // Start with polling for better compatibility
-      upgrade: true,
+      transports: ['websocket'], // Force websocket to bypass polling session issues
+      upgrade: false,
+      rememberUpgrade: false,
+      perMessageDeflate: false, // Fix for 'Invalid frame header' on some proxies
       reconnectionAttempts: Infinity,
-      reconnectionDelay: 3000,
-      timeout: 20000,
+      reconnectionDelay: 2000,
+      timeout: 30000,
     };
 
     // If the URL has a path (like /backup), we might need to specify it for Socket.io

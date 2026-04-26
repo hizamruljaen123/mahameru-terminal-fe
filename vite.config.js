@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     port: 5151,
     headers: {
-      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' unpkg.com cdn.jsdelivr.net cdnjs.cloudflare.com cdn.plot.ly code.jquery.com; style-src 'self' 'unsafe-inline' unpkg.com fonts.googleapis.com; img-src 'self' data: blob: unpkg.com cdn.jsdelivr.net *.tile.openstreetmap.org; connect-src 'self' api.asetpedia.online *.api.asetpedia.online wss://api.asetpedia.online; font-src 'self' fonts.gstatic.com; frame-src 'self' youtube.com *.youtube.com;",
+      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' unpkg.com cdn.jsdelivr.net cdnjs.cloudflare.com cdn.plot.ly code.jquery.com s3.tradingview.com *.tradingview.com; style-src 'self' 'unsafe-inline' unpkg.com fonts.googleapis.com; img-src 'self' data: blob: unpkg.com cdn.jsdelivr.net *.tile.openstreetmap.org *.openstreetmap.org; connect-src 'self' blob: unpkg.com api.asetpedia.online *.api.asetpedia.online wss://api.asetpedia.online wss://*.asetpedia.online https://api.asetpedia.online https://*.asetpedia.online s3.tradingview.com *.tradingview.com; font-src 'self' fonts.gstatic.com; frame-src 'self' youtube.com *.youtube.com s3.tradingview.com sslecal2.investing.com *.tradingview.com;",
       'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
       'X-Frame-Options': 'SAMEORIGIN',
       'X-Content-Type-Options': 'nosniff',
@@ -16,7 +16,7 @@ export default defineConfig({
   },
   preview: {
     headers: {
-      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' unpkg.com cdn.jsdelivr.net cdnjs.cloudflare.com cdn.plot.ly code.jquery.com; style-src 'self' 'unsafe-inline' unpkg.com fonts.googleapis.com; img-src 'self' data: blob: unpkg.com cdn.jsdelivr.net *.tile.openstreetmap.org; connect-src 'self' api.asetpedia.online *.api.asetpedia.online wss://api.asetpedia.online; font-src 'self' fonts.gstatic.com; frame-src 'self' youtube.com *.youtube.com;",
+      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' unpkg.com cdn.jsdelivr.net cdnjs.cloudflare.com cdn.plot.ly code.jquery.com s3.tradingview.com *.tradingview.com; style-src 'self' 'unsafe-inline' unpkg.com fonts.googleapis.com; img-src 'self' data: blob: unpkg.com cdn.jsdelivr.net *.tile.openstreetmap.org *.openstreetmap.org; connect-src 'self' blob: unpkg.com api.asetpedia.online *.api.asetpedia.online wss://api.asetpedia.online wss://*.asetpedia.online https://api.asetpedia.online https://*.asetpedia.online s3.tradingview.com *.tradingview.com; font-src 'self' fonts.gstatic.com; frame-src 'self' youtube.com *.youtube.com s3.tradingview.com sslecal2.investing.com *.tradingview.com;",
       'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
       'X-Frame-Options': 'SAMEORIGIN',
       'X-Content-Type-Options': 'nosniff',
