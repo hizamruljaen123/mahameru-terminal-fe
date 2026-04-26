@@ -156,12 +156,25 @@ function App() {
 
     // ================================================================
     // SOCKET.IO — Real-time live stream from backup_service (port 5004)
-    // This runs IN PARALLEL with SSE stream from news_service (port 5101)
-    // SSE = batched full refresh every 3s
-    // SocketIO = instant push on each new DB insert
     // ================================================================
     const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_BACKUP_URL;
-    const socket = io(SOCKET_URL, {
+    
+    // Parse path if present in SOCKET_URL (e.g. https://api.asetpedia.online/backup)
+    let socketPath = "/socket.io";
+    let socketBaseUrl = SOCKET_URL;
+    
+    try {
+      const urlObj = new URL(SOCKET_URL);
+      if (urlObj.pathname && urlObj.pathname !== '/') {
+        socketPath = urlObj.pathname.replace(/\/$/, "") + "/socket.io";
+        socketBaseUrl = urlObj.origin;
+      }
+    } catch (e) {
+      console.warn("[SOCKET] Invalid URL in env, falling back to default path");
+    }
+
+    const socket = io(socketBaseUrl, {
+      path: socketPath,
       transports: ['websocket', 'polling'],
       reconnectionAttempts: Infinity,
       reconnectionDelay: 3000,

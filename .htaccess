@@ -11,7 +11,7 @@ RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
 # Security Headers (Apache)
 <IfModule mod_headers.c>
-    Header set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' unpkg.com cdn.jsdelivr.net cdnjs.cloudflare.com cdn.plot.ly code.jquery.com; style-src 'self' 'unsafe-inline' unpkg.com fonts.googleapis.com; img-src 'self' data: blob: unpkg.com cdn.jsdelivr.net *.tile.openstreetmap.org; connect-src 'self' api.asetpedia.online *.api.asetpedia.online wss://api.asetpedia.online; font-src 'self' fonts.gstatic.com; frame-src 'self' youtube.com *.youtube.com;"
+    Header set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' unpkg.com cdn.jsdelivr.net cdnjs.cloudflare.com cdn.plot.ly code.jquery.com s3.tradingview.com; style-src 'self' 'unsafe-inline' unpkg.com fonts.googleapis.com; img-src 'self' data: blob: unpkg.com cdn.jsdelivr.net *.tile.openstreetmap.org *.openstreetmap.org; connect-src 'self' blob: data: https: wss: *.asetpedia.online; font-src 'self' fonts.gstatic.com; frame-src 'self' youtube.com *.youtube.com s3.tradingview.com sslecal2.investing.com;"
     Header set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
     Header set X-Frame-Options "SAMEORIGIN"
     Header set X-Content-Type-Options "nosniff"
