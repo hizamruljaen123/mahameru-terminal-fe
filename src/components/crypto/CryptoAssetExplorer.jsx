@@ -67,6 +67,7 @@ export default function CryptoAssetExplorer(props) {
   const [prices, setPrices] = createSignal({});
   const [klineStore, setKlineStore] = createSignal({});
   const [wsStatus, setWsStatus] = createSignal("CONNECTING");
+  const [dataSource, setDataSource] = createSignal("CMC");
   let ws = null;
 
   const connectWS = () => {
@@ -120,13 +121,14 @@ export default function CryptoAssetExplorer(props) {
   onMount(async () => {
     connectWS();
     try {
-      const resp = await fetch(`${import.meta.env.VITE_CRYPTO_API}/api/crypto/cmc/list`);
+      const resp = await fetch(`${import.meta.env.VITE_CRYPTO_API}/api/crypto/unified/list`);
       const json = await resp.json();
       if (json.status === "success") {
         setCoins(json.data);
+        if (json.source) setDataSource(json.source.toUpperCase());
       }
     } catch (e) {
-      console.error("Failed to fetch CMC list", e);
+      console.error("Failed to fetch unified crypto list", e);
     } finally {
       setLoading(false);
     }
@@ -148,7 +150,7 @@ export default function CryptoAssetExplorer(props) {
       <div class="p-4 border-b border-border_main bg-black/40 flex items-center justify-between gap-4">
         <div class="flex flex-col gap-1">
           <h2 class="text-[12px] font-black text-text_accent uppercase tracking-widest">Global Asset Explorer</h2>
-          <p class="text-[9px] text-text_secondary uppercase">Institutional Data powered by CoinMarketCap Professional</p>
+          <p class="text-[9px] text-text_secondary uppercase">Institutional Data powered by <span class="text-text_accent">{dataSource()}</span> INFRASTRUCTURE</p>
         </div>
         
         <div class="relative w-64">
