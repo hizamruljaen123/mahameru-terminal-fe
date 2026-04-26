@@ -515,6 +515,11 @@ export function useMapController(state) {
         });
         resizeObserver.observe(el);
 
+        // FIX: Production CSP blocks blob: workers. Use CDN CSP-compliant worker.
+        if (window.maplibregl) {
+            window.maplibregl.workerUrl = 'https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl-csp-worker.js';
+        }
+
         mapInstance = new window.maplibregl.Map({
             container: el,
             style: createBaseStyle(),
