@@ -163,8 +163,8 @@ function ChannelBrowser(props) {
   });
 
   return (
-    <div class="flex flex-col h-full bg-bg_sidebar/95 backdrop-blur-2xl border border-border_main shadow-2xl overflow-hidden">
-      <div class="p-4 border-b border-border_main bg-bg_header/30 flex flex-col gap-3">
+    <div class="flex flex-col h-full bg-bg_sidebar/98 backdrop-blur-3xl border border-border_main shadow-2xl overflow-hidden">
+      <div class="p-4 border-b border-border_main bg-bg_header/80 flex flex-col gap-3">
          <div class="flex items-center justify-between">
             <h3 class="text-[11px] font-black tracking-widest text-text_accent uppercase">SOURCE LIST: {props.source.name}</h3>
             <button onClick={props.onClose} class="text-text_secondary hover:text-text_primary transition-all">
@@ -175,7 +175,7 @@ function ChannelBrowser(props) {
             type="text" 
             placeholder="FILTER CHANNELS..." 
             onInput={(e) => setSearch(e.target.value)}
-            class="bg-bg_main/60 border border-border_main text-[10px] px-3 py-1.5 focus:outline-none focus:border-text_accent/50 text-text_primary font-mono uppercase placeholder:text-text_secondary/30"
+            class="bg-bg_main/80 border border-border_main text-[10px] px-3 py-1.5 focus:outline-none focus:border-text_accent/50 text-text_primary font-mono uppercase placeholder:text-text_secondary/30"
          />
       </div>
       
@@ -188,7 +188,7 @@ function ChannelBrowser(props) {
                 return (
                   <button 
                     onClick={() => props.onToggle(c)}
-                    class={`p-3 text-left border transition-all ${isSelected() ? 'border-text_accent bg-text_accent/20 shadow-[0_0_15px_rgba(59,130,246,0.2)]' : 'border-border_main hover:border-text_accent/60 bg-bg_main/5'}`}
+                    class={`p-3 text-left border transition-all ${isSelected() ? 'border-text_accent bg-text_accent/40 shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'border-border_main hover:border-text_accent/60 bg-bg_main/20'}`}
                   >
                     <span class="text-[10px] font-black text-text_primary truncate w-full tracking-wider">{c.name.toUpperCase()}</span>
                   </button>
@@ -201,13 +201,13 @@ function ChannelBrowser(props) {
         </Show>
       </div>
 
-      <div class="p-3 border-t border-border_main bg-bg_header/30 flex items-center justify-between font-mono">
-         <div class="text-[9px] text-white/40 font-black tracking-widest uppercase">TOTAL CHANNELS: {totalCount()}</div>
+      <div class="p-3 border-t border-border_main bg-bg_header/80 flex items-center justify-between font-mono">
+         <div class="text-[9px] text-white/60 font-black tracking-widest uppercase">TOTAL CHANNELS: {totalCount()}</div>
          <div class="flex items-center gap-4">
             <button 
                disabled={page() === 1}
                onClick={() => setPage(p => Math.max(1, p - 1))}
-               class={`text-[9px] font-black tracking-tighter px-3 py-1 border transition-all ${page() === 1 ? 'border-border_main text-text_secondary/20' : 'border-border_main text-text_primary hover:border-text_accent hover:text-text_accent'}`}
+               class={`text-[9px] font-black tracking-tighter px-3 py-1 border transition-all ${page() === 1 ? 'border-border_main text-text_secondary/10' : 'border-border_main text-text_primary hover:border-text_accent hover:text-text_accent bg-black/40'}`}
             >
                PREVIOUS
             </button>
@@ -217,7 +217,7 @@ function ChannelBrowser(props) {
             <button 
                disabled={page() === totalPages()}
                onClick={() => setPage(p => Math.min(totalPages(), p + 1))}
-               class={`text-[9px] font-black tracking-tighter px-3 py-1 border transition-all ${page() === (totalPages() || 1) ? 'border-white/5 text-white/20' : 'border-white/20 text-white hover:border-text_accent hover:text-text_accent'}`}
+               class={`text-[9px] font-black tracking-tighter px-3 py-1 border transition-all ${page() === (totalPages() || 1) ? 'border-white/5 text-white/10' : 'border-white/20 text-white hover:border-text_accent hover:text-text_accent bg-black/40'}`}
             >
                NEXT
             </button>
@@ -382,7 +382,7 @@ export default function TVView() {
       {/* Viewing Area */}
       <div class="flex-1 flex flex-col overflow-hidden relative font-mono">
         <Show when={activeSource()}>
-          <div class="absolute inset-0 z-50 flex items-center justify-center p-12 bg-bg_main/40 backdrop-blur-sm animate-in fade-in duration-300">
+          <div class="absolute inset-0 z-50 flex items-center justify-center p-12 bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
              <div class="w-full max-w-4xl h-full max-h-[80vh] flex flex-col overflow-hidden shadow-[0_0_100px_rgba(0,0,0,0.5)]">
                <ChannelBrowser 
                   source={activeSource()} 

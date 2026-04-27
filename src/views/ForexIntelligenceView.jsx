@@ -177,53 +177,67 @@ export default function ForexIntelligenceView(props) {
 
   const fetchNews = async (symbol, name) => {
     setNewsLoading(true);
+    console.log(`[FOREX_INTEL] Fetching news for: ${symbol} (${name})`);
     try {
       const q = buildForexQuery(symbol, name);
       const isIDR = symbol.includes('IDR');
       const lang = 'en';
       const country = isIDR ? 'ID' : 'US';
 
-      const resp = await fetch(`${GNEWS_API}/api/gnews/search?q=${encodeURIComponent(q)}&lang=${lang}&country=${country}`);
+      const url = `${GNEWS_API}/api/gnews/search?q=${encodeURIComponent(q)}&lang=${lang}&country=${country}`;
+      const resp = await fetch(url);
       const json = await resp.json();
       
-      // Adjusted to match the specific "news" key structure provided
-      let data = json.news || [];
+      console.log(`[FOREX_INTEL] API Response for ${symbol}:`, json);
+      
+      // Extraction logic: support flat array, .news, .results, or .data
+      let data = [];
+      if (Array.isArray(json)) {
+        data = json;
+      } else if (json && typeof json === 'object') {
+        data = json.news || json.results || json.data || [];
+      }
 
       // FALLBACK 1: If results are low, retry with bilateral focus
-      if (data.length < 5) {
+      if (data.length < 3) {
         const raw = symbol.replace('=X', '');
         const cur1 = raw.slice(0, 3).toUpperCase();
         const cur2 = raw.slice(3, 6).toUpperCase();
-        const fallbackQ = `${cur1} ${cur2} bilateral trade economic relations central bank`;
+        const fallbackQ = `${cur1} ${cur2} economy monetary policy`;
+        console.log(`[FOREX_INTEL] Low results, triggering fallback: ${fallbackQ}`);
+        
         const fbResp = await fetch(`${GNEWS_API}/api/gnews/search?q=${encodeURIComponent(fallbackQ)}&lang=${lang}&country=${country}`);
         const fbJson = await fbResp.json();
-        const fbData = fbJson.news || [];
+        const fbData = Array.isArray(fbJson) ? fbJson : (fbJson.news || fbJson.results || fbJson.data || []);
+        
         if (fbData.length > 0) {
-          data = [...data, ...fbData.filter(f => !data.some(d => d.title === f.title))];
+          // Merge and deduplicate
+          const combined = [...data, ...fbData];
+          const seen = new Set();
+          data = combined.filter(item => {
+            const title = (item.title || item.headline || "").toLowerCase();
+            if (!title || seen.has(title)) return false;
+            seen.add(title);
+            return true;
+          });
         }
       }
 
-      // FINAL FALLBACK: Global FX context
-      if (data.length === 0) {
-        const genericQ = "Global Forex Market Exchange Rate Economic Outlook Central Bank";
-        const genResp = await fetch(`${GNEWS_API}/api/gnews/search?q=${encodeURIComponent(genericQ)}&lang=${lang}&country=${country}`);
-        const genJson = await genResp.json();
-        data = genJson.news || [];
-      }
-
       const formatted = data.map(item => ({
-        title: item.title,
-        publisher: (item.publisher || 'FOREX').toUpperCase(),
-        time: item.time || Math.floor(Date.now() / 1000),
-        link: item.link
+        title: item.title || item.headline || 'UNIDENTIFIED INTEL NODE',
+        publisher: (item.publisher || item.source || 'FOREX_SURVEILLANCE').toUpperCase(),
+        time: item.time || item.timestamp || Math.floor(Date.now() / 1000),
+        link: item.link || item.url || '#'
       }));
       
+      console.log(`[FOREX_INTEL] Formatted ${formatted.length} articles.`);
       setNews(formatted);
     } catch (e) {
-      console.error("News fetch error:", e);
+      console.error("[FOREX_INTEL] Critical Fetch Error:", e);
       setNews([]);
+    } finally {
+      setNewsLoading(false);
     }
-    setNewsLoading(false);
   };
 
   const fetchDetail = async (symbol, range = '6M') => {
@@ -539,23 +553,34 @@ export default function ForexIntelligenceView(props) {
               <div class="grid grid-cols-12 gap-6">
                 <div class="col-span-12 lg:col-span-8 flex flex-col border-2 border-border_main bg-black/40 h-[400px]">
                   <SectionHeader title="LATEST CURRENCY NEWS" />
-                  <div class="flex-1 overflow-y-auto p-2 space-y-1 win-scroll">
+                  <div class="flex-1 overflow-y-auto p-2 space-y-1 win-scroll relative min-h-[200px]">
+                    <Show when={newsLoading()}>
+                      <div class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/20 backdrop-blur-[2px] z-10">
+                        <div class="w-4 h-4 border-2 border-text_accent border-t-transparent animate-spin rounded-full"></div>
+                        <span class="text-[8px] font-black text-text_accent tracking-widest uppercase animate-pulse">Scanning Nodes...</span>
+                      </div>
+                    </Show>
+
                     <For each={news().slice(0, 8)}>
                       {(n) => (
-                        <a href={n.link} target="_blank" class="flex items-center gap-4 px-4 py-2.5 hover:bg-white/[0.03] transition-all group border-b border-border_main/5 last:border-0">
-                          <div class="flex flex-col shrink-0 w-24">
-                            <span class="text-[8px] font-black text-text_accent uppercase tracking-tighter opacity-60">{n.publisher}</span>
-                            <span class="text-[7px] font-bold text-text_secondary opacity-30 tabular-nums">{new Date(n.time * 1000).toLocaleDateString()}</span>
+                        <a href={n.link} target="_blank" class="flex items-center gap-4 px-4 py-3 hover:bg-white/[0.05] transition-all group border-b border-white/5 last:border-0 bg-black/20 mb-1 rounded-sm">
+                          <div class="flex flex-col shrink-0 w-20">
+                            <span class="text-[8px] font-black text-text_accent uppercase tracking-tighter truncate">{n.publisher}</span>
+                            <span class="text-[7px] font-bold text-text_secondary opacity-40 tabular-nums">{new Date(n.time * 1000).toLocaleDateString()}</span>
                           </div>
-                          <h4 class="text-[10px] font-black text-text_primary group-hover:text-text_accent transition-colors truncate uppercase tracking-tight">{n.title}</h4>
-                          <div class="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
+                          <h4 class="text-[10px] font-bold text-white group-hover:text-text_accent transition-colors line-clamp-2 uppercase tracking-tight flex-1 leading-snug">{n.title}</h4>
+                          <div class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                             <svg class="w-3 h-3 text-text_accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6m4-3h6v6m-11 5L21 3" /></svg>
                           </div>
                         </a>
                       )}
                     </For>
+
                     <Show when={news().length === 0 && !newsLoading()}>
-                      <div class="flex items-center justify-center h-full text-[9px] text-text_secondary opacity-40 uppercase tracking-widest italic">No recent news found for this currency pair.</div>
+                      <div class="flex flex-col items-center justify-center h-full gap-2 opacity-30 py-10">
+                        <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" /></svg>
+                        <span class="text-[9px] font-black uppercase tracking-widest italic">No surveillance nodes detected for {selectedSymbol()}</span>
+                      </div>
                     </Show>
                   </div>
                 </div>
@@ -612,20 +637,27 @@ export default function ForexIntelligenceView(props) {
             <div class="flex flex-col gap-6 animate-in slide-in-from-right-4 duration-500 h-full">
               <div class="flex flex-col border-2 border-border_main bg-black/40 h-full">
                 <SectionHeader title="FOREX INTEL FEED // CURRENCY SURVEILLANCE" />
-                <div class="flex-1 overflow-y-auto p-4 space-y-1 win-scroll">
+                <div class="flex-1 overflow-y-auto p-4 space-y-1 win-scroll relative min-h-[300px]">
+                  <Show when={newsLoading()}>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/40 backdrop-blur-sm z-20">
+                      <div class="w-8 h-8 border-2 border-text_accent border-t-transparent animate-spin rounded-full"></div>
+                      <span class="text-[10px] font-black text-text_accent tracking-[0.4em] uppercase animate-pulse">Fetching Intel Nodes...</span>
+                    </div>
+                  </Show>
+
                   <For each={news()}>
                     {(item) => (
-                      <a href={item.link} target="_blank" class="flex items-center gap-6 px-6 py-4 hover:bg-white/[0.03] transition-all group border-b border-border_main/5 last:border-0 relative overflow-hidden">
-                        <div class="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-text_accent scale-y-0 group-hover:scale-y-100 transition-transform"></div>
+                      <a href={item.link} target="_blank" class="flex items-center gap-6 px-6 py-5 hover:bg-white/[0.05] transition-all group border-b border-white/5 last:border-0 relative overflow-hidden bg-black/10 mb-1 rounded-sm">
+                        <div class="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-10 bg-text_accent scale-y-0 group-hover:scale-y-100 transition-transform"></div>
                         <div class="flex flex-col shrink-0 w-32">
                           <div class="flex items-center gap-2">
-                            <div class="w-1 h-1 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]"></div>
-                            <span class="text-[9px] font-black text-blue-400 uppercase tracking-widest">{item.publisher}</span>
+                            <div class="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]"></div>
+                            <span class="text-[9px] font-black text-blue-400 uppercase tracking-widest truncate">{item.publisher}</span>
                           </div>
-                          <span class="text-[8px] font-black text-text_secondary opacity-30 uppercase mt-0.5 tabular-nums">{new Date(item.time * 1000).toLocaleString()}</span>
+                          <span class="text-[8px] font-black text-text_secondary opacity-40 uppercase mt-0.5 tabular-nums">{new Date(item.time * 1000).toLocaleString()}</span>
                         </div>
                         <div class="flex-1 min-w-0">
-                          <h3 class="text-[13px] font-black text-text_primary group-hover:text-text_accent transition-colors leading-tight tracking-tight uppercase truncate">{item.title}</h3>
+                          <h3 class="text-[13px] font-bold text-white group-hover:text-text_accent transition-colors leading-snug tracking-tight uppercase line-clamp-2">{item.title}</h3>
                         </div>
                         <div class="shrink-0 flex items-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
                           <span class="text-[8px] font-black text-text_accent tracking-[0.2em]">ACCESS_INTEL</span>
@@ -634,10 +666,11 @@ export default function ForexIntelligenceView(props) {
                       </a>
                     )}
                   </For>
-                  <Show when={news().length === 0 && newsLoading()}>
-                    <div class="flex flex-col items-center justify-center h-full gap-4">
-                      <div class="w-6 h-6 border-2 border-text_accent border-t-transparent animate-spin rounded-full"></div>
-                      <span class="text-[10px] font-black text-text_accent tracking-[0.4em] uppercase">Fetching Intel...</span>
+
+                  <Show when={news().length === 0 && !newsLoading()}>
+                    <div class="flex flex-col items-center justify-center h-full gap-3 opacity-30 py-20">
+                       <svg class="w-12 h-12 text-text_secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" /></svg>
+                       <span class="text-[10px] font-black text-text_secondary uppercase tracking-widest italic">No surveillance data found for {selectedSymbol()}</span>
                     </div>
                   </Show>
                 </div>

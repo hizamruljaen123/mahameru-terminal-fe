@@ -11,15 +11,15 @@ export default function InfraMacroProxy() {
         try {
             // Fetch Industrial Zones
             const infraRes = await fetch(`${import.meta.env.VITE_INDUSTRIAL_ZONE_API}/api/industrial/summary`);
-            
+
             // Fetch Economy News (we added this to crypto_service as /api/news/economy, or sentiment_service)
             // Using existing endpoint if available or mock if not
             const newsRes = await fetch(`${import.meta.env.VITE_CRYPTO_API}/api/news/economy`).catch(() => null);
-            
+
             if (infraRes.ok) {
                 setInfraData(await infraRes.json());
             } else {
-                throw new Error("Failed to load infrastructure data");
+                throw new Error("No Data Yet");
             }
 
             if (newsRes && newsRes.ok) {
@@ -53,7 +53,7 @@ export default function InfraMacroProxy() {
 
             <Show when={!loading()} fallback={<div class="flex-1 flex items-center justify-center text-[10px] animate-pulse text-text_secondary">GATHERING INFRASTRUCTURE DATA...</div>}>
                 <Show when={!error()} fallback={<div class="flex-1 flex items-center justify-center text-[10px] text-red-500">{error()}</div>}>
-                    
+
                     <div class="grid grid-cols-2 gap-2 mb-4">
                         <div class="bg-black/30 border border-white/5 p-3 rounded flex flex-col items-center">
                             <span class="text-[8px] text-text_secondary uppercase tracking-widest mb-1">Active Industrial Zones</span>

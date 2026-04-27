@@ -77,7 +77,13 @@ export default function LiquidityHeatmap(props) {
                     return `${type}<br/>Price: ${p.name}<br/>Leverage Cluster: ${p.value / 2}x`;
                 }
             },
-            grid: { top: 30, bottom: 20, left: 90, right: 20 },
+            grid: { 
+                top: 35, 
+                bottom: 10, 
+                left: 10, 
+                right: 30,
+                containLabel: true 
+            },
             xAxis: { 
                 type: 'value', 
                 show: false,
@@ -86,17 +92,27 @@ export default function LiquidityHeatmap(props) {
             yAxis: { 
                 type: 'category', 
                 data: prices,
-                axisLabel: { color: '#cbd5e1', fontSize: 9, fontFamily: 'monospace' },
+                axisLabel: { 
+                    color: '#94a3b8', 
+                    fontSize: 9, 
+                    fontFamily: 'monospace',
+                    fontWeight: 'bold',
+                    margin: 12
+                },
                 axisTick: { show: false },
-                axisLine: { show: false }
+                axisLine: { show: false },
+                inverse: true // Price ascending from top to bottom
             },
             series: [
                 {
                     type: 'bar',
                     data: values.map((v, i) => ({ value: v, itemStyle: { color: colors[i] } })),
-                    barWidth: '60%',
+                    barWidth: '45%',
                     showBackground: true,
-                    backgroundStyle: { color: 'rgba(255,255,255,0.02)' }
+                    backgroundStyle: { color: 'rgba(255,255,255,0.01)' },
+                    itemStyle: {
+                        borderRadius: [0, 2, 2, 0]
+                    }
                 }
             ]
         };
@@ -143,7 +159,7 @@ export default function LiquidityHeatmap(props) {
                         </div>
                     </div>
 
-                    <div class="flex-1 w-full min-h-[300px]" ref={chartRef}></div>
+                    <div class="flex-1 w-full" ref={chartRef}></div>
                     
                 </Show>
             </Show>

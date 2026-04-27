@@ -2,18 +2,7 @@ import { render } from 'solid-js/web';
 import './index.css';
 import App from './App';
 
-// Global CORS Fix for Local Development
-if (import.meta.env.DEV) {
-  const originalFetch = window.fetch;
-  window.fetch = (...args) => {
-    let [resource, config] = args;
-    if (typeof resource === 'string' && resource.includes('api.asetpedia.online')) {
-      resource = resource.replace('https://api.asetpedia.online', '/api-proxy');
-    }
-    return originalFetch(resource, config);
-  };
-}
-
+// Direct API Communication Mode
 const root = document.getElementById('root');
 
 if (import.meta.env.DEV && !(root instanceof HTMLElement)) {

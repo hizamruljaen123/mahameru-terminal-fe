@@ -66,7 +66,7 @@ export default function StrategicProjectView(props) {
             const query = `${asset.name} ${asset.country} energy infrastructure news`;
             const res = await fetch(`${import.meta.env.VITE_GNEWS_API}/api/gnews/search?q=${encodeURIComponent(query)}`);
             const data = await res.json();
-            setNewsData(data.news || []);
+            setNewsData(data.data || []);
         } catch (e) { console.error("GNews fetch failed", e); }
         finally { setIsLoadingNews(false); }
 

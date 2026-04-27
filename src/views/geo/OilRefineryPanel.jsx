@@ -5,10 +5,10 @@ import { mapOffshoreType, OFFSHORE_CATEGORIES } from '../../utils/config/offshor
 
 const CATEGORY_CONFIG = {
   major: { radius: 10, color: '#ef4444', fillColor: '#ef4444', label: 'MAJOR (>400K BBL)' },
-  large: { radius: 7,  color: '#f97316', fillColor: '#f97316', label: 'LARGE (200-400K BBL)' },
+  large: { radius: 7, color: '#f97316', fillColor: '#f97316', label: 'LARGE (200-400K BBL)' },
   medium: { radius: 5, color: '#f59e0b', fillColor: '#f59e0b', label: 'MEDIUM (100-200K BBL)' },
-  small: { radius: 3,  color: '#eab308', fillColor: '#eab308', label: 'SMALL (30-100K BBL)' },
-  micro: { radius: 2,  color: '#84cc16', fillColor: '#84cc16', label: 'MICRO (<30K BBL)' },
+  small: { radius: 3, color: '#eab308', fillColor: '#eab308', label: 'SMALL (30-100K BBL)' },
+  micro: { radius: 2, color: '#84cc16', fillColor: '#84cc16', label: 'MICRO (<30K BBL)' },
   unknown: { radius: 2, color: '#64748b', fillColor: '#64748b', label: 'UNKNOWN' },
   lng: { radius: 6, color: '#3b82f6', fillColor: '#0ea5e9', label: 'LNG TERMINAL' },
   offshore: { radius: 6, color: '#f43f5e', fillColor: '#f43f5e', label: 'OFFSHORE PLATFORM' },
@@ -25,7 +25,7 @@ const LNG_TYPE_CONFIG = {
 };
 
 export default function OilRefineryPanel() {
-  const [view, setView] = createSignal('combined'); // 'fleet', 'lng', 'offshore', 'trades', 'report', 'combined'
+  const [view, setView] = createSignal('combined'); // 'fleet', 'lng', 'offshore', 'trades', 'report', 'combined', 'accidents'
   const [activeTableTab, setActiveTableTab] = createSignal('OVERVIEW'); // 'OVERVIEW', 'REFINERY', 'LNG', 'OFFSHORE'
   const [markerMode, setMarkerMode] = createSignal('COUNTRY'); // 'COUNTRY', 'ASSET'
   const [refineries, setRefineries] = createSignal([]);
@@ -68,14 +68,18 @@ export default function OilRefineryPanel() {
   const [loadingAnalytics, setLoadingAnalytics] = createSignal(false);
   const [combinedDBStats, setCombinedDBStats] = createSignal(null);
   const [loadingDBStats, setLoadingDBStats] = createSignal(false);
-  
+
   const [refIntel, setRefIntel] = createSignal(null);
+  const [accidents, setAccidents] = createSignal([]);
+  const [loadingAccidents, setLoadingAccidents] = createSignal(false);
   const [detailTab, setDetailTab] = createSignal('INTEL'); // 'NEWS', 'INTEL'
 
   let mapInstance = null;
   let markerLayer = null;
   let routeLayer = null;
   let selectionLayer = null;
+  let accidentChart = null;
+  let accidentChartRef = null;
 
   const fetchRefineries = async () => {
     try {
@@ -239,6 +243,21 @@ export default function OilRefineryPanel() {
     }
   };
 
+  const fetchAccidents = async () => {
+    setLoadingAccidents(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_OIL_REFINERY_API}/api/accidents`);
+      const result = await res.json();
+      if (result.status === 'success') {
+        setAccidents(result.data || []);
+      }
+    } catch (e) {
+      console.error("Accident Analysis: Fetch error", e);
+    } finally {
+      setLoadingAccidents(false);
+    }
+  };
+
   createEffect(() => {
     if (view() === 'trades') fetchTrades();
     if (view() === 'report') {
@@ -252,11 +271,12 @@ export default function OilRefineryPanel() {
     if (view() === 'lng') fetchLngFacilities();
     if (view() === 'offshore') fetchOffshorePlatforms();
     if (view() === 'terminal') fetchPetroleumTerminals();
+    if (view() === 'accidents') fetchAccidents();
     if (view() === 'fleet' || view() === 'combined') {
-       fetchRefineries();
-       fetchLngFacilities();
-       fetchOffshorePlatforms();
-       fetchPetroleumTerminals();
+      fetchRefineries();
+      fetchLngFacilities();
+      fetchOffshorePlatforms();
+      fetchPetroleumTerminals();
     }
   });
 
@@ -271,30 +291,32 @@ export default function OilRefineryPanel() {
     const l = filteredLng();
     const o = filteredOffshore();
     const t = filteredTerminals();
-    
+
     if (markerLayer) {
-       if (v === 'combined') {
-          const tab = activeTableTab();
-          if (markerMode() === 'COUNTRY') {
-             updateCountryMarkers(combinedStats().countries, tab);
-          } else {
-             if (tab === 'REFINERY') updateMarkers(r);
-             else if (tab === 'LNG') updateMarkers(l);
-             else if (tab === 'OFFSHORE') updateMarkers(o);
-             else if (tab === 'TERMINAL') updateMarkers(t);
-             else updateMarkers([...r, ...l, ...o, ...t]);
-          }
-       } else if (v === 'fleet') {
-          updateMarkers(r);
-       } else if (v === 'lng') {
-          updateMarkers(l);
-       } else if (v === 'offshore') {
-          updateMarkers(o);
-       } else if (v === 'terminal') {
-          updateMarkers(t);
-       } else {
-          markerLayer.clearLayers();
-       }
+      if (v === 'combined') {
+        const tab = activeTableTab();
+        if (markerMode() === 'COUNTRY') {
+          updateCountryMarkers(combinedStats().countries, tab);
+        } else {
+          if (tab === 'REFINERY') updateMarkers(r);
+          else if (tab === 'LNG') updateMarkers(l);
+          else if (tab === 'OFFSHORE') updateMarkers(o);
+          else if (tab === 'TERMINAL') updateMarkers(t);
+          else updateMarkers([...r, ...l, ...o, ...t]);
+        }
+      } else if (v === 'fleet') {
+        updateMarkers(r);
+      } else if (v === 'lng') {
+        updateMarkers(l);
+      } else if (v === 'offshore') {
+        updateMarkers(o);
+      } else if (v === 'terminal') {
+        updateMarkers(t);
+      } else if (v === 'accidents') {
+        updateAccidentMarkers(accidents());
+      } else {
+        markerLayer.clearLayers();
+      }
     }
   });
 
@@ -338,15 +360,15 @@ export default function OilRefineryPanel() {
         const offId = id.split('-')[1];
         const off = offshorePlatforms().find(p => p.originalId.toString() === offId);
         if (off) {
-           url = `${import.meta.env.VITE_GNEWS_API}/api/gnews/search?q=${encodeURIComponent(off.name + " " + off.country)}`;
-           useGNews = true;
+          url = `${import.meta.env.VITE_GNEWS_API}/api/gnews/search?q=${encodeURIComponent(off.name + " " + off.country)}`;
+          useGNews = true;
         }
       } else if (id.toString().startsWith('terminal-')) {
         const termId = id.split('-')[1];
         const term = petroleumTerminals().find(p => p.originalId.toString() === termId);
         if (term) {
-           url = `${import.meta.env.VITE_GNEWS_API}/api/gnews/search?q=${encodeURIComponent(term.name + " " + term.country)}`;
-           useGNews = true;
+          url = `${import.meta.env.VITE_GNEWS_API}/api/gnews/search?q=${encodeURIComponent(term.name + " " + term.country)}`;
+          useGNews = true;
         }
       } else if (id.toString().startsWith('lng-')) {
         const lngId = id.split('-')[1];
@@ -405,7 +427,7 @@ export default function OilRefineryPanel() {
       setSelectedOffshoreId(null);
       setSelectedTerminalId(null);
     }
-    
+
     if (mapInstance && ref.latitude) {
       if (selectionLayer) {
         selectionLayer.clearLayers();
@@ -423,7 +445,7 @@ export default function OilRefineryPanel() {
     setSelectedTrade(trade);
     fetchTradeDetail(trade);
     fetchTradeNews(trade.origin_name, trade.destination_name);
-    
+
     if (mapInstance && routeLayer) {
       routeLayer.clearLayers();
       try {
@@ -448,7 +470,7 @@ export default function OilRefineryPanel() {
   const filteredRefineries = createMemo(() => {
     const sc = searchCountry().toLowerCase();
     const st = searchTerm().toLowerCase();
-    return refineries().filter(r => 
+    return refineries().filter(r =>
       r.nama_kilang.toLowerCase().includes(st) &&
       r.negara.toLowerCase().includes(sc)
     );
@@ -457,7 +479,7 @@ export default function OilRefineryPanel() {
   const filteredLng = createMemo(() => {
     const sc = searchCountry().toLowerCase();
     const st = searchTerm().toLowerCase();
-    return lngFacilities().filter(l => 
+    return lngFacilities().filter(l =>
       (l.name.toLowerCase().includes(st) || l.country.toLowerCase().includes(st)) &&
       l.country.toLowerCase().includes(sc)
     );
@@ -466,7 +488,7 @@ export default function OilRefineryPanel() {
   const filteredOffshore = createMemo(() => {
     const sc = searchCountry().toLowerCase();
     const st = searchTerm().toLowerCase();
-    return offshorePlatforms().filter(o => 
+    return offshorePlatforms().filter(o =>
       (o.name.toLowerCase().includes(st) || o.country.toLowerCase().includes(st)) &&
       o.country.toLowerCase().includes(sc)
     );
@@ -475,14 +497,14 @@ export default function OilRefineryPanel() {
   const filteredTerminals = createMemo(() => {
     const sc = searchCountry().toLowerCase();
     const st = searchTerm().toLowerCase();
-    return petroleumTerminals().filter(t => 
+    return petroleumTerminals().filter(t =>
       (t.name.toLowerCase().includes(st) || t.country.toLowerCase().includes(st)) &&
       t.country.toLowerCase().includes(sc)
     );
   });
 
   const filteredTrades = createMemo(() => {
-    return trades().filter(t => 
+    return trades().filter(t =>
       t.origin_name.toLowerCase().includes(tradeSearch().toLowerCase()) ||
       t.destination_name.toLowerCase().includes(tradeSearch().toLowerCase())
     );
@@ -493,6 +515,36 @@ export default function OilRefineryPanel() {
   const selectedOffshore = createMemo(() => offshorePlatforms().find(o => o.id === selectedOffshoreId()));
   const selectedTerminal = createMemo(() => petroleumTerminals().find(t => t.id === selectedTerminalId()));
 
+  const groupedAccidents = createMemo(() => {
+    const acc = accidents();
+    const groups = {};
+    acc.forEach(a => {
+      const date = a.event_date || 'UNKNOWN DATE';
+      if (!groups[date]) groups[date] = [];
+      groups[date].push(a);
+    });
+    return Object.keys(groups).sort((a, b) => new Date(b) - new Date(a)).map(date => ({
+      date,
+      items: groups[date]
+    }));
+  });
+
+  const accidentChartData = createMemo(() => {
+    const acc = accidents();
+    const counts = {};
+    acc.forEach(a => {
+      if (!a.event_date) return;
+      const date = new Date(a.event_date);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    const sortedKeys = Object.keys(counts).sort();
+    return {
+      labels: sortedKeys,
+      values: sortedKeys.map(k => counts[k])
+    };
+  });
+
   const combinedStats = createMemo(() => {
     const refs = refineries();
     const lng = lngFacilities();
@@ -502,14 +554,14 @@ export default function OilRefineryPanel() {
     [...refs, ...lng, ...off, ...terminals].forEach(item => {
       const country = item.negara || item.country || 'UNKNOWN';
       if (!countryAgg[country]) {
-        countryAgg[country] = { 
-          name: country, 
-          count: 0, 
-          refs: 0, 
-          lngs: 0, 
-          offs: 0, 
+        countryAgg[country] = {
+          name: country,
+          count: 0,
+          refs: 0,
+          lngs: 0,
+          offs: 0,
           terms: 0,
-          lat: 0, 
+          lat: 0,
           lng: 0,
           bounds: [[item.latitude, item.longitude], [item.latitude, item.longitude]]
         };
@@ -519,14 +571,14 @@ export default function OilRefineryPanel() {
       if (item.category === 'lng') countryAgg[country].lngs++;
       if (item.category === 'offshore') countryAgg[country].offs++;
       if (item.category === 'terminal') countryAgg[country].terms++;
-      
+
       if (item.latitude && item.longitude) {
-         countryAgg[country].lat = (countryAgg[country].lat * (countryAgg[country].count - 1) + item.latitude) / countryAgg[country].count;
-         countryAgg[country].lng = (countryAgg[country].lng * (countryAgg[country].count - 1) + item.longitude) / countryAgg[country].count;
-         countryAgg[country].bounds[0][0] = Math.min(countryAgg[country].bounds[0][0], item.latitude);
-         countryAgg[country].bounds[0][1] = Math.min(countryAgg[country].bounds[0][1], item.longitude);
-         countryAgg[country].bounds[1][0] = Math.max(countryAgg[country].bounds[1][0], item.latitude);
-         countryAgg[country].bounds[1][1] = Math.max(countryAgg[country].bounds[1][1], item.longitude);
+        countryAgg[country].lat = (countryAgg[country].lat * (countryAgg[country].count - 1) + item.latitude) / countryAgg[country].count;
+        countryAgg[country].lng = (countryAgg[country].lng * (countryAgg[country].count - 1) + item.longitude) / countryAgg[country].count;
+        countryAgg[country].bounds[0][0] = Math.min(countryAgg[country].bounds[0][0], item.latitude);
+        countryAgg[country].bounds[0][1] = Math.min(countryAgg[country].bounds[0][1], item.longitude);
+        countryAgg[country].bounds[1][0] = Math.max(countryAgg[country].bounds[1][0], item.latitude);
+        countryAgg[country].bounds[1][1] = Math.max(countryAgg[country].bounds[1][1], item.longitude);
       }
     });
     const countries = Object.values(countryAgg).sort((a, b) => b.count - a.count);
@@ -551,7 +603,7 @@ export default function OilRefineryPanel() {
     fetchPetroleumTerminals();
     setTimeout(() => mapInstance.invalidateSize(), 200);
   };
-    
+
   const updateCountryMarkers = (countries, activeTab = 'OVERVIEW') => {
     if (!markerLayer) return;
     markerLayer.clearLayers();
@@ -582,13 +634,81 @@ export default function OilRefineryPanel() {
         iconAnchor: [16, 16]
       });
       window.L.marker([country.lat, country.lng], { icon }).addTo(markerLayer).on('click', () => {
-         setSearchCountry(country.name);
-         setMarkerMode('ASSET');
-         if (activeTab === 'OVERVIEW') setActiveTableTab('REFINERY');
-         mapInstance.fitBounds(country.bounds, { padding: [50, 50], maxZoom: 8, animate: true });
+        setSearchCountry(country.name);
+        setMarkerMode('ASSET');
+        if (activeTab === 'OVERVIEW') setActiveTableTab('REFINERY');
+        mapInstance.fitBounds(country.bounds, { padding: [50, 50], maxZoom: 8, animate: true });
       });
     });
   };
+
+  const updateAccidentMarkers = (data) => {
+    if (!markerLayer || !mapInstance) return;
+    markerLayer.clearLayers();
+    if (data.length === 0) return;
+
+    const bounds = window.L.latLngBounds();
+    let hasPoints = false;
+
+    data.forEach((item) => {
+      if (!item.latitude || !item.longitude) return;
+
+      const icon = window.L.divIcon({
+        className: 'accident-marker',
+        html: `
+          <div class="relative group">
+            <div class="w-6 h-6 flex items-center justify-center animate-pulse">
+               <span class="text-xl drop-shadow-[0_0_5px_rgba(239,68,68,1)]">🔥</span>
+            </div>
+            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-[2000]">
+               <div class="bg-black/90 border border-red-500/50 px-2 py-1 text-[8px] font-black text-white uppercase flex flex-col items-center">
+                  <span class="text-red-500">INCIDENT REPORT</span>
+                  <span>${item.facility_name}</span>
+               </div>
+            </div>
+          </div>
+        `,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+      });
+
+      window.L.marker([item.latitude, item.longitude], { icon }).addTo(markerLayer).on('click', () => {
+        // Maybe handle selection for accidents too?
+      });
+
+      bounds.extend([item.latitude, item.longitude]);
+      hasPoints = true;
+    });
+
+    if (hasPoints && data.length > 0) {
+      mapInstance.fitBounds(bounds, { padding: [50, 50], maxZoom: 6, animate: true });
+    }
+  };
+
+  const initAccidentChart = () => {
+    if (!accidentChartRef || !window.echarts) return;
+    if (accidentChart) accidentChart.dispose();
+    accidentChart = window.echarts.init(accidentChartRef, 'dark');
+    const data = accidentChartData();
+    accidentChart.setOption({
+      backgroundColor: 'transparent',
+      tooltip: { trigger: 'axis', backgroundColor: '#0a1628', borderColor: '#ef4444', textStyle: { color: '#fff', fontSize: 10 } },
+      grid: { top: 30, bottom: 30, left: 40, right: 20 },
+      xAxis: { type: 'category', data: data.labels, axisLabel: { color: '#94a3b8', fontSize: 8 }, axisLine: { lineStyle: { color: '#1e293b' } } },
+      yAxis: { type: 'value', splitLine: { lineStyle: { color: '#1e293b', opacity: 0.5 } }, axisLabel: { color: '#94a3b8', fontSize: 8 } },
+      series: [{
+        data: data.values, type: 'line', smooth: true, symbol: 'circle', symbolSize: 6,
+        lineStyle: { color: '#ef4444', width: 2 }, itemStyle: { color: '#ef4444' },
+        areaStyle: { color: new window.echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: 'rgba(239, 68, 68, 0.3)' }, { offset: 1, color: 'transparent' }]) }
+      }]
+    });
+  };
+
+  createEffect(() => {
+    if (view() === 'accidents' && accidents().length > 0) {
+       setTimeout(initAccidentChart, 200);
+    }
+  });
 
   const updateMarkers = (data) => {
     if (!markerLayer || !mapInstance) return;
@@ -619,14 +739,14 @@ export default function OilRefineryPanel() {
       }
 
       window.L.circleMarker([item.latitude, item.longitude], {
-        radius: radius, 
-        fillColor: fillColor, 
-        color: '#fff', 
-        weight: 1, 
-        opacity: 0.8, 
+        radius: radius,
+        fillColor: fillColor,
+        color: '#fff',
+        weight: 1,
+        opacity: 0.8,
         fillOpacity: 0.8
       }).addTo(markerLayer).on('click', () => handleSelect(item));
-      
+
       bounds.extend([item.latitude, item.longitude]);
       hasPoints = true;
     });
@@ -648,180 +768,263 @@ export default function OilRefineryPanel() {
   return (
     <div class="h-full flex flex-col bg-[#050b14] text-[#e2e8f0] font-mono lowercase overflow-hidden">
       <div class="flex items-center gap-1 p-1 bg-[#0a1628] border-b border-[#1e3a5f] shrink-0 overflow-x-auto no-scrollbar">
-         <div class="flex items-center gap-2 px-3 py-1 mr-4 border-r border-[#1e3a5f]">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="3"><path d="M2 20h20M7 20v-4m10 4v-8M12 20V4" /></svg>
-            <span class="text-[10px] font-black text-white tracking-widest uppercase">REFINERY ANALYTICS SYSTEM</span>
-         </div>
-         <div class="flex gap-1">
-            <button onClick={() => initMap(document.querySelector('.leaflet-container')?.parentElement || null)} class="h-6 px-3 text-[9px] font-black uppercase border border-orange-500/40 text-orange-500 hover:bg-orange-500 hover:text-white transition-all">RE-INIT MAP</button>
-            <button onClick={() => toggleView('combined')} class={`h-6 px-3 text-[9px] font-black uppercase border transition-all ${view() === 'combined' ? 'bg-purple-600 text-white border-purple-400' : 'text-white/40 border-transparent hover:text-white'}`}>COMBINED HUB</button>
-            <button onClick={() => toggleView('trades')} class={`h-6 px-3 text-[9px] font-black uppercase border transition-all ${view() === 'trades' ? 'bg-blue-600 text-white border-blue-400' : 'text-white/40 border-transparent hover:text-white'}`}>TRADE FLOW</button>
-            <button onClick={() => setView('report')} class={`h-6 px-3 text-[9px] font-black uppercase border transition-all ${view() === 'report' ? 'bg-green-600 text-white border-green-400' : 'text-white/40 border-transparent hover:text-white'}`}>ANALYTICS REPORT</button>
-         </div>
-         <div class="ml-auto flex items-center gap-4 px-4 text-[9px] text-[#22c55e] font-black uppercase tracking-widest bg-[#22c55e]/5 h-full">
-            <span class="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse"></span>
-            SYSTEM STATUS: OPERATIONAL
-         </div>
+        <div class="flex items-center gap-2 px-3 py-1 mr-4 border-r border-[#1e3a5f]">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="3"><path d="M2 20h20M7 20v-4m10 4v-8M12 20V4" /></svg>
+          <span class="text-[10px] font-black text-white tracking-widest uppercase">REFINERY ANALYTICS SYSTEM</span>
+        </div>
+        <div class="flex gap-1">
+          <button onClick={() => initMap(document.querySelector('.leaflet-container')?.parentElement || null)} class="h-6 px-3 text-[9px] font-black uppercase border border-orange-500/40 text-orange-500 hover:bg-orange-500 hover:text-white transition-all">RE-INIT MAP</button>
+          <button onClick={() => toggleView('combined')} class={`h-6 px-3 text-[9px] font-black uppercase border transition-all ${view() === 'combined' ? 'bg-purple-600 text-white border-purple-400' : 'text-white/40 border-transparent hover:text-white'}`}>COMBINED HUB</button>
+          <button onClick={() => toggleView('trades')} class={`h-6 px-3 text-[9px] font-black uppercase border transition-all ${view() === 'trades' ? 'bg-blue-600 text-white border-blue-400' : 'text-white/40 border-transparent hover:text-white'}`}>TRADE FLOW</button>
+          <button onClick={() => toggleView('accidents')} class={`h-6 px-3 text-[9px] font-black uppercase border transition-all ${view() === 'accidents' ? 'bg-red-600 text-white border-red-400' : 'text-white/40 border-transparent hover:text-white'}`}>INCIDENT LOG</button>
+          <button onClick={() => setView('report')} class={`h-6 px-3 text-[9px] font-black uppercase border transition-all ${view() === 'report' ? 'bg-green-600 text-white border-green-400' : 'text-white/40 border-transparent hover:text-white'}`}>ANALYTICS REPORT</button>
+        </div>
+        <div class="ml-auto flex items-center gap-4 px-4 text-[9px] text-[#22c55e] font-black uppercase tracking-widest bg-[#22c55e]/5 h-full">
+          <span class="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse"></span>
+          SYSTEM STATUS: OPERATIONAL
+        </div>
       </div>
 
       <div class="flex-1 flex flex-col relative overflow-hidden">
         <div class={`flex-1 flex flex-col h-full ${view() === 'report' ? 'hidden' : ''}`}>
-           <div class="h-[65%] relative border-b-2 border-[#1e3a5f]">
-              <style>{`
+          <div class="h-[65%] relative border-b-2 border-[#1e3a5f]">
+            <style>{`
                 .animate-trade-line { stroke-dasharray: 10, 10; animation: dash 20s linear infinite; }
                 @keyframes dash { to { stroke-dashoffset: -1000; } }
               `}</style>
-              <div ref={initMap} class="w-full h-full grayscale-[0.2]" />
-              
-              <div class="absolute top-4 left-4 z-[1000] bg-black/90 border border-white/5 p-1.5 backdrop-blur-md flex flex-col gap-2.5 shadow-2xl animate-in fade-in slide-in-from-left-2 max-w-[120px] border-l-2 border-orange-500">
-                <Show when={view() === 'fleet' || view() === 'combined'}>
-                  <div class="w-full">
-                    <div class="flex items-center gap-2 mb-2 pb-1 border-b border-orange-500/30">
-                       <span class="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
-                       <span class="text-[9px] font-black text-white uppercase tracking-wider">OIL REFINERIES</span>
-                    </div>
-                    <div class="space-y-1">
-                      <For each={CAT_ORDER.slice(0, 5)}>{(cat) => (<div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full" style={{ background: CATEGORY_CONFIG[cat].fillColor }}></div><span class="text-[7px] text-white/40 uppercase font-bold">{CATEGORY_CONFIG[cat].label}</span></div>)}</For>
-                    </div>
-                  </div>
-                </Show>
+            <div ref={initMap} class="w-full h-full grayscale-[0.2]" />
 
-                <Show when={view() === 'lng' || view() === 'combined'}>
-                  <div class="w-full">
-                    <div class="flex items-center gap-2 mb-2 pb-1 border-b border-cyan-500/30">
-                       <span class="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"></span>
-                       <span class="text-[9px] font-black text-white uppercase tracking-wider">LNG TERMINALS</span>
-                    </div>
-                    <div class="space-y-1">
-                       <For each={Object.entries(LNG_TYPE_CONFIG)}>{([key, cfg]) => (<div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full" style={{ background: cfg.color }}></div><span class="text-[7px] text-white/40 uppercase font-bold">{cfg.label}</span></div>)}</For>
-                    </div>
+            <div class="absolute top-4 left-4 z-[1000] bg-black/90 border border-white/5 p-1.5 backdrop-blur-md flex flex-col gap-2.5 shadow-2xl animate-in fade-in slide-in-from-left-2 max-w-[120px] border-l-2 border-orange-500">
+              <Show when={view() === 'fleet' || view() === 'combined'}>
+                <div class="w-full">
+                  <div class="flex items-center gap-2 mb-2 pb-1 border-b border-orange-500/30">
+                    <span class="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
+                    <span class="text-[9px] font-black text-white uppercase tracking-wider">OIL REFINERIES</span>
                   </div>
-                </Show>
-
-                <Show when={view() === 'offshore' || view() === 'combined'}>
-                  <div class="w-full">
-                    <div class="flex items-center gap-2 mb-2 pb-1 border-b border-rose-500/30">
-                       <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
-                       <span class="text-[9px] font-black text-white uppercase tracking-wider">OFFSHORE OPS</span>
-                    </div>
-                    <div class="space-y-1">
-                       <For each={Object.values(OFFSHORE_CATEGORIES)}>{(cat) => (<div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full" style={{ background: cat.color }}></div><span class="text-[7px] text-white/40 uppercase font-bold">{cat.label}</span></div>)}</For>
-                    </div>
+                  <div class="space-y-1">
+                    <For each={CAT_ORDER.slice(0, 5)}>{(cat) => (<div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full" style={{ background: CATEGORY_CONFIG[cat].fillColor }}></div><span class="text-[7px] text-white/40 uppercase font-bold">{CATEGORY_CONFIG[cat].label}</span></div>)}</For>
                   </div>
-                </Show>
+                </div>
+              </Show>
 
-                <Show when={view() === 'terminal' || view() === 'combined'}>
-                  <div class="w-full">
-                    <div class="flex items-center gap-2 mb-2 pb-1 border-b border-fuchsia-500/30">
-                       <span class="w-1.5 h-1.5 rounded-full bg-fuchsia-500 animate-pulse"></span>
-                       <span class="text-[9px] font-black text-white uppercase tracking-wider">PETRO TERMINALS</span>
-                    </div>
-                    <div class="space-y-1">
-                       <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-[#d946ef]"></div><span class="text-[7px] text-white/40 uppercase font-bold">ONSHORE</span></div>
-                       <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-[#8b5cf6]"></div><span class="text-[7px] text-white/40 uppercase font-bold">OFFSHORE</span></div>
-                    </div>
+              <Show when={view() === 'lng' || view() === 'combined'}>
+                <div class="w-full">
+                  <div class="flex items-center gap-2 mb-2 pb-1 border-b border-cyan-500/30">
+                    <span class="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"></span>
+                    <span class="text-[9px] font-black text-white uppercase tracking-wider">LNG TERMINALS</span>
+                  </div>
+                  <div class="space-y-1">
+                    <For each={Object.entries(LNG_TYPE_CONFIG)}>{([key, cfg]) => (<div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full" style={{ background: cfg.color }}></div><span class="text-[7px] text-white/40 uppercase font-bold">{cfg.label}</span></div>)}</For>
+                  </div>
+                </div>
+              </Show>
+
+              <Show when={view() === 'offshore' || view() === 'combined'}>
+                <div class="w-full">
+                  <div class="flex items-center gap-2 mb-2 pb-1 border-b border-rose-500/30">
+                    <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                    <span class="text-[9px] font-black text-white uppercase tracking-wider">OFFSHORE OPS</span>
+                  </div>
+                  <div class="space-y-1">
+                    <For each={Object.values(OFFSHORE_CATEGORIES)}>{(cat) => (<div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full" style={{ background: cat.color }}></div><span class="text-[7px] text-white/40 uppercase font-bold">{cat.label}</span></div>)}</For>
+                  </div>
+                </div>
+              </Show>
+
+              <Show when={view() === 'terminal' || view() === 'combined'}>
+                <div class="w-full">
+                  <div class="flex items-center gap-2 mb-2 pb-1 border-b border-fuchsia-500/30">
+                    <span class="w-1.5 h-1.5 rounded-full bg-fuchsia-500 animate-pulse"></span>
+                    <span class="text-[9px] font-black text-white uppercase tracking-wider">PETRO TERMINALS</span>
+                  </div>
+                  <div class="space-y-1">
+                    <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-[#d946ef]"></div><span class="text-[7px] text-white/40 uppercase font-bold">ONSHORE</span></div>
+                    <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-[#8b5cf6]"></div><span class="text-[7px] text-white/40 uppercase font-bold">OFFSHORE</span></div>
+                  </div>
+                </div>
+              </Show>
+            </div>
+
+            <Show when={view() === 'accidents'}>
+              <div class="absolute top-4 right-4 bottom-4 z-[1000] w-80 bg-black/85 border border-white/5 backdrop-blur-md shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-500">
+                <div class="p-3 border-b border-red-500/30 bg-red-500/5 flex flex-col gap-3">
+                  <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
+                    <h3 class="text-[10px] font-black text-white uppercase tracking-widest">INCIDENT COMMAND CENTER</h3>
+                  </div>
+                  <div class="bg-black/40 border border-white/5 rounded p-2">
+                    <div class="text-[8px] font-bold text-red-500/70 mb-2 uppercase tracking-tighter">Frequency Analytics</div>
+                    <div ref={accidentChartRef} class="h-28 w-full"></div>
+                  </div>
+                </div>
+
+                <div class="flex-1 overflow-y-auto win-scroll p-3">
+                  <div class="space-y-6 relative">
+                    <div class="absolute left-1.5 top-0 bottom-0 w-px bg-white/5"></div>
+
+                    <For each={groupedAccidents()}>
+                      {(group) => (
+                        <div class="relative pl-5">
+                          <div class="absolute left-0 top-1 w-3 h-3 bg-[#0a1628] border-2 border-red-500 rounded-full z-10"></div>
+                          <div class="text-[9px] font-black text-red-500 mb-2 uppercase tracking-widest">{group.date}</div>
+
+                          <div class="space-y-3">
+                            <For each={group.items}>
+                              {(item) => (
+                                <div onClick={() => { if (item.latitude) mapInstance.flyTo([item.latitude, item.longitude], 12); }} class="group bg-white/2 border border-white/5 p-2.5 hover:bg-red-500/10 hover:border-red-500/30 transition-all cursor-pointer relative">
+                                  <div class="text-[9px] font-black text-white uppercase mb-1 leading-tight group-hover:text-red-400">{item.facility_name}</div>
+                                  <div class="text-[8px] text-white/40 uppercase line-clamp-2">{item.location}</div>
+                                  <div class="flex items-center gap-2 mt-2 pt-2 border-t border-white/5">
+                                    <span class="text-[7px] text-white/20 uppercase font-bold">CASUALTIES: {item.casualties || '0'}</span>
+                                  </div>
+                                </div>
+                              )}
+                            </For>
+                          </div>
+                        </div>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </div>
+            </Show>
+
+            <Show when={(selectedRefinery() || selectedLng() || selectedOffshore() || selectedTerminal()) && (view() === 'combined' || view() === 'fleet' || view() === 'lng' || view() === 'offshore' || view() === 'terminal')}>
+              <div class="absolute bottom-4 left-4 right-4 z-[1000] bg-[#0a1628]/95 border-l-4 border-orange-500 p-4 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 shadow-2xl flex justify-between items-center">
+                <div>
+                  <div class="text-[9px] text-[#22d3ee] font-black uppercase tracking-[0.3em] mb-2 flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 bg-[#22d3ee] animate-pulse"></span>
+                    ASSET IDENTIFIED: {selectedRefinery() ? 'REFINERY' : selectedLng() ? 'LNG HUB' : selectedOffshore() ? 'OFFSHORE PLATFORM' : 'PETROLEUM TERMINAL'}
+                  </div>
+                  <h2 class="text-20px font-black text-white uppercase leading-none tracking-tighter">{selectedRefinery()?.nama_kilang || selectedLng()?.name || selectedOffshore()?.name || selectedTerminal()?.name}</h2>
+                  <div class="flex gap-4 mt-2 text-[10px] font-bold uppercase tracking-widest text-white/50">
+                    <span class="text-[#f97316]">{selectedRefinery()?.negara || selectedLng()?.country || selectedOffshore()?.country || selectedTerminal()?.country}</span>
+                    <span class="border-l border-white/10 pl-4 uppercase">{(selectedRefinery()?.capacity || selectedLng()?.liq_capacity_bpd || selectedTerminal()?.liq_capacity_bpd || 0).toLocaleString()} {selectedRefinery() || selectedLng() || selectedTerminal() ? 'BPD' : ''}</span>
+                    <span class="border-l border-white/10 pl-4 text-green-500 uppercase">{selectedRefinery() ? 'OPERATIONAL' : (selectedLng() || selectedOffshore() || selectedTerminal())?.fac_status}</span>
+                  </div>
+                </div>
+                <button onClick={() => setShowDetail(true)} class="bg-orange-600 text-white px-8 py-3 text-[12px] font-black uppercase tracking-[0.2em] hover:bg-orange-500 transition-all shadow-[0_0_30px_rgba(234,88,12,0.4)] border border-orange-400/50">ANALYZE STRATEGIC ASSET</button>
+              </div>
+            </Show>
+          </div>
+
+          <div class="flex-1 flex overflow-hidden">
+            <div class="flex-1 flex flex-col bg-black/40">
+              <div class="p-2.5 border-b border-[#1e3a5f] bg-white/2 flex items-center gap-3">
+                <Show when={searchCountry() !== "" || activeTableTab() !== 'OVERVIEW'}>
+                  <button onClick={() => { setSearchCountry(""); setActiveTableTab('OVERVIEW'); setMarkerMode('COUNTRY'); mapInstance.flyTo([20, 0], 2); }} class="bg-orange-500/10 border border-orange-500/30 text-orange-500 text-[8px] font-black px-2 py-1 flex items-center gap-1.5 hover:bg-orange-500 hover:text-white transition-all group shrink-0">← GLOBAL OVERVIEW</button>
+                </Show>
+                <Show when={view() === 'fleet'}><input onInput={(e) => setSearchTerm(e.target.value)} type="text" placeholder="FILTER BY NAME..." class="bg-black/40 border border-white/10 px-2 py-1 text-[10px] text-white w-32" /><input onInput={(e) => setSearchCountry(e.target.value)} type="text" placeholder="FILTER BY COUNTRY..." class="bg-black/40 border border-white/10 px-2 py-1 text-[10px] text-white w-32" /></Show>
+                <Show when={view() === 'lng'}><input onInput={(e) => setSearchTerm(e.target.value)} type="text" placeholder="FILTER BY TERMINAL..." class="bg-black/40 border border-cyan-500/30 px-2 py-1 text-[10px] text-white w-64" /></Show>
+                <Show when={view() === 'offshore'}><input onInput={(e) => setSearchTerm(e.target.value)} type="text" placeholder="FILTER BY PLATFORM..." class="bg-black/40 border border-rose-500/30 px-2 py-1 text-[10px] text-white w-64" /></Show>
+                <Show when={view() === 'terminal'}><input onInput={(e) => setSearchTerm(e.target.value)} type="text" placeholder="FILTER BY TERMINAL..." class="bg-black/40 border border-fuchsia-500/30 px-2 py-1 text-[10px] text-white w-64" /></Show>
+                <Show when={view() === 'trades'}><input onInput={(e) => setTradeSearch(e.target.value)} type="text" placeholder="SEARCH TRADE LANES..." class="bg-black/40 border border-blue-500/30 px-2 py-1 text-[10px] text-white w-64" /></Show>
+                <div class="ml-auto text-[8px] font-black text-white/30 uppercase tracking-widest">
+                  TOTAL: {
+                    view() === 'trades' ? filteredTrades().length :
+                      activeTableTab() === 'OVERVIEW' ? combinedStats().countries.length :
+                        activeTableTab() === 'REFINERY' ? filteredRefineries().length :
+                          activeTableTab() === 'LNG' ? filteredLng().length :
+                            activeTableTab() === 'OFFSHORE' ? filteredOffshore().length :
+                              activeTableTab() === 'TERMINAL' ? filteredTerminals().length : 0
+                  } RECORDS
+                </div>
+              </div>
+
+              <Show when={view() === 'combined'}>
+                <div class="flex border-b border-[#1e3a5f] bg-black/20">
+                  <button onClick={() => { setActiveTableTab('OVERVIEW'); setMarkerMode('COUNTRY'); setSearchCountry(""); }} class={`flex-1 py-1.5 text-[8px] font-black uppercase transition-all ${activeTableTab() === 'OVERVIEW' ? 'bg-orange-500/20 text-orange-500 border-b-2 border-orange-500' : 'text-white/40 hover:text-white'}`}>OVERVIEW</button>
+                  <button onClick={() => { setActiveTableTab('REFINERY'); setMarkerMode('ASSET'); }} class={`flex-1 py-1.5 text-[8px] font-black uppercase transition-all ${activeTableTab() === 'REFINERY' ? 'bg-orange-500/20 text-orange-500 border-b-2 border-orange-500' : 'text-white/40 hover:text-white'}`}>REFINERIES</button>
+                  <button onClick={() => { setActiveTableTab('LNG'); setMarkerMode('ASSET'); }} class={`flex-1 py-1.5 text-[8px] font-black uppercase transition-all ${activeTableTab() === 'LNG' ? 'bg-cyan-500/20 text-cyan-500 border-b-2 border-cyan-500' : 'text-white/40 hover:text-white'}`}>LNG TERMINALS</button>
+                  <button onClick={() => { setActiveTableTab('OFFSHORE'); setMarkerMode('ASSET'); }} class={`flex-1 py-1.5 text-[8px] font-black uppercase transition-all ${activeTableTab() === 'OFFSHORE' ? 'bg-rose-500/20 text-rose-500 border-b-2 border-rose-500' : 'text-white/40 hover:text-white'}`}>OFFSHORE OPS</button>
+                  <button onClick={() => { setActiveTableTab('TERMINAL'); setMarkerMode('ASSET'); }} class={`flex-1 py-1.5 text-[8px] font-black uppercase transition-all ${activeTableTab() === 'TERMINAL' ? 'bg-fuchsia-500/20 text-fuchsia-500 border-b-2 border-fuchsia-500' : 'text-white/40 hover:text-white'}`}>PETRO TERMINALS</button>
+                </div>
+              </Show>
+
+              <div class="flex-1 overflow-y-auto win-scroll relative">
+                <Show when={view() === 'combined' && activeTableTab() === 'OVERVIEW'}>
+                  <table class="w-full text-left"><thead class="sticky top-0 bg-[#0f1d2e] z-10 border-b border-[#1e3a5f]"><tr class="text-[7px] text-white/40 uppercase tracking-widest"><th class="p-3">NATION / JURISDICTION</th><th class="p-3 text-right">ASSET COUNT</th><th class="p-3">DISTRIBUTION</th></tr></thead><tbody class="divide-y divide-white/5"><For each={combinedStats().countries}>{(agg) => (<tr onClick={() => { setSearchCountry(agg.name); setMarkerMode('ASSET'); setActiveTableTab('REFINERY'); mapInstance.fitBounds(agg.bounds, { padding: [30, 30], maxZoom: 8, animate: true }); }} class={`group cursor-pointer hover:bg-orange-500/5 ${searchCountry() === agg.name ? 'bg-orange-500/10 border-l-3 border-orange-500' : ''}`}><td class="p-2.5 text-[10px] font-black text-white uppercase group-hover:text-orange-500">{agg.name}</td><td class="p-2.5 text-[11px] font-black text-right text-orange-500">{agg.count}</td><td class="p-2.5"><div class="flex gap-1.5"><div class="flex items-center gap-0.5"><span class="w-1 h-1 rounded-full bg-orange-500"></span><span class="text-[7px] font-bold text-white/40">{agg.refs}</span></div><div class="flex items-center gap-0.5"><span class="w-1 h-1 rounded-full bg-cyan-500"></span><span class="text-[7px] font-bold text-white/40">{agg.lngs}</span></div><div class="flex items-center gap-0.5"><span class="w-1 h-1 rounded-full bg-rose-500"></span><span class="text-[7px] font-bold text-white/40">{agg.offs}</span></div><div class="flex items-center gap-0.5"><span class="w-1 h-1 rounded-full bg-fuchsia-500"></span><span class="text-[7px] font-bold text-white/40">{agg.terms}</span></div></div></td></tr>)}</For></tbody></table>
+                </Show>
+                <Show when={view() === 'fleet' || (view() === 'combined' && activeTableTab() === 'REFINERY')}>
+                  <table class="w-full text-left"><thead class="sticky top-0 bg-[#0f1d2e] z-10 border-b border-[#1e3a5f]"><tr class="text-[7px] text-white/40 uppercase tracking-widest"><th class="p-3">IDENTIFIER</th><th class="p-3">LOCATION</th><th class="p-3 text-right">CAPACITY</th><th class="p-3">SCALE</th></tr></thead><tbody class="divide-y divide-white/5"><For each={filteredRefineries()}>{(ref) => (<tr onClick={() => handleSelect(ref)} class={`group cursor-pointer hover:bg-orange-500/5 ${selectedId() === ref.id ? 'bg-orange-500/10 border-l-2 border-orange-500' : ''}`}><td class="p-2 text-[10px] font-black text-white uppercase">{ref.nama_kilang}</td><td class="p-2 text-[10px] font-bold text-[#f97316] uppercase">{ref.negara}</td><td class="p-2 text-[11px] font-black text-right text-green-500">{ref.capacity.toLocaleString()}</td><td class="p-2"><span class="px-1 text-[7px] font-black border" style={{ color: CATEGORY_CONFIG[ref.category].color, 'border-color': CATEGORY_CONFIG[ref.category].color + '30' }}>{ref.category.toUpperCase()}</span></td></tr>)}</For></tbody></table>
+                </Show>
+                <Show when={view() === 'lng' || (view() === 'combined' && activeTableTab() === 'LNG')}>
+                  <table class="w-full text-left"><thead class="sticky top-0 bg-[#0f1d2e] z-10 border-b border-[#1e3a5f]"><tr class="text-[7px] text-white/40 uppercase tracking-widest"><th class="p-3">LNG HUB IDENTIFIER</th><th class="p-3">LOCATION</th><th class="p-3">OPERATOR</th><th class="p-3">STATUS</th></tr></thead><tbody class="divide-y divide-white/5"><For each={filteredLng()}>{(lng) => (<tr onClick={() => handleSelect(lng)} class={`group cursor-pointer hover:bg-cyan-500/5 ${selectedLngId() === lng.id ? 'bg-cyan-500/10 border-l-2 border-cyan-500' : ''}`}><td class="p-2 text-[10px] font-black text-white uppercase">{lng.name}</td><td class="p-2 text-[10px] font-bold text-cyan-500 uppercase">{lng.country}</td><td class="p-2 text-[10px] font-bold text-white/40 uppercase">{lng.operator || 'N/A'}</td><td class="p-2"><span class="px-1 text-[7px] font-black border border-cyan-500/30 text-cyan-400 capitalize">{lng.fac_status}</span></td></tr>)}</For></tbody></table>
+                </Show>
+                <Show when={view() === 'offshore' || (view() === 'combined' && activeTableTab() === 'OFFSHORE')}>
+                  <table class="w-full text-left"><thead class="sticky top-0 bg-[#0f1d2e] z-10 border-b border-[#1e3a5f]"><tr class="text-[7px] text-white/40 uppercase tracking-widest"><th class="p-3">OFFSHORE PLATFORM</th><th class="p-3">LOCATION</th><th class="p-3">OPERATOR</th><th class="p-3">STATUS</th></tr></thead><tbody class="divide-y divide-white/5"><For each={filteredOffshore()}>{(off) => (<tr onClick={() => handleSelect(off)} class={`group cursor-pointer hover:bg-rose-500/5 ${selectedOffshoreId() === off.id ? 'bg-rose-500/10 border-l-2 border-rose-500' : ''}`}><td class="p-2 text-[10px] font-black text-white uppercase">{off.name}</td><td class="p-2 text-[10px] font-bold text-rose-500 uppercase">{off.country}</td><td class="p-2 text-[10px] font-bold text-white/40 uppercase">{off.operator || 'N/A'}</td><td class="p-2"><span class="px-1 text-[7px] font-black border border-rose-500/30 text-rose-400 capitalize">{off.fac_status}</span></td></tr>)}</For></tbody></table>
+                </Show>
+                <Show when={view() === 'terminal' || (view() === 'combined' && activeTableTab() === 'TERMINAL')}>
+                  <table class="w-full text-left"><thead class="sticky top-0 bg-[#0f1d2e] z-10 border-b border-[#1e3a5f]"><tr class="text-[7px] text-white/40 uppercase tracking-widest"><th class="p-3">TERMINAL HUB</th><th class="p-3">LOCATION</th><th class="p-3 text-right">CAPACITY</th><th class="p-3">STATUS</th></tr></thead><tbody class="divide-y divide-white/5"><For each={filteredTerminals()}>{(term) => (<tr onClick={() => handleSelect(term)} class={`group cursor-pointer hover:bg-fuchsia-500/5 ${selectedTerminalId() === term.id ? 'bg-fuchsia-500/10 border-l-2 border-fuchsia-500' : ''}`}><td class="p-2 text-[10px] font-black text-white uppercase">{term.name}</td><td class="p-2 text-[10px] font-bold text-fuchsia-500 uppercase">{term.country}</td><td class="p-2 text-[11px] font-black text-right text-white/60">{term.capacity.toLocaleString()}</td><td class="p-2 text-right"><span class="px-1 text-[7px] font-black border border-fuchsia-500/30 text-fuchsia-400 capitalize">{term.fac_status}</span></td></tr>)}</For></tbody></table>
+                </Show>
+                <Show when={view() === 'trades'}>
+                  <table class="w-full text-left"><thead class="sticky top-0 bg-[#0f1d2e] z-10 border-b border-[#1e3a5f]"><tr class="text-[7px] text-white/40 uppercase tracking-widest"><th class="p-3">ORIGIN NODE</th><th class="p-3">DESTINATION NODE</th><th class="p-3">CARGO GRADE</th><th class="p-3">FREQUENCY</th></tr></thead><tbody class="divide-y divide-white/5"><For each={filteredTrades()}>{(trade) => (<tr onClick={() => handleTradeSelect(trade)} class={`group cursor-pointer hover:bg-blue-500/5 ${selectedTrade() === trade ? 'bg-blue-500/10 border-l-2 border-blue-500' : ''}`}><td class="p-2 text-[10px] font-black text-white uppercase">{trade.origin_name}</td><td class="p-2 text-[10px] font-black text-white uppercase">{trade.destination_name}</td><td class="p-2 text-[10px] font-bold text-blue-400 uppercase">{trade.grade_name}</td><td class="p-2 text-[10px] font-bold text-white/30 uppercase">{trade.frequency}</td></tr>)}</For></tbody></table>
+                </Show>
+                <Show when={view() === 'accidents'}>
+                  <div class="flex-1 overflow-y-auto win-scroll">
+                    <table class="w-full text-left">
+                      <thead class="sticky top-0 bg-[#0f1d2e] z-10 border-b border-red-500/30">
+                        <tr class="text-[7px] text-white/40 uppercase tracking-widest">
+                          <th class="p-3">EVENT DATE</th>
+                          <th class="p-3">FACILITY</th>
+                          <th class="p-3">LOCATION</th>
+                          <th class="p-3">CAUSE / IMPACT</th>
+                          <th class="p-3">CASUALTIES</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-white/5">
+                        <For each={accidents()}>
+                          {(acc) => (
+                            <tr onClick={() => { if (acc.latitude) mapInstance.flyTo([acc.latitude, acc.longitude], 12); }} class="group cursor-pointer hover:bg-red-500/5 transition-colors">
+                              <td class="p-2.5 text-[9px] font-black text-white/60 whitespace-nowrap">{acc.event_date}</td>
+                              <td class="p-2.5">
+                                <div class="text-[10px] font-black text-white uppercase">{acc.facility_name}</div>
+                                <div class="text-[8px] text-white/30 uppercase">{acc.operator}</div>
+                              </td>
+                              <td class="p-2.5 text-[9px] font-bold text-red-500 uppercase">{acc.location}</td>
+                              <td class="p-2.5">
+                                <div class="text-[9px] font-bold text-white/80 line-clamp-1">{acc.cause}</div>
+                                <div class="text-[8px] text-white/40 line-clamp-1 italic">{acc.impact}</div>
+                              </td>
+                              <td class="p-2.5">
+                                <span class={`px-1.5 py-0.5 text-[8px] font-black rounded ${acc.casualties?.toLowerCase().includes('death') ? 'bg-red-500/20 text-red-500' : 'bg-white/5 text-white/40'}`}>
+                                  {acc.casualties || 'NONE REPORTED'}
+                                </span>
+                              </td>
+                            </tr>
+                          )}
+                        </For>
+                      </tbody>
+                    </table>
                   </div>
                 </Show>
               </div>
-
-               <Show when={(selectedRefinery() || selectedLng() || selectedOffshore() || selectedTerminal()) && (view() === 'combined' || view() === 'fleet' || view() === 'lng' || view() === 'offshore' || view() === 'terminal')}>
-                  <div class="absolute bottom-4 left-4 right-4 z-[1000] bg-[#0a1628]/95 border-l-4 border-orange-500 p-4 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 shadow-2xl flex justify-between items-center">
-                     <div>
-                        <div class="text-[9px] text-[#22d3ee] font-black uppercase tracking-[0.3em] mb-2 flex items-center gap-2">
-                           <span class="w-1.5 h-1.5 bg-[#22d3ee] animate-pulse"></span>
-                           ASSET IDENTIFIED: {selectedRefinery() ? 'REFINERY' : selectedLng() ? 'LNG HUB' : selectedOffshore() ? 'OFFSHORE PLATFORM' : 'PETROLEUM TERMINAL'}
-                        </div>
-                         <h2 class="text-20px font-black text-white uppercase leading-none tracking-tighter">{selectedRefinery()?.nama_kilang || selectedLng()?.name || selectedOffshore()?.name || selectedTerminal()?.name}</h2>
-                        <div class="flex gap-4 mt-2 text-[10px] font-bold uppercase tracking-widest text-white/50">
-                           <span class="text-[#f97316]">{selectedRefinery()?.negara || selectedLng()?.country || selectedOffshore()?.country || selectedTerminal()?.country}</span>
-                           <span class="border-l border-white/10 pl-4 uppercase">{(selectedRefinery()?.capacity || selectedLng()?.liq_capacity_bpd || selectedTerminal()?.liq_capacity_bpd || 0).toLocaleString()} {selectedRefinery() || selectedLng() || selectedTerminal() ? 'BPD' : ''}</span>
-                           <span class="border-l border-white/10 pl-4 text-green-500 uppercase">{selectedRefinery() ? 'OPERATIONAL' : (selectedLng() || selectedOffshore() || selectedTerminal())?.fac_status}</span>
-                        </div>
-                     </div>
-                     <button onClick={() => setShowDetail(true)} class="bg-orange-600 text-white px-8 py-3 text-[12px] font-black uppercase tracking-[0.2em] hover:bg-orange-500 transition-all shadow-[0_0_30px_rgba(234,88,12,0.4)] border border-orange-400/50">ANALYZE STRATEGIC ASSET</button>
-                  </div>
-               </Show>
             </div>
-
-            <div class="flex-1 flex overflow-hidden">
-               <div class="flex-1 flex flex-col bg-black/40">
-                 <div class="p-2.5 border-b border-[#1e3a5f] bg-white/2 flex items-center gap-3">
-                    <Show when={searchCountry() !== "" || activeTableTab() !== 'OVERVIEW'}>
-                       <button onClick={() => { setSearchCountry(""); setActiveTableTab('OVERVIEW'); setMarkerMode('COUNTRY'); mapInstance.flyTo([20, 0], 2); }} class="bg-orange-500/10 border border-orange-500/30 text-orange-500 text-[8px] font-black px-2 py-1 flex items-center gap-1.5 hover:bg-orange-500 hover:text-white transition-all group shrink-0">← GLOBAL OVERVIEW</button>
-                    </Show>
-                    <Show when={view() === 'fleet'}><input onInput={(e) => setSearchTerm(e.target.value)} type="text" placeholder="FILTER BY NAME..." class="bg-black/40 border border-white/10 px-2 py-1 text-[10px] text-white w-32" /><input onInput={(e) => setSearchCountry(e.target.value)} type="text" placeholder="FILTER BY COUNTRY..." class="bg-black/40 border border-white/10 px-2 py-1 text-[10px] text-white w-32" /></Show>
-                    <Show when={view() === 'lng'}><input onInput={(e) => setSearchTerm(e.target.value)} type="text" placeholder="FILTER BY TERMINAL..." class="bg-black/40 border border-cyan-500/30 px-2 py-1 text-[10px] text-white w-64" /></Show>
-                    <Show when={view() === 'offshore'}><input onInput={(e) => setSearchTerm(e.target.value)} type="text" placeholder="FILTER BY PLATFORM..." class="bg-black/40 border border-rose-500/30 px-2 py-1 text-[10px] text-white w-64" /></Show>
-                    <Show when={view() === 'terminal'}><input onInput={(e) => setSearchTerm(e.target.value)} type="text" placeholder="FILTER BY TERMINAL..." class="bg-black/40 border border-fuchsia-500/30 px-2 py-1 text-[10px] text-white w-64" /></Show>
-                    <Show when={view() === 'trades'}><input onInput={(e) => setTradeSearch(e.target.value)} type="text" placeholder="SEARCH TRADE LANES..." class="bg-black/40 border border-blue-500/30 px-2 py-1 text-[10px] text-white w-64" /></Show>
-                    <div class="ml-auto text-[8px] font-black text-white/30 uppercase tracking-widest">
-                       TOTAL: { 
-                         view() === 'trades' ? filteredTrades().length :
-                         activeTableTab() === 'OVERVIEW' ? combinedStats().countries.length : 
-                         activeTableTab() === 'REFINERY' ? filteredRefineries().length :
-                         activeTableTab() === 'LNG' ? filteredLng().length :
-                         activeTableTab() === 'OFFSHORE' ? filteredOffshore().length :
-                         activeTableTab() === 'TERMINAL' ? filteredTerminals().length : 0
-                       } RECORDS
-                    </div>
-                 </div>
-                 
-                 <Show when={view() === 'combined'}>
-                    <div class="flex border-b border-[#1e3a5f] bg-black/20">
-                      <button onClick={() => { setActiveTableTab('OVERVIEW'); setMarkerMode('COUNTRY'); setSearchCountry(""); }} class={`flex-1 py-1.5 text-[8px] font-black uppercase transition-all ${activeTableTab() === 'OVERVIEW' ? 'bg-orange-500/20 text-orange-500 border-b-2 border-orange-500' : 'text-white/40 hover:text-white'}`}>OVERVIEW</button>
-                      <button onClick={() => { setActiveTableTab('REFINERY'); setMarkerMode('ASSET'); }} class={`flex-1 py-1.5 text-[8px] font-black uppercase transition-all ${activeTableTab() === 'REFINERY' ? 'bg-orange-500/20 text-orange-500 border-b-2 border-orange-500' : 'text-white/40 hover:text-white'}`}>REFINERIES</button>
-                      <button onClick={() => { setActiveTableTab('LNG'); setMarkerMode('ASSET'); }} class={`flex-1 py-1.5 text-[8px] font-black uppercase transition-all ${activeTableTab() === 'LNG' ? 'bg-cyan-500/20 text-cyan-500 border-b-2 border-cyan-500' : 'text-white/40 hover:text-white'}`}>LNG TERMINALS</button>
-                      <button onClick={() => { setActiveTableTab('OFFSHORE'); setMarkerMode('ASSET'); }} class={`flex-1 py-1.5 text-[8px] font-black uppercase transition-all ${activeTableTab() === 'OFFSHORE' ? 'bg-rose-500/20 text-rose-500 border-b-2 border-rose-500' : 'text-white/40 hover:text-white'}`}>OFFSHORE OPS</button>
-                      <button onClick={() => { setActiveTableTab('TERMINAL'); setMarkerMode('ASSET'); }} class={`flex-1 py-1.5 text-[8px] font-black uppercase transition-all ${activeTableTab() === 'TERMINAL' ? 'bg-fuchsia-500/20 text-fuchsia-500 border-b-2 border-fuchsia-500' : 'text-white/40 hover:text-white'}`}>PETRO TERMINALS</button>
-                    </div>
-                 </Show>
-
-                 <div class="flex-1 overflow-y-auto win-scroll relative">
-                    <Show when={view() === 'combined' && activeTableTab() === 'OVERVIEW'}>
-                       <table class="w-full text-left"><thead class="sticky top-0 bg-[#0f1d2e] z-10 border-b border-[#1e3a5f]"><tr class="text-[7px] text-white/40 uppercase tracking-widest"><th class="p-3">NATION / JURISDICTION</th><th class="p-3 text-right">ASSET COUNT</th><th class="p-3">DISTRIBUTION</th></tr></thead><tbody class="divide-y divide-white/5"><For each={combinedStats().countries}>{(agg) => (<tr onClick={() => { setSearchCountry(agg.name); setMarkerMode('ASSET'); setActiveTableTab('REFINERY'); mapInstance.fitBounds(agg.bounds, { padding: [30, 30], maxZoom: 8, animate: true }); }} class={`group cursor-pointer hover:bg-orange-500/5 ${searchCountry() === agg.name ? 'bg-orange-500/10 border-l-3 border-orange-500' : ''}`}><td class="p-2.5 text-[10px] font-black text-white uppercase group-hover:text-orange-500">{agg.name}</td><td class="p-2.5 text-[11px] font-black text-right text-orange-500">{agg.count}</td><td class="p-2.5"><div class="flex gap-1.5"><div class="flex items-center gap-0.5"><span class="w-1 h-1 rounded-full bg-orange-500"></span><span class="text-[7px] font-bold text-white/40">{agg.refs}</span></div><div class="flex items-center gap-0.5"><span class="w-1 h-1 rounded-full bg-cyan-500"></span><span class="text-[7px] font-bold text-white/40">{agg.lngs}</span></div><div class="flex items-center gap-0.5"><span class="w-1 h-1 rounded-full bg-rose-500"></span><span class="text-[7px] font-bold text-white/40">{agg.offs}</span></div><div class="flex items-center gap-0.5"><span class="w-1 h-1 rounded-full bg-fuchsia-500"></span><span class="text-[7px] font-bold text-white/40">{agg.terms}</span></div></div></td></tr>)}</For></tbody></table>
-                    </Show>
-                    <Show when={view() === 'fleet' || (view() === 'combined' && activeTableTab() === 'REFINERY')}>
-                       <table class="w-full text-left"><thead class="sticky top-0 bg-[#0f1d2e] z-10 border-b border-[#1e3a5f]"><tr class="text-[7px] text-white/40 uppercase tracking-widest"><th class="p-3">IDENTIFIER</th><th class="p-3">LOCATION</th><th class="p-3 text-right">CAPACITY</th><th class="p-3">SCALE</th></tr></thead><tbody class="divide-y divide-white/5"><For each={filteredRefineries()}>{(ref) => (<tr onClick={() => handleSelect(ref)} class={`group cursor-pointer hover:bg-orange-500/5 ${selectedId() === ref.id ? 'bg-orange-500/10 border-l-2 border-orange-500' : ''}`}><td class="p-2 text-[10px] font-black text-white uppercase">{ref.nama_kilang}</td><td class="p-2 text-[10px] font-bold text-[#f97316] uppercase">{ref.negara}</td><td class="p-2 text-[11px] font-black text-right text-green-500">{ref.capacity.toLocaleString()}</td><td class="p-2"><span class="px-1 text-[7px] font-black border" style={{ color: CATEGORY_CONFIG[ref.category].color, 'border-color': CATEGORY_CONFIG[ref.category].color+'30' }}>{ref.category.toUpperCase()}</span></td></tr>)}</For></tbody></table>
-                    </Show>
-                    <Show when={view() === 'lng' || (view() === 'combined' && activeTableTab() === 'LNG')}>
-                       <table class="w-full text-left"><thead class="sticky top-0 bg-[#0f1d2e] z-10 border-b border-[#1e3a5f]"><tr class="text-[7px] text-white/40 uppercase tracking-widest"><th class="p-3">LNG HUB IDENTIFIER</th><th class="p-3">LOCATION</th><th class="p-3">OPERATOR</th><th class="p-3">STATUS</th></tr></thead><tbody class="divide-y divide-white/5"><For each={filteredLng()}>{(lng) => (<tr onClick={() => handleSelect(lng)} class={`group cursor-pointer hover:bg-cyan-500/5 ${selectedLngId() === lng.id ? 'bg-cyan-500/10 border-l-2 border-cyan-500' : ''}`}><td class="p-2 text-[10px] font-black text-white uppercase">{lng.name}</td><td class="p-2 text-[10px] font-bold text-cyan-500 uppercase">{lng.country}</td><td class="p-2 text-[10px] font-bold text-white/40 uppercase">{lng.operator || 'N/A'}</td><td class="p-2"><span class="px-1 text-[7px] font-black border border-cyan-500/30 text-cyan-400 capitalize">{lng.fac_status}</span></td></tr>)}</For></tbody></table>
-                    </Show>
-                    <Show when={view() === 'offshore' || (view() === 'combined' && activeTableTab() === 'OFFSHORE')}>
-                       <table class="w-full text-left"><thead class="sticky top-0 bg-[#0f1d2e] z-10 border-b border-[#1e3a5f]"><tr class="text-[7px] text-white/40 uppercase tracking-widest"><th class="p-3">OFFSHORE PLATFORM</th><th class="p-3">LOCATION</th><th class="p-3">OPERATOR</th><th class="p-3">STATUS</th></tr></thead><tbody class="divide-y divide-white/5"><For each={filteredOffshore()}>{(off) => (<tr onClick={() => handleSelect(off)} class={`group cursor-pointer hover:bg-rose-500/5 ${selectedOffshoreId() === off.id ? 'bg-rose-500/10 border-l-2 border-rose-500' : ''}`}><td class="p-2 text-[10px] font-black text-white uppercase">{off.name}</td><td class="p-2 text-[10px] font-bold text-rose-500 uppercase">{off.country}</td><td class="p-2 text-[10px] font-bold text-white/40 uppercase">{off.operator || 'N/A'}</td><td class="p-2"><span class="px-1 text-[7px] font-black border border-rose-500/30 text-rose-400 capitalize">{off.fac_status}</span></td></tr>)}</For></tbody></table>
-                    </Show>
-                    <Show when={view() === 'terminal' || (view() === 'combined' && activeTableTab() === 'TERMINAL')}>
-                       <table class="w-full text-left"><thead class="sticky top-0 bg-[#0f1d2e] z-10 border-b border-[#1e3a5f]"><tr class="text-[7px] text-white/40 uppercase tracking-widest"><th class="p-3">TERMINAL HUB</th><th class="p-3">LOCATION</th><th class="p-3 text-right">CAPACITY</th><th class="p-3">STATUS</th></tr></thead><tbody class="divide-y divide-white/5"><For each={filteredTerminals()}>{(term) => (<tr onClick={() => handleSelect(term)} class={`group cursor-pointer hover:bg-fuchsia-500/5 ${selectedTerminalId() === term.id ? 'bg-fuchsia-500/10 border-l-2 border-fuchsia-500' : ''}`}><td class="p-2 text-[10px] font-black text-white uppercase">{term.name}</td><td class="p-2 text-[10px] font-bold text-fuchsia-500 uppercase">{term.country}</td><td class="p-2 text-[11px] font-black text-right text-white/60">{term.capacity.toLocaleString()}</td><td class="p-2 text-right"><span class="px-1 text-[7px] font-black border border-fuchsia-500/30 text-fuchsia-400 capitalize">{term.fac_status}</span></td></tr>)}</For></tbody></table>
-                    </Show>
-                    <Show when={view() === 'trades'}>
-                       <table class="w-full text-left"><thead class="sticky top-0 bg-[#0f1d2e] z-10 border-b border-[#1e3a5f]"><tr class="text-[7px] text-white/40 uppercase tracking-widest"><th class="p-3">ORIGIN NODE</th><th class="p-3">DESTINATION NODE</th><th class="p-3">CARGO GRADE</th><th class="p-3">FREQUENCY</th></tr></thead><tbody class="divide-y divide-white/5"><For each={filteredTrades()}>{(trade) => (<tr onClick={() => handleTradeSelect(trade)} class={`group cursor-pointer hover:bg-blue-500/5 ${selectedTrade() === trade ? 'bg-blue-500/10 border-l-2 border-blue-500' : ''}`}><td class="p-2 text-[10px] font-black text-white uppercase">{trade.origin_name}</td><td class="p-2 text-[10px] font-black text-white uppercase">{trade.destination_name}</td><td class="p-2 text-[10px] font-bold text-blue-400 uppercase">{trade.grade_name}</td><td class="p-2 text-[10px] font-bold text-white/30 uppercase">{trade.frequency}</td></tr>)}</For></tbody></table>
-                    </Show>
-                 </div>
-               </div>
-            </div>
+          </div>
         </div>
 
         <div class={`flex-1 overflow-y-auto win-scroll bg-[#050b14] p-12 ${view() !== 'report' ? 'hidden' : ''}`}>
-           {/* REPORT CONTENT ... */}
+          {/* REPORT CONTENT ... */}
         </div>
 
-        <StrategicAssetDetail 
-           showDetail={showDetail}
-           setShowDetail={setShowDetail}
-           selectedRefinery={selectedRefinery}
-           selectedLng={selectedLng}
-           selectedOffshore={selectedOffshore}
-           selectedTerminal={selectedTerminal}
-           setSelectedId={setSelectedId}
-           setSelectedLngId={setSelectedLngId}
-           setSelectedOffshoreId={setSelectedOffshoreId}
-           setSelectedTerminalId={setSelectedTerminalId}
-           selectionLayer={selectionLayer}
-           detailTab={detailTab}
-           setDetailTab={setDetailTab}
-           news={news}
-           loadingNews={loadingNews}
-           refIntel={refIntel}
-           getUtilStatus={getUtilStatus}
+        <StrategicAssetDetail
+          showDetail={showDetail}
+          setShowDetail={setShowDetail}
+          selectedRefinery={selectedRefinery}
+          selectedLng={selectedLng}
+          selectedOffshore={selectedOffshore}
+          selectedTerminal={selectedTerminal}
+          setSelectedId={setSelectedId}
+          setSelectedLngId={setSelectedLngId}
+          setSelectedOffshoreId={setSelectedOffshoreId}
+          setSelectedTerminalId={setSelectedTerminalId}
+          selectionLayer={selectionLayer}
+          detailTab={detailTab}
+          setDetailTab={setDetailTab}
+          news={news}
+          loadingNews={loadingNews}
+          refIntel={refIntel}
+          getUtilStatus={getUtilStatus}
         />
       </div>
     </div>

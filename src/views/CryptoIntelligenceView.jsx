@@ -689,7 +689,7 @@ export default function CryptoIntelligenceView(props) {
 
               <div class="grid grid-cols-12 gap-6">
                  {/* LIQUIDITY HEATMAP (Institutional Class) */}
-                 <div class="col-span-12 h-[350px]">
+                 <div class="col-span-12 h-[450px]">
                    <LiquidityHeatmap symbol={selectedSymbol()} />
                  </div>
               </div>

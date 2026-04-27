@@ -546,10 +546,7 @@ const EntityAnalysisView = (props) => {
                 { url: `${import.meta.env.VITE_API_BASE}/api/news/search?q=${encodeURIComponent(companyName)}`, key: 'results' },
                 { url: `${import.meta.env.VITE_GNEWS_API}/api/gnews/search?q=${encodeURIComponent(symbol)}`, key: 'news' },
                 { url: `${import.meta.env.VITE_GNEWS_API}/api/gnews/search?q=${encodeURIComponent(companyName)}`, key: 'news' }
-            ].map(src => ({
-                ...src,
-                url: src.url.replace('https://api.asetpedia.online', '/api-proxy')
-            }));
+            ];
 
             let pending = fetchSources.length;
             fetchSources.forEach(src => {

@@ -407,94 +407,89 @@ export default function AlertCenterView() {
 
         {/* ── VESSEL ANOMALIES ── */}
         <Show when={tab() === 'ANOMALY'}>
-            <VesselAnomalyTab />
+          <VesselAnomalyTab />
         </Show>
       </div>
 
       {/* ── FOOTER ── */}
-      <div class="h-8 border-t border-border_main bg-bg_header/30 flex items-center px-6 justify-between shrink-0">
-        <span class="text-[8px] text-text_secondary/30 tracking-widest">
-          PRICE UPDATE: 30S // KEYWORD MATCH: REALTIME // STORAGE: LOCAL
-        </span>
-        <span class="text-[8px] font-black text-yellow-400/20 italic tracking-widest">ENQY TERMINAL // ALERT SYSTEM</span>
-      </div>
+
     </div>
   );
 }
 
 function VesselAnomalyTab() {
-    const [anomalies, setAnomalies] = createSignal([]);
-    const [loading, setLoading] = createSignal(true);
+  const [anomalies, setAnomalies] = createSignal([]);
+  const [loading, setLoading] = createSignal(true);
 
-    const fetchAnomalies = async () => {
-        try {
-            const resp = await fetch(`${VESSEL_INTEL_API}/api/intelligence/anomalies`);
-            const data = await resp.json();
-            if (data.anomalies) setAnomalies(data.anomalies);
-        } catch (err) {
-            console.error("Vessel Anomaly Error", err);
-        } finally {
-            setLoading(false);
-        }
-    };
+  const fetchAnomalies = async () => {
+    try {
+      const resp = await fetch(`${VESSEL_INTEL_API}/intelligence/anomalies`);
+      const data = await resp.json();
+      if (data.anomalies) setAnomalies(data.anomalies);
+    } catch (err) {
+      console.error("Vessel Anomaly Error", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    onMount(() => {
-        fetchAnomalies();
-        const itv = setInterval(fetchAnomalies, 300000); // 5 minutes
-        onCleanup(() => clearInterval(itv));
-    });
+  onMount(() => {
+    fetchAnomalies();
+    const itv = setInterval(fetchAnomalies, 300000); // 5 minutes
+    onCleanup(() => clearInterval(itv));
+  });
 
-    return (
-        <div class="flex-1 flex overflow-hidden">
-            <div class="flex-1 overflow-auto p-4 space-y-2 win-scroll">
-                <Show when={loading() && anomalies().length === 0}>
-                    <div class="flex flex-col items-center justify-center gap-4 opacity-20 p-20">
-                        <div class="w-8 h-8 border-2 border-text_accent border-t-transparent animate-spin rounded-full"></div>
-                        <div class="text-[12px] font-black tracking-[0.5em]">SCANNING FOR ANOMALIES</div>
-                    </div>
-                </Show>
-                <Show when={!loading() && anomalies().length === 0}>
-                    <div class="flex flex-col items-center justify-center gap-4 opacity-20 p-20">
-                        <div class="text-[40px]">🚢</div>
-                        <div class="text-[12px] font-black tracking-[0.5em]">NO ANOMALIES DETECTED</div>
-                        <div class="text-[9px] tracking-widest text-text_secondary">Supply chain network operating normally</div>
-                    </div>
-                </Show>
-                <For each={anomalies()}>
-                    {(ano) => (
-                        <div class="p-4 border border-red-500/20 bg-red-900/10 flex flex-col gap-2 hover:bg-red-900/20 transition-all">
-                            <div class="flex justify-between items-start">
-                                <span class="text-[12px] font-black text-white">{ano.vessel_name} <span class="text-text_secondary/50">(MMSI: {ano.mmsi})</span></span>
-                                <span class="text-[9px] font-black text-red-500 px-2 py-0.5 border border-red-500/50 bg-red-500/10 uppercase tracking-widest">{ano.type}</span>
-                            </div>
-                            <span class="text-[10px] text-text_secondary leading-relaxed">{ano.details}</span>
-                            <div class="flex justify-between mt-2 pt-2 border-t border-red-500/10">
-                                <span class="text-[8px] font-black text-red-400/50 tracking-widest">Confidence: {ano.confidence * 100}%</span>
-                                <span class="text-[8px] font-black text-text_secondary/40">{new Date(ano.timestamp).toLocaleString()}</span>
-                            </div>
-                        </div>
-                    )}
-                </For>
+  return (
+    <div class="flex-1 flex overflow-hidden">
+      <div class="flex-1 overflow-auto p-4 space-y-2 win-scroll">
+        <Show when={loading() && anomalies().length === 0}>
+          <div class="flex flex-col items-center justify-center gap-4 opacity-20 p-20">
+            <div class="w-8 h-8 border-2 border-text_accent border-t-transparent animate-spin rounded-full"></div>
+            <div class="text-[12px] font-black tracking-[0.5em]">SCANNING FOR ANOMALIES</div>
+          </div>
+        </Show>
+        <Show when={!loading() && anomalies().length === 0}>
+          <div class="flex flex-col items-center justify-center gap-4 opacity-20 p-20">
+            <div class="text-[40px]">🚢</div>
+            <div class="text-[12px] font-black tracking-[0.5em]">NO ANOMALIES DETECTED</div>
+            <div class="text-[9px] tracking-widest text-text_secondary">Supply chain network operating normally</div>
+          </div>
+        </Show>
+        <For each={anomalies()}>
+          {(ano) => (
+            <div class="p-4 border border-red-500/20 bg-red-900/10 flex flex-col gap-2 hover:bg-red-900/20 transition-all">
+              <div class="flex justify-between items-start">
+                <span class="text-[12px] font-black text-white">{ano.vessel_name} <span class="text-text_secondary/50">(MMSI: {ano.mmsi})</span></span>
+                <span class="text-[9px] font-black text-red-500 px-2 py-0.5 border border-red-500/50 bg-red-500/10 uppercase tracking-widest">{ano.type}</span>
+              </div>
+              <span class="text-[10px] text-text_secondary leading-relaxed">{ano.details}</span>
+              <div class="flex justify-between mt-2 pt-2 border-t border-red-500/10">
+                <span class="text-[8px] font-black text-red-400/50 tracking-widest">Confidence: {ano.confidence * 100}%</span>
+                <span class="text-[8px] font-black text-text_secondary/40">{new Date(ano.timestamp).toLocaleString()}</span>
+              </div>
             </div>
-            {/* Sidebar */}
-            <div class="w-72 border-l border-border_main flex flex-col bg-bg_sidebar/20 shrink-0">
-                <div class="px-4 py-3 border-b border-border_main text-[8px] font-black text-text_accent/50 tracking-widest">ANOMALY ENGINE STATUS</div>
-                <div class="p-4 flex flex-col gap-3">
-                    <div class="text-[8px] text-text_secondary/40 leading-relaxed">
-                        Automatic detection of dark vessels, irregular routing, and anomalous supply chain behavior.
-                    </div>
-                    <div class="mt-4 flex flex-col gap-2">
-                        <div class="flex justify-between items-center text-[9px] font-black">
-                            <span class="text-text_secondary/50">Poll Interval</span>
-                            <span class="text-text_accent">5 Minutes</span>
-                        </div>
-                        <div class="flex justify-between items-center text-[9px] font-black">
-                            <span class="text-text_secondary/50">Data Source</span>
-                            <span class="text-text_accent">Vessel Intel Service</span>
-                        </div>
-                    </div>
-                </div>
+          )}
+        </For>
+      </div>
+      {/* Sidebar */}
+      <div class="w-72 border-l border-border_main flex flex-col bg-bg_sidebar/20 shrink-0">
+        <div class="px-4 py-3 border-b border-border_main text-[8px] font-black text-text_accent/50 tracking-widest">ANOMALY ENGINE STATUS</div>
+        <div class="p-4 flex flex-col gap-3">
+          <div class="text-[8px] text-text_secondary/40 leading-relaxed">
+            Automatic detection of dark vessels, irregular routing, and anomalous supply chain behavior.
+          </div>
+          <div class="mt-4 flex flex-col gap-2">
+            <div class="flex justify-between items-center text-[9px] font-black">
+              <span class="text-text_secondary/50">Poll Interval</span>
+              <span class="text-text_accent">5 Minutes</span>
             </div>
+            <div class="flex justify-between items-center text-[9px] font-black">
+              <span class="text-text_secondary/50">Data Source</span>
+              <span class="text-text_accent">Vessel Intel Service</span>
+            </div>
+          </div>
         </div>
-    );
+      </div>
+    </div>
+  );
 }

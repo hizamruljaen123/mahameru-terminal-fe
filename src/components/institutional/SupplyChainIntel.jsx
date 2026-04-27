@@ -11,17 +11,17 @@ export default function SupplyChainIntel(props) {
         try {
             // Using default backend port 8100 as per python file, mapped via env in production
             const API_BASE = import.meta.env.VITE_VESSEL_INTEL_API || 'http://localhost:8100';
-            
+
             const [invRes, anomRes] = await Promise.all([
-                fetch(`${API_BASE}/api/intelligence/inventory-model`),
-                fetch(`${API_BASE}/api/intelligence/anomalies`)
+                fetch(`${API_BASE}/intelligence/inventory-model`),
+                fetch(`${API_BASE}/intelligence/anomalies`)
             ]);
-            
+
             if (invRes.ok && anomRes.ok) {
                 setInvData(await invRes.json());
                 setAnomData(await anomRes.json());
             } else {
-                setError('Failed to fetch intelligence data');
+                setError('No Data Yet');
             }
         } catch (err) {
             setError('Connection to Vessel Intel Node failed.');
@@ -50,7 +50,7 @@ export default function SupplyChainIntel(props) {
 
             <Show when={!loading()} fallback={<div class="flex-1 flex flex-col items-center justify-center text-[10px] animate-pulse text-text_secondary gap-2"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg><span>TRACKING VESSELS...</span></div>}>
                 <Show when={!error()} fallback={<div class="flex-1 flex items-center justify-center text-[10px] text-red-500">{error()}</div>}>
-                    
+
                     {/* Top Stats */}
                     <div class="flex gap-2 mb-4">
                         <div class="flex-1 bg-black/30 border border-white/5 p-3 rounded flex flex-col items-center">
@@ -78,7 +78,7 @@ export default function SupplyChainIntel(props) {
                                             <div class="flex flex-col items-end">
                                                 <span class="text-[11px] font-mono text-text_accent font-bold">{hub.estimated_mbbl?.toFixed(1)} MBBL</span>
                                                 <div class="flex gap-1 mt-1">
-                                                    <For each={Array(Math.min(5, Math.max(1, Math.ceil(hub.vessel_count/5))))}>
+                                                    <For each={Array(Math.min(5, Math.max(1, Math.ceil(hub.vessel_count / 5))))}>
                                                         {() => <div class="w-1 h-2 bg-text_accent opacity-60 rounded-sm"></div>}
                                                     </For>
                                                 </div>
@@ -88,7 +88,7 @@ export default function SupplyChainIntel(props) {
                                 </For>
                             </div>
                         </div>
-                        
+
                         {/* Anomalies List */}
                         <Show when={anomData()?.anomalies?.count > 0}>
                             <div>

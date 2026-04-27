@@ -515,9 +515,10 @@ export function useMapController(state) {
         });
         resizeObserver.observe(el);
 
-        // FIX: Production CSP blocks blob: workers. Use CDN CSP-compliant worker.
+        // FIX: Production CSP blocks blob: workers. Use CDN CSP-compliant worker matching the version in index.html (4.1.2)
         if (window.maplibregl) {
-            window.maplibregl.workerUrl = 'https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl-csp-worker.js';
+            console.log("[MAP] Setting CSP-compliant worker URL for MapLibre 4.1.2");
+            window.maplibregl.workerUrl = 'https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl-csp-worker.js';
         }
 
         mapInstance = new window.maplibregl.Map({
