@@ -122,6 +122,7 @@ function App() {
         const parsed = JSON.parse(event.data);
         if (parsed.status) setStatus(parsed.status);
         if (parsed.news) mergeData(parsed.news);
+        if (parsed.updates) mergeData(parsed.updates);
       };
 
       eventSource.onerror = (err) => {

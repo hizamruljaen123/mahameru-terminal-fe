@@ -6,7 +6,7 @@ import EntityAdvancedView from '../components/EntityAdvancedView';
 import EntityFullReport from '../components/EntityFullReport';
 import TechnicalAnalysisPanel from '../components/TechnicalAnalysisPanel';
 import IndexAnalysisView from './IndexAnalysisView';
-import MarketDashboard from '../components/MarketDashboard';
+import MarketDashboard, { MarketHoursHeatmap } from '../components/MarketDashboard';
 
 // --- SHARED COMPONENTS ---
 
@@ -655,52 +655,19 @@ const EntityAnalysisView = (props) => {
             {/* View Switching Logic */}
             <Show when={!selectedEntity()}>
                 <div class="space-y-10 animate-in fade-in zoom-in-95 duration-700">
-                    {/* 1. Global Indices High-Density Cluster */}
+                    {/* 1. Global Indices High-Density Heatmap */}
                     <div class="space-y-4">
                         <div class="flex items-center gap-4">
                             <div class="h-px bg-border_main flex-1"></div>
                             <h2 class="text-[10px] font-black text-text_accent uppercase tracking-[0.5em] whitespace-nowrap">GLOBAL INDICES</h2>
                             <div class="h-px bg-border_main flex-1"></div>
                         </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-                            <For each={marketIndices()}>
-                                {(category) => (
-                                    <div class="bg-bg_header border border-border_main rounded overflow-hidden flex flex-col shadow-lg hover:border-text_accent/30 transition-colors">
-                                        <div class="bg-bg_main/50 px-3 py-1.5 border-b border-border_main flex justify-between items-center">
-                                            <span class="text-[8px] font-black text-text_secondary opacity-60 uppercase">{category.category}</span>
-                                        </div>
-                                        <div class="overflow-y-auto max-h-[220px] scrollbar-hide">
-                                            <table class="w-full text-left text-[9px]">
-                                                <tbody class="divide-y divide-border_main/10 font-mono">
-                                                    <For each={category.data.slice(0, 5)}>
-                                                        {(row) => (
-                                                            <tr
-                                                                onClick={() => { selectEntity(row.symbol); setActiveTab('profile'); }}
-                                                                class="hover:bg-bg_main/60 cursor-pointer group/row transition-colors"
-                                                            >
-                                                                <td class="p-2 pl-3">
-                                                                    <div class="flex items-center gap-2">
-                                                                        <img src={`https://flagcdn.com/w20/${row.country.toLowerCase()}.png`} width="12" class="opacity-80 group-hover/row:opacity-100" />
-                                                                        <span class={`whitespace-normal font-bold ${row.name.includes('IDX') ? 'text-blue-400' : 'text-text_primary'}`}>{row.name}</span>
-                                                                    </div>
-                                                                </td>
-                                                                <td class="p-2 text-right">
-                                                                    <div class="flex flex-col items-end">
-                                                                        <span class="font-black text-text_primary/80">{row.close?.toFixed(0)}</span>
-                                                                        <span class={`text-[7px] font-black ${row.change_pct >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                                                                            {row.change_pct >= 0 ? '+' : ''}{row.change_pct?.toFixed(2)}%
-                                                                        </span>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        )}
-                                                    </For>
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                )}
-                            </For>
+                        <div class="border border-border_main bg-bg_header/30 rounded">
+                            <MarketHoursHeatmap 
+                                currentTime={() => new Date()} 
+                                noScroll={true} 
+                                onSelect={(ticker) => { selectEntity(ticker); setActiveTab('profile'); }}
+                            />
                         </div>
                     </div>
 

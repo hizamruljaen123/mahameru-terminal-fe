@@ -1,4 +1,4 @@
-import { createSignal, onMount, For, Show, createEffect } from 'solid-js';
+import { createSignal, onMount, For, Show, Switch, Match, createEffect } from 'solid-js';
 import * as echarts from 'echarts';
 
 
@@ -212,7 +212,226 @@ function IndustryHeatmap(props) {
   return <div ref={chartRef} class="w-full h-full" />;
 }
 
+// --- WORLD MARKET HOURS & GLOBAL INDICES HEATMAP ---
+export function MarketHoursHeatmap(props) {
+  const [indicesData, setIndicesData] = createSignal({});
+
+  const GLOBAL_INDICES_CONFIG = [
+    {
+      region: 'ASIA PASIFIK & AUSTRALIA',
+      items: [
+        { name: 'IDX Composite', ticker: '^JKSE', zone: 'Asia/Jakarta', open: '09:00', close: '16:00', defaultPrice: 7072, defaultChange: -0.48 },
+        { name: 'STI Index - Singapore', ticker: '^STI', zone: 'Asia/Singapore', open: '09:00', close: '17:00', defaultPrice: 4888, defaultChange: -0.10 },
+        { name: 'FTSE Bursa Malaysia KLCI', ticker: '^KLSE', zone: 'Asia/Kuala_Lumpur', open: '09:00', close: '17:00', defaultPrice: 1730, defaultChange: 0.72 },
+        { name: 'PSEi Index - Philippines', ticker: '^PSEI', zone: 'Asia/Manila', open: '09:30', close: '15:30', defaultPrice: 5867, defaultChange: -0.58 },
+        { name: 'Nikkei 225', ticker: '^N225', zone: 'Asia/Tokyo', open: '09:00', close: '15:00', defaultPrice: 59917, defaultChange: -1.02 },
+        { name: 'Hang Seng Index', ticker: '^HSI', zone: 'Asia/Hong_Kong', open: '09:30', close: '16:00', defaultPrice: 25680, defaultChange: -0.95 },
+        { name: 'KOSPI Composite', ticker: '^KS11', zone: 'Asia/Seoul', open: '09:00', close: '15:30', defaultPrice: 6641, defaultChange: 0.39 },
+        { name: 'SSE Composite - Shanghai', ticker: '000001.SS', zone: 'Asia/Shanghai', open: '09:30', close: '15:00', defaultPrice: 4079, defaultChange: -0.19 },
+        { name: 'S&P BSE Sensex', ticker: '^BSESN', zone: 'Asia/Kolkata', open: '09:15', close: '15:30', defaultPrice: 76887, defaultChange: -0.54 }
+      ]
+    },
+    {
+      region: 'AMERIKA SERIKAT',
+      items: [
+        { name: 'S&P 500', ticker: '^GSPC', zone: 'America/New_York', open: '09:30', close: '16:00', defaultPrice: 7129, defaultChange: -0.13 },
+        { name: 'Dow Jones Industrial Average', ticker: '^DJI', zone: 'America/New_York', open: '09:30', close: '16:00', defaultPrice: 48849, defaultChange: -0.60 },
+        { name: 'NASDAQ Composite', ticker: '^IXIC', zone: 'America/New_York', open: '09:30', close: '16:00', defaultPrice: 24642, defaultChange: -0.09 },
+        { name: 'Russell 2000', ticker: '^RUT', zone: 'America/New_York', open: '09:30', close: '16:00', defaultPrice: 2737, defaultChange: -0.71 }
+      ]
+    },
+    {
+      region: 'EROPA',
+      items: [
+        { name: 'FTSE 100', ticker: '^FTSE', zone: 'Europe/London', open: '08:00', close: '16:30', defaultPrice: 10213, defaultChange: -1.16 },
+        { name: 'DAX PERFORMANCE-INDEX', ticker: '^GDAXI', zone: 'Europe/Berlin', open: '09:00', close: '17:30', defaultPrice: 23955, defaultChange: -0.27 },
+        { name: 'CAC 40', ticker: '^FCHI', zone: 'Europe/Paris', open: '09:00', close: '17:30', defaultPrice: 8072, defaultChange: -0.39 },
+        { name: 'ESTX 50 PR.EUR', ticker: '^STOXX50E', zone: 'Europe/Paris', open: '09:00', close: '17:30', defaultPrice: 5816, defaultChange: -0.34 },
+        { name: 'Euronext 100 Index', ticker: '^N100', zone: 'Europe/Paris', open: '09:00', close: '17:30', defaultPrice: 1782, defaultChange: -0.23 }
+      ]
+    },
+    {
+      region: 'GLOBAL / LAINNYA',
+      items: [
+        { name: 'NYSE Composite (DJ)', ticker: '^NYA', zone: 'America/New_York', open: '09:30', close: '16:00', defaultPrice: 22746, defaultChange: -0.39 },
+        { name: 'NYSE AMEX COMPOSITE INDEX', ticker: '^XAX', zone: 'America/New_York', open: '09:30', close: '16:00', defaultPrice: 8927, defaultChange: 0.44 }
+      ]
+    }
+  ];
+
+  onMount(async () => {
+    try {
+      const res = await fetch(`${MARKET_API}/api/market/watchlist`).then(r => r.json());
+      if (res.status === 'success' && res.data && res.data.indices) {
+        const map = {};
+        res.data.indices.forEach(item => {
+          map[item.symbol] = item;
+        });
+        setIndicesData(map);
+      }
+    } catch (e) {
+      console.error("Failed to fetch indices for market sessions", e);
+    }
+  });
+
+  const getMarketStatus = (m, now) => {
+    try {
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: m.zone,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+      });
+      
+      const parts = formatter.formatToParts(now);
+      const partMap = {};
+      parts.forEach(p => partMap[p.type] = p.value);
+      
+      const year = parseInt(partMap.year);
+      const month = parseInt(partMap.month) - 1;
+      const day = parseInt(partMap.day);
+      const hour = parseInt(partMap.hour);
+      const minute = parseInt(partMap.minute);
+      
+      const localDate = new Date(year, month, day, hour, minute);
+      const dayOfWeek = localDate.getDay();
+      
+      const [openH, openM] = m.open.split(':').map(Number);
+      const [closeH, closeM] = m.close.split(':').map(Number);
+      
+      const openTime = new Date(year, month, day, openH, openM);
+      const closeTime = new Date(year, month, day, closeH, closeM);
+      
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      
+      if (isWeekend) {
+        const daysToMon = dayOfWeek === 6 ? 2 : 1;
+        const nextMonOpen = new Date(year, month, day + daysToMon, openH, openM);
+        const diffMs = nextMonOpen - localDate;
+        const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+        return {
+          status: 'WEEKEND',
+          statusText: 'WEEKEND',
+          countdown: `OPENS IN ${diffHrs}H`,
+          localTime: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+        };
+      } else if (localDate >= openTime && localDate < closeTime) {
+        const diffMs = closeTime - localDate;
+        const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+        const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        return {
+          status: 'OPEN',
+          statusText: 'OPEN',
+          countdown: `${diffHrs}H ${diffMins}M LEFT`,
+          localTime: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+        };
+      } else {
+        let nextOpen = new Date(year, month, day, openH, openM);
+        if (localDate >= closeTime) {
+          nextOpen = new Date(year, month, day + 1, openH, openM);
+          if (nextOpen.getDay() === 6) nextOpen.setDate(nextOpen.getDate() + 2);
+          else if (nextOpen.getDay() === 0) nextOpen.setDate(nextOpen.getDate() + 1);
+        }
+        const diffMs = nextOpen - localDate;
+        const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+        const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        return {
+          status: 'CLOSED',
+          statusText: 'CLOSED',
+          countdown: `OPENS IN ${diffHrs}H ${diffMins}M`,
+          localTime: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+        };
+      }
+    } catch (e) {
+      return { status: 'UNKNOWN', statusText: 'N/A', countdown: '---', localTime: '--:--' };
+    }
+  };
+
+  const getFlattenedMarkets = () => {
+    const now = props.currentTime();
+    const flattened = [];
+    
+    GLOBAL_INDICES_CONFIG.forEach(regionBlock => {
+      regionBlock.items.forEach(m => {
+        const tickerData = indicesData()[m.ticker] || {};
+        const status = getMarketStatus(m, now);
+        
+        const price = tickerData.price || m.defaultPrice;
+        const chg = tickerData.change_pct !== undefined ? tickerData.change_pct : m.defaultChange;
+        
+        const performanceColor = chg > 0.5 ? 'bg-emerald-950/40 border-emerald-500/40 hover:bg-emerald-900/40 text-emerald-400' :
+                                 chg > 0 ? 'bg-emerald-950/20 border-emerald-500/20 hover:bg-emerald-950/30 text-emerald-400/80' :
+                                 chg < -0.5 ? 'bg-red-950/40 border-red-500/40 hover:bg-red-900/40 text-red-400' :
+                                 chg < 0 ? 'bg-red-950/20 border-red-500/20 hover:bg-red-950/30 text-red-400/80' : 
+                                 'bg-slate-900/20 border-slate-700/20 hover:bg-slate-900/30 text-slate-400';
+                                 
+        flattened.push({
+          ...m,
+          ...status,
+          price,
+          change: chg,
+          performanceColor,
+          region: regionBlock.region
+        });
+      });
+    });
+    
+    return flattened;
+  };
+
+  const containerClass = () => props.noScroll 
+    ? "w-full p-6 animate-in fade-in duration-700" 
+    : "w-full h-full p-6 overflow-y-auto scrollbar-hide animate-in fade-in duration-700";
+
+  return (
+    <div class={containerClass()}>
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-2">
+        <For each={getFlattenedMarkets()}>
+          {(market) => (
+            <div 
+              onClick={() => props.onSelect && props.onSelect(market.ticker)}
+              class={`flex flex-col justify-between p-2 border rounded ${market.performanceColor} transition-all duration-200 hover:scale-[1.02] cursor-pointer`}
+            >
+              
+              <div class="flex justify-between items-start gap-1">
+                <div class="flex flex-col gap-0.5 min-w-0 flex-1">
+                  <span class="text-[10px] font-black tracking-tight text-white uppercase truncate leading-tight">{market.name}</span>
+                  <div class="flex items-center gap-1 mt-0.5">
+                    <span class="text-[7.5px] font-bold opacity-50 tracking-wider truncate uppercase">{market.region.replace(' & AUSTRALIA', '').replace('AMERIKA SERIKAT', 'USA').replace('EROPA', 'EU')}</span>
+                    <span class="text-[8.5px] font-mono font-black px-1 py-0.25 rounded bg-black/60 text-text_accent border border-text_accent/20">{market.localTime}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex justify-between items-end mt-2">
+                <div class="flex flex-col">
+                  <span class="text-[13px] font-mono font-black leading-none">
+                    {market.change >= 0 ? '+' : ''}{market.change.toFixed(2)}%
+                  </span>
+                  <span class="text-[8px] font-mono font-bold opacity-50 mt-1 leading-none">
+                    {market.price ? market.price.toLocaleString(undefined, { maximumFractionDigits: 1 }) : '---'}
+                  </span>
+                </div>
+
+                <div class="flex flex-col items-end text-right leading-none border-l border-white/10 pl-2">
+                  <span class={`text-[8px] font-black uppercase tracking-wider ${market.status === 'OPEN' ? 'text-emerald-400 animate-pulse' : market.status === 'WEEKEND' ? 'text-slate-500' : 'text-red-400/80'}`}>
+                    {market.statusText}
+                  </span>
+                  <span class="text-[7px] font-mono font-bold opacity-50 tracking-tighter mt-1">{market.countdown}</span>
+                </div>
+              </div>
+
+            </div>
+          )}
+        </For>
+      </div>
+    </div>
+  );
+}
+
 // --- SECTOR PERFORMANCE COMPONENT ---
+
+
 function SectorPerformanceView() {
   const [data, setData] = createSignal([]);
   const [isLoading, setIsLoading] = createSignal(true);
@@ -421,7 +640,7 @@ function TradingViewWidget(props) {
 
 export default function MarketDashboard(props) {
   const [activeTab, setActiveTab] = createSignal('OVERVIEW');
-  const [activeHeatmap, setActiveHeatmap] = createSignal('AllID');
+  const [activeHeatmap, setActiveHeatmap] = createSignal('GLOBAL_INDICES');
   const [currentTime, setCurrentTime] = createSignal(new Date());
 
   const [cryptoMovers, setCryptoMovers] = createSignal([]);
@@ -498,16 +717,7 @@ export default function MarketDashboard(props) {
     }
   };
 
-  const worldClocks = [
-    { city: 'NEW YORK', zone: 'America/New_York', market: 'NYSE' },
-    { city: 'LONDON', zone: 'Europe/London', market: 'LSE' },
-    { city: 'TOKYO', zone: 'Asia/Tokyo', market: 'TSE' },
-    { city: 'SYDNEY', zone: 'Australia/Sydney', market: 'ASX' },
-    { city: 'FRANKFURT', zone: 'Europe/Berlin', market: 'DAX' },
-    { city: 'HONG KONG', zone: 'Asia/Hong_Kong', market: 'HKEX' },
-    { city: 'SINGAPORE', zone: 'Asia/Singapore', market: 'SGX' },
-    { city: 'JAKARTA', zone: 'Asia/Jakarta', market: 'IDX' }
-  ];
+
 
   const formatZoneTime = (zone) => currentTime().toLocaleTimeString('en-US', { timeZone: zone, hour12: false, hour: '2-digit', minute: '2-digit' });
 
@@ -548,26 +758,8 @@ export default function MarketDashboard(props) {
             {/* ROW 1: MISSION CONTROL */}
             <div class="grid grid-cols-12 gap-4 h-[350px]">
 
-              {/* COMPONENT: WORLD CLOCK CLUSTER (3/12) */}
-              <div class="col-span-12 xl:col-span-3 bg-bg_header/30 border border-border_main flex flex-col overflow-hidden">
-                <div class="bg-bg_main/5 px-3 py-2 border-b border-border_main flex items-center justify-between">
-                  <span class="text-[8px] font-black tracking-widest text-[#555] uppercase">WORLD CLOCKS</span>
-                  <div class="w-1 h-3 bg-blue-500"></div>
-                </div>
-                <div class="flex-1 overflow-y-auto scrollbar-hide p-2 flex flex-col gap-1">
-                  <For each={worldClocks}>
-                    {(clock) => (
-                      <div class="flex justify-between items-center py-1.5 border-b border-border_main/10 px-1 hover:bg-bg_main/5 transition-colors">
-                        <span class="text-[7px] text-text_secondary/80 font-black uppercase tracking-tighter">{clock.city}</span>
-                        <span class="text-[10px] text-text_primary font-mono font-bold">{formatZoneTime(clock.zone)}</span>
-                      </div>
-                    )}
-                  </For>
-                </div>
-              </div>
-
-              {/* COMPONENT: SENTIMENT HEATMAP (5/12) - NEW */}
-              <div class="col-span-12 xl:col-span-5 bg-bg_header/30 border border-border_main flex flex-col overflow-hidden">
+              {/* COMPONENT: SENTIMENT HEATMAP (6/12) - NEW */}
+              <div class="col-span-12 xl:col-span-6 bg-bg_header/30 border border-border_main flex flex-col overflow-hidden">
                 <div class="bg-bg_main/5 px-4 py-2 border-b border-border_main flex justify-between items-center">
                   <span class="text-[9px] font-black tracking-widest text-text_accent uppercase">SENTIMENT ANALYSIS</span>
                   <div class="w-1 h-3 bg-text_accent shadow-[0_0_10px_rgba(0,255,65,0.4)]"></div>
@@ -577,8 +769,8 @@ export default function MarketDashboard(props) {
                 </div>
               </div>
 
-              {/* COMPONENT: MACRO NEWS FEED (4/12) */}
-              <div class="col-span-12 xl:col-span-4 bg-bg_header/30 border border-border_main flex flex-col overflow-hidden">
+              {/* COMPONENT: MACRO NEWS FEED (6/12) */}
+              <div class="col-span-12 xl:col-span-6 bg-bg_header/30 border border-border_main flex flex-col overflow-hidden">
                 <div class="bg-bg_main/5 px-4 py-2 border-b border-border_main flex justify-between items-center">
                   <span class="text-[9px] font-black tracking-widest text-[#666] uppercase">RECENT NEWS</span>
                   <div class="w-1 h-3 bg-amber-500"></div>
@@ -807,6 +999,7 @@ export default function MarketDashboard(props) {
               <div class="col-span-2 flex flex-col gap-2">
                 <h3 class="text-[10px] font-black text-text_accent mb-4 border-b border-text_accent/20 pb-2 uppercase tracking-widest">DATA CATEGORY</h3>
                 <For each={[
+                  { id: 'GLOBAL_INDICES', name: 'GLOBAL INDICES', source: 'GLOBAL_INDICES' },
                   { id: 'AllID', name: 'IDX COMPOSITE', source: 'AllID' },
                   { id: 'SPX500', name: 'S&P 500', source: 'SPX500' },
                   { id: 'Nasdaq100', name: 'NASDAQ 100', source: 'Nasdaq100' },
@@ -826,9 +1019,19 @@ export default function MarketDashboard(props) {
                 </For>
               </div>
               <div class="col-span-10 border-2 border-border_main bg-black/40 overflow-hidden relative group">
-                <Show
-                  when={activeHeatmap() === 'SENTIMENT'}
-                  fallback={
+                <Switch>
+                  <Match when={activeHeatmap() === 'GLOBAL_INDICES'}>
+                    <MarketHoursHeatmap currentTime={currentTime} />
+                  </Match>
+                  <Match when={activeHeatmap() === 'SENTIMENT'}>
+                    <div class="w-full h-full p-2">
+                      <SentimentHeatmap data={sentimentSummary()} />
+                    </div>
+                  </Match>
+                  <Match when={activeHeatmap() === 'SECTORS'}>
+                    <SectorPerformanceView />
+                  </Match>
+                  <Match when={['AllID', 'SPX500', 'Nasdaq100', 'HSI', 'DAX'].includes(activeHeatmap())}>
                     <TradingViewWidget
                       key={activeHeatmap()}
                       scriptSrc="https://s3.tradingview.com/external-embedding/embed-widget-stock-heatmap.js"
@@ -849,16 +1052,8 @@ export default function MarketDashboard(props) {
                         "backgroundColor": "#020202"
                       }}
                     />
-                  }
-                >
-                  <div class="w-full h-full p-2">
-                    <SentimentHeatmap data={sentimentSummary()} />
-                  </div>
-                </Show>
-
-                <Show when={activeHeatmap() === 'SECTORS'}>
-                  <SectorPerformanceView />
-                </Show>
+                  </Match>
+                </Switch>
               </div>
             </div>
           </div>
