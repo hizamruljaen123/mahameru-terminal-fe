@@ -1,4 +1,4 @@
-import { For, createSignal, Show, createMemo } from 'solid-js';
+import { For, createSignal, Show, createMemo, createEffect } from 'solid-js';
 import logo from '../../assets/img/logo-dark.png';
 
 
@@ -108,6 +108,17 @@ export function Sidebar(props) {
   const [catFilter, setCatFilter] = createSignal("");
   const [activeGroup, setActiveGroup] = createSignal(null);
 
+  // Auto-collapse sidebar when in Workspace
+  createEffect((prevView) => {
+    const currentView = props.view();
+    if (currentView === 'workspace' && prevView !== 'workspace') {
+      setIsOpen(false);
+    } else if (currentView !== 'workspace' && prevView === 'workspace') {
+      setIsOpen(true);
+    }
+    return currentView;
+  }, props.view());
+
   const filteredCategories = createMemo(() => {
     const all = [...new Set([...NEWS_CATEGORIES, ...props.categories.map(c => c.toUpperCase())])].sort();
     if (!catFilter()) return all;
@@ -163,6 +174,8 @@ export function Sidebar(props) {
             title: 'MAIN MENU',
             items: [
               { id: 'dashboard', label: 'Dashboard', icon: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10' },
+              { id: 'workspace', label: 'Workspace', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
+              { id: 'entity-correlation', label: 'Entity Correlation', icon: 'M12 2L2 7l10 5 10-5-10-5z M2 17l10 5 10-5 M2 12l10 5 10-5' },
             ]
           },
           {
@@ -191,7 +204,6 @@ export function Sidebar(props) {
             items: [
               { id: 'watchlist', label: 'Watchlist', icon: 'M3 3v18h18 M19 9l-5 5-4-4-3 3' },
               { id: 'correlation', label: 'Correlation', icon: 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z' },
-              { id: 'entity-correlation', label: 'Entity Correlation', icon: 'M12 2L2 7l10 5 10-5-10-5z M2 17l10 5 10-5 M2 12l10 5 10-5' },
               { id: 'alerts', label: 'Notifications', icon: 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0' },
             ]
           },
