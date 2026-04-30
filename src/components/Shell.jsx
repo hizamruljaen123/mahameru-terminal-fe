@@ -94,7 +94,7 @@ const NEWS_CATEGORIES = [
 ];
 
 const NEWS_GROUPS = {
-  "STRATEGIC": ['INTERNATIONAL', 'WORLD', 'INDONESIA', 'POLITICS', 'GEOPOLITICS', 'GOVERNMENT', 'OFFICIAL SPEECHES', 'OFFICIAL DOCUMENTATION', 'HISTORY'],
+  "STRATEGIC": ['INTERNATIONAL', 'WORLD', 'INDONESIA', 'POLITICS', 'GEOPOLITICS', 'GOVERNMENT', 'OFFICIAL SPEECHES', 'OFFICIAL DOCUMENTATION'],
   "FINANCE": ['BUSINESS', 'ECONOMY', 'INVESTMENT', 'FINANCE', 'TRADE', 'ECONOMY', 'BUSINESS LAW', 'REAL ESTATE', 'PROPERTY', 'RETAIL', 'CONSUMER GOODS', 'SERVICE', 'BUSINESS/CONTRACTS'],
   "TECH & CRYPTO": ['TECHNOLOGY', 'CRYPTO', 'CRYPTO ANALYSIS', 'INDONESIA CRYPTO', 'CYBER SECURITY', 'CYBER INTEL', 'INFORMATION', 'PODCAST'],
   "DEFENSE & RISK": ['INTELLIGENCE', 'DEFENSE NEWS', 'ARMY NEWS', 'NAVAL NEWS', 'MILITARY NEWS', 'BUSINESS RISK', 'RISK MANAGEMENT', 'LEGAL RISK', 'SOCIAL RISK', 'INDUSTRIAL INTEL', 'ECONOMIC INTEL', 'SECURITY', 'ARBITRATION'],
@@ -396,10 +396,10 @@ export function Header(props) {
 
         {/* === LIVE STATUS === */}
         <div class="flex items-center gap-2 px-4 border-r border-white/5">
-          <div class={`relative flex items-center gap-2 px-2.5 py-1 rounded-sm border ${props.socketConnected?.() ? 'border-green-500/20 bg-[#020502]' : 'border-white/5 bg-[#0a0a0a]'}`}>
-            <span class={`w-1.5 h-1.5 rounded-full ${props.socketConnected?.() ? 'bg-green-400' : 'bg-white/10'}`} />
-            <span class={`text-[8px] font-black tracking-[0.3em] uppercase ${props.socketConnected?.() ? 'text-green-400' : 'text-white/20'}`}>
-              {props.socketConnected?.() ? 'CONNECTED' : 'OFFLINE'}
+          <div class={`relative flex items-center gap-2 px-2.5 py-1 rounded-sm border ${props.socketConnected?.() ? 'border-green-500/20 bg-[#020502]' : props.status?.().message === 'RECONNECTING' ? 'border-amber-500/20 bg-[#050402]' : 'border-white/5 bg-[#0a0a0a]'}`}>
+            <span class={`w-1.5 h-1.5 rounded-full ${props.socketConnected?.() ? 'bg-green-400' : props.status?.().message === 'RECONNECTING' ? 'bg-amber-400 animate-pulse' : 'bg-white/10'}`} />
+            <span class={`text-[8px] font-black tracking-[0.3em] uppercase ${props.socketConnected?.() ? 'text-green-400' : props.status?.().message === 'RECONNECTING' ? 'text-amber-400' : 'text-white/20'}`}>
+              {props.socketConnected?.() ? 'STABLE' : props.status?.().message === 'RECONNECTING' ? 'RECONNECTING' : 'OFFLINE'}
             </span>
             <Show when={props.liveCount?.() > 0}>
               <button

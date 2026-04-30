@@ -1,5 +1,6 @@
 import { createSignal, onMount, onCleanup, For, Show, createEffect } from 'solid-js';
 import * as echarts from 'echarts';
+import ComparativeView from './research-panel/comparative/ComparativeView';
 
 // We'll dynamically load Marked.js for markdown parsing
 const loadMarked = () => {
@@ -25,6 +26,7 @@ const loadHtml2Pdf = () => {
 
 export default function ResearchPanelView() {
     const RESEARCH_API = import.meta.env.VITE_RESEARCH_API;
+    const [mode, setMode] = createSignal('single'); // 'single' | 'comparative'
 
     const [symbol, setSymbol] = createSignal('');
     const [model, setModel] = createSignal('deepseek-v4-flash');
@@ -236,31 +238,131 @@ export default function ResearchPanelView() {
         }
     };
 
-    const handleSavePDF = () => {
-        if (!window.html2pdf || !reportContainerRef) return;
-        const opt = {
-            margin: 0.5,
-            filename: `${symbol()}_Research_Report.pdf`,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true, logging: false },
-            jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
-        };
-        // Add a temporary class to justify text before printing
-        reportContainerRef.classList.add('print-justify');
-        window.html2pdf().set(opt).from(reportContainerRef).save().then(() => {
-            reportContainerRef.classList.remove('print-justify');
+    const handleSavePDF = async () => {
+        const el = reportContainerRef;
+        if (!window.html2pdf || !el) return;
+
+        addLog("Initializing institutional PDF engine...");
+
+        // 1. Create Iframe Sandbox
+        const iframe = document.createElement('iframe');
+        Object.assign(iframe.style, {
+            position: 'fixed',
+            left: '-10000px',
+            top: '0',
+            width: '1200px',
+            height: '1000px'
         });
+        document.body.appendChild(iframe);
+
+        const doc = iframe.contentWindow.document;
+        const reportHtml = el.innerHTML;
+
+        // 2. Build complete document
+        doc.open();
+        doc.write(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+            <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+            <style>
+                body { background: white; margin: 0; padding: 60px; font-family: 'Roboto', sans-serif; }
+                .paper-report { background: white; color: #1e293b; width: 100%; }
+                .paper-report h1 { font-family: 'Outfit', sans-serif; font-size: 2.25rem; font-weight: 900; color: #0f172a; margin-bottom: 1.5rem; }
+                .paper-report h2 { font-family: 'Outfit', sans-serif; font-size: 1.5rem; font-weight: 800; color: #1e293b; margin-top: 2rem; margin-bottom: 1rem; }
+                .paper-report h3 { font-family: 'Outfit', sans-serif; font-size: 1.25rem; font-weight: 700; color: #0369a1; margin-top: 1.5rem; margin-bottom: 0.75rem; }
+                .paper-report p, .paper-report li { font-size: 0.95rem; line-height: 1.8; margin-bottom: 1.25rem; color: #334155; text-align: justify; }
+                .paper-report table { width: 100%; font-size: 0.85rem; border-collapse: collapse; margin-bottom: 1.5rem; }
+                .paper-report th { background: #f8fafc; color: #0f172a; font-weight: 700; padding: 0.75rem; border-bottom: 2px solid #cbd5e1; }
+                .paper-report td { padding: 0.75rem; border-bottom: 1px solid #e2e8f0; color: #475569; }
+                .section-title { font-size: 1rem; font-weight: 800; color: #0284c7; border-bottom: 1.5px solid #0284c7; padding-bottom: 4px; margin-top: 2rem; margin-bottom: 1rem; }
+                .img-snapshot { width: 100%; height: auto; display: block; margin: 20px 0; border: 1px solid #eee; }
+                canvas { display: none !important; }
+            </style>
+          </head>
+          <body>
+            <div class="paper-report">${reportHtml}</div>
+          </body>
+          </html>
+        `);
+        doc.close();
+
+        // 3. Sync Canvases
+        const origCanvases = el.querySelectorAll('canvas');
+        const iframeCanvases = doc.querySelectorAll('canvas');
+        origCanvases.forEach((canvas, i) => {
+            try {
+                const img = doc.createElement('img');
+                img.src = canvas.toDataURL('image/png', 1.0);
+                img.className = 'img-snapshot';
+                if (iframeCanvases[i]) {
+                    iframeCanvases[i].parentNode.replaceChild(img, iframeCanvases[i]);
+                }
+            } catch (e) {}
+        });
+
+        // 4. Capture
+        const opt = {
+            margin: [10, 10, 10, 10],
+            filename: `${symbol()}_Research_Report.pdf`,
+            image: { type: 'jpeg', quality: 1.0 },
+            html2canvas: { 
+                scale: 2, 
+                useCORS: true, 
+                backgroundColor: '#ffffff',
+                width: 1200,
+                windowWidth: 1200
+            },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        try {
+            addLog("Generating institutional document...");
+            await new Promise(r => setTimeout(r, 1000));
+            await window.html2pdf().set(opt).from(doc.body).save();
+            addLog("PDF Export Complete.");
+        } catch (err) {
+            addLog(`PDF Export Failed: ${err.message}`, 'error');
+        } finally {
+            document.body.removeChild(iframe);
+        }
     };
 
     return (
         <div class="flex-1 flex flex-col bg-bg_main overflow-hidden text-text_primary text-[10px] relative">
 
-            {/* Header Form */}
-            <div class="px-6 py-4 bg-bg_sidebar border-b border-border_main flex justify-between items-center shrink-0">
+            {/* Header + Mode Tabs */}
+            <div class="px-6 py-3 bg-bg_sidebar border-b border-border_main flex justify-between items-center shrink-0">
                 <div class="flex items-center gap-4">
-                    <h2 class="text-[14px] font-black text-text_accent tracking-widest uppercase">RESEARCH & ANALYSIS HUB</h2>
+                    <h2 class="text-[13px] font-black text-text_accent tracking-widest">Research & Analysis Hub</h2>
+                </div>
+                <div class="flex items-center gap-1 bg-black/40 p-1 rounded border border-white/5">
+                    <button
+                        onClick={() => setMode('single')}
+                        class={`px-4 py-1.5 text-[9px] font-black tracking-widest rounded-sm transition-all ${
+                            mode() === 'single' ? 'bg-text_accent text-bg_main' : 'text-white/30 hover:text-white'
+                        }`}
+                    >
+                        Single Analysis
+                    </button>
+                    <button
+                        onClick={() => setMode('comparative')}
+                        class={`px-4 py-1.5 text-[9px] font-black tracking-widest rounded-sm transition-all ${
+                            mode() === 'comparative' ? 'bg-text_accent text-bg_main' : 'text-white/30 hover:text-white'
+                        }`}
+                    >
+                        ⊕ Comparative
+                    </button>
                 </div>
             </div>
+
+            {/* Route to views */}
+            <Show when={mode() === 'comparative'}>
+                <ComparativeView />
+            </Show>
+
+            <Show when={mode() === 'single'}>
             {/* Progress Bar */}
             <Show when={progress() > 0 && progress() < 100}>
                 <div class="h-1 w-full bg-bg_sidebar">
@@ -273,10 +375,12 @@ export default function ResearchPanelView() {
                 <div class="w-[300px] border-r border-border_main flex flex-col bg-bg_sidebar overflow-y-auto win-scroll p-4 gap-4 shrink-0">
 
                     <div class="glass-panel p-3 flex flex-col gap-3">
-                        <h3 class="text-[9px] font-black text-text_accent tracking-widest border-b border-border_main pb-1 uppercase">CONTROL PANEL</h3>
+                        <h3 class="text-[9px] font-black text-text_accent tracking-widest border-b border-border_main pb-1 mb-1">
+                            Market Context Selection
+                        </h3>
                         <form onSubmit={handleSearch} class="flex flex-col gap-3">
                             <div class="relative">
-                                <label class="text-[8px] text-text_secondary font-black uppercase tracking-wider block mb-1">Enter Ticker</label>
+                                <label class="text-[8px] text-text_secondary font-black block mb-1">Enter Ticker</label>
                                 <input
                                     type="text"
                                     class="w-full bg-black border border-border_main px-3 py-2 text-[11px] font-mono text-white outline-none focus:border-text_accent uppercase"
@@ -312,7 +416,7 @@ export default function ResearchPanelView() {
                                 </Show>
                             </div>
                             <div>
-                                <label class="text-[8px] text-text_secondary font-black uppercase tracking-wider block mb-1">AI Engine Model</label>
+                                <label class="text-[8px] text-text_secondary font-black block mb-1">AI Engine Model</label>
                                 <select
                                     class="w-full bg-black border border-border_main px-3 py-2 text-[11px] font-mono text-white outline-none focus:border-text_accent"
                                     value={model()}
@@ -325,24 +429,24 @@ export default function ResearchPanelView() {
                             </div>
                             <button
                                 type="submit"
-                                class="w-full bg-text_accent text-bg_main py-2 font-black uppercase hover:bg-white transition-colors tracking-widest disabled:opacity-50 text-[10px]"
-                                disabled={loading()}
+                                disabled={loading() || !symbol()}
+                                class="w-full bg-text_accent text-bg_main py-2.5 font-black hover:brightness-110 transition-all tracking-widest disabled:opacity-50 text-[10px]"
                             >
-                                {loading() ? 'ANALYZING...' : 'SYNTHESIZE'}
+                                {loading() ? '⟳ Processing Intelligence...' : 'Start Research Analysis'}
                             </button>
                             <button
                                 type="button"
-                                class="w-full border border-text_accent text-text_accent py-2 font-black uppercase hover:bg-text_accent hover:text-bg_main transition-colors tracking-widest disabled:opacity-50 text-[10px]"
                                 disabled={loading() || (!fullData() && !reports()[1])}
                                 onClick={handleSavePDF}
+                                class="w-full border border-text_accent/30 text-text_accent py-2 font-black hover:bg-text_accent hover:text-bg_main transition-colors tracking-widest disabled:opacity-30 text-[10px]"
                             >
-                                SAVE PDF
+                                Export PDF Report
                             </button>
                         </form>
                     </div>
 
                     <div class="glass-panel p-3 flex flex-col gap-2">
-                        <h3 class="text-[9px] font-black text-text_accent tracking-widest border-b border-border_main pb-1">EXECUTION LOGS</h3>
+                        <h3 class="text-[9px] font-black text-text_accent tracking-widest border-b border-border_main pb-1">Execution Logs</h3>
                         <div class="flex flex-col gap-1 text-[8px] font-mono opacity-60 overflow-y-auto max-h-32">
                             <For each={logs()}>
                                 {(log) => <div>{log}</div>}
@@ -352,26 +456,26 @@ export default function ResearchPanelView() {
 
                     <Show when={reports()[1] || fullData()}>
                         <div class="glass-panel p-3">
-                            <h3 class="text-[9px] font-black text-text_accent tracking-widest border-b border-border_main pb-1 mb-2">REPORT BOOKMARKS</h3>
+                            <h3 class="text-[9px] font-black text-text_accent tracking-widest border-b border-border_main pb-1 mb-2">Report Bookmarks</h3>
                             <div class="flex flex-col gap-1.5 text-[10px] font-bold text-text_secondary">
-                                <a href="#ai-stage-1" class="hover:text-text_accent transition-colors flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-text_accent"></span> 1. BUSINESS OVERVIEW</a>
-                                <a href="#ai-stage-2" class="hover:text-text_accent transition-colors flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-text_accent"></span> 2. FUNDAMENTALS DEEP-DIVE</a>
-                                <a href="#ai-stage-3" class="hover:text-text_accent transition-colors flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-text_accent"></span> 3. TECHNICAL SETUP</a>
-                                <a href="#ai-stage-4" class="hover:text-text_accent transition-colors flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-text_accent"></span> 4. CATALYST HIGHLIGHTS</a>
-                                <a href="#ai-stage-5" class="hover:text-text_accent transition-colors flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-text_accent"></span> 5. FINAL RECOMMENDATIONS</a>
+                                <a href="#ai-stage-1" class="hover:text-text_accent transition-colors flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-text_accent"></span> 1. Business Overview</a>
+                                <a href="#ai-stage-2" class="hover:text-text_accent transition-colors flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-text_accent"></span> 2. Fundamentals Deep-Dive</a>
+                                <a href="#ai-stage-3" class="hover:text-text_accent transition-colors flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-text_accent"></span> 3. Technical Setup</a>
+                                <a href="#ai-stage-4" class="hover:text-text_accent transition-colors flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-text_accent"></span> 4. Catalyst Highlights</a>
+                                <a href="#ai-stage-5" class="hover:text-text_accent transition-colors flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-text_accent"></span> 5. Final Recommendations</a>
                             </div>
                         </div>
                     </Show>
 
                     <Show when={fullData()?.news}>
                         <div class="glass-panel p-3">
-                            <h3 class="text-[9px] font-black text-text_accent tracking-widest border-b border-border_main pb-1 mb-2">NEWS FEED & PUBLIC SENTIMENT</h3>
+                            <h3 class="text-[9px] font-black text-text_accent tracking-widest border-b border-border_main pb-1 mb-2">News Feed & Public Sentiment</h3>
                             <div class="flex flex-col gap-2 max-h-64 overflow-y-auto win-scroll pr-1">
                                 <For each={fullData().news.news.slice(0, 5)}>
                                     {(n) => (
                                         <a href={n.link} target="_blank" class="block bg-bg_main/50 p-2 border border-border_main hover:border-text_accent/50 cursor-pointer">
                                             <div class="text-[8px] font-black text-text_accent mb-1">{n.publisher || 'NEWS'}</div>
-                                            <div class="text-[9px] font-bold text-white line-clamp-2 leading-tight uppercase">{n.title}</div>
+                                            <div class="text-[9px] font-bold text-white line-clamp-2 leading-tight">{n.title}</div>
                                         </a>
                                     )}
                                 </For>
@@ -381,22 +485,22 @@ export default function ResearchPanelView() {
 
                     <Show when={fullData()?.fundamental}>
                         <div class="glass-panel p-3">
-                            <h3 class="text-[9px] font-black text-text_accent tracking-widest border-b border-border_main pb-1 mb-2">FUNDAMENTAL FACTSHEET</h3>
+                            <h3 class="text-[9px] font-black text-text_accent tracking-widest border-b border-border_main pb-1 mb-2">Fundamental Factsheet</h3>
                             <div class="grid grid-cols-2 gap-2">
                                 <div class="bg-bg_main/50 p-2 border border-border_main">
-                                    <div class="text-[7px] text-text_secondary opacity-50 uppercase">Market Cap</div>
+                                    <div class="text-[7px] text-text_secondary opacity-50">Market Cap</div>
                                     <div class="text-[11px] font-black text-white">{formatNumber(fullData().fundamental.snapshot.marketCap)}</div>
                                 </div>
                                 <div class="bg-bg_main/50 p-2 border border-border_main">
-                                    <div class="text-[7px] text-text_secondary opacity-50 uppercase">PE Ratio</div>
+                                    <div class="text-[7px] text-text_secondary opacity-50">PE Ratio</div>
                                     <div class="text-[11px] font-black text-white">{fullData().fundamental.snapshot.peRatio?.toFixed(2) || 'N/A'}</div>
                                 </div>
                                 <div class="bg-bg_main/50 p-2 border border-border_main">
-                                    <div class="text-[7px] text-text_secondary opacity-50 uppercase">Revenue</div>
+                                    <div class="text-[7px] text-text_secondary opacity-50">Revenue</div>
                                     <div class="text-[11px] font-black text-white">{formatNumber(fullData().fundamental.snapshot.totalRevenue)}</div>
                                 </div>
                                 <div class="bg-bg_main/50 p-2 border border-border_main">
-                                    <div class="text-[7px] text-text_secondary opacity-50 uppercase">Net Income</div>
+                                    <div class="text-[7px] text-text_secondary opacity-50">Net Income</div>
                                     <div class="text-[11px] font-black text-white">{formatNumber(fullData().fundamental.snapshot.netIncome)}</div>
                                 </div>
                             </div>
@@ -406,7 +510,7 @@ export default function ResearchPanelView() {
                 <div class="flex-1 flex flex-col overflow-y-auto win-scroll bg-[#0b0f19] p-8">
 
                     <Show when={fullData() || reports()[1]}>
-                        <div class="paper-report bg-white shadow-2xl mx-auto max-w-6xl p-16 relative font-sans text-justify text-[#1e293b] normal-case" ref={reportContainerRef}>
+                        <div class="paper-report bg-white shadow-2xl mx-auto max-w-6xl p-16 relative font-sans text-justify text-[#1e293b]" ref={reportContainerRef}>
                             <style>
                                 {`
                                     .paper-report {
@@ -415,13 +519,15 @@ export default function ResearchPanelView() {
                                         box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
                                         border-radius: 4px;
                                     }
+                                    .paper-report * {
+                                        text-transform: none !important;
+                                    }
                                     .paper-report h1 {
                                         font-family: 'Outfit', sans-serif;
                                         font-size: 2.25rem;
                                         font-weight: 900;
                                         color: #0f172a !important;
                                         margin-bottom: 1.5rem;
-                                        text-transform: none !important;
                                     }
                                     .paper-report h2 {
                                         font-family: 'Outfit', sans-serif;
@@ -430,7 +536,6 @@ export default function ResearchPanelView() {
                                         color: #1e293b !important;
                                         margin-top: 2rem;
                                         margin-bottom: 1rem;
-                                        text-transform: none !important;
                                     }
                                     .paper-report h3 {
                                         font-family: 'Outfit', sans-serif;
@@ -439,7 +544,6 @@ export default function ResearchPanelView() {
                                         color: #0369a1 !important;
                                         margin-top: 1.5rem;
                                         margin-bottom: 0.75rem;
-                                        text-transform: none !important;
                                     }
                                     .paper-report h4, .paper-report h5 {
                                         font-family: 'Outfit', sans-serif;
@@ -448,7 +552,6 @@ export default function ResearchPanelView() {
                                         color: #334155 !important;
                                         margin-top: 1.25rem;
                                         margin-bottom: 0.5rem;
-                                        text-transform: none !important;
                                     }
                                     .paper-report p {
                                         font-size: 0.95rem;
@@ -499,7 +602,6 @@ export default function ResearchPanelView() {
                                         margin-top: 2rem;
                                         margin-bottom: 1rem;
                                         letter-spacing: 0.05em;
-                                        text-transform: uppercase;
                                     }
                                     .print-justify p { text-align: justify; }
                                 `}
@@ -508,11 +610,11 @@ export default function ResearchPanelView() {
                             {/* Document Header */}
                             <div class="flex justify-between items-start border-b-2 border-slate-200 pb-4 mb-6">
                                 <div>
-                                    <h1 class="text-4xl font-black tracking-tight text-slate-900 m-0 p-0 uppercase">{symbol()}</h1>
+                                    <h1 class="text-4xl font-black tracking-tight text-slate-900 m-0 p-0">{symbol()}</h1>
                                     <div class="text-sm font-bold text-slate-500 mt-1">{fullData()?.fundamental?.snapshot?.name || 'Asset Overview'}</div>
                                 </div>
                                 <div class="text-right">
-                                    <div class="text-xs font-black tracking-widest text-sky-600 uppercase">ASETPEDIA INTELLIGENCE</div>
+                                    <div class="text-xs font-black text-sky-600">Asetpedia Intelligence</div>
                                     <div class="text-xs font-bold text-slate-400 mt-1">{new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
                                 </div>
                             </div>
@@ -520,13 +622,13 @@ export default function ResearchPanelView() {
                             {/* Row: News and Executives */}
                             <div class="grid grid-cols-3 gap-6 my-6 text-left">
                                 <div class="col-span-2">
-                                    <h5 class="text-xs font-black text-slate-800 border-b border-slate-200 pb-1 mb-2">LATEST PUBLIC NEWS</h5>
+                                    <h5 class="text-xs font-black text-slate-800 border-b border-slate-200 pb-1 mb-2">Latest Public News</h5>
                                     <div class="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
                                         <For each={fullData()?.news?.news?.slice(0, 4)}>
                                             {(n) => (
                                                 <a href={n.link} target="_blank" class="block p-2 border border-slate-200 hover:bg-slate-50 transition">
                                                     <div class="text-[9px] font-black text-sky-600 mb-1">{n.publisher || 'NEWS'}</div>
-                                                    <div class="text-[11px] font-bold text-slate-800 leading-tight uppercase">{n.title}</div>
+                                                    <div class="text-[11px] font-bold text-slate-800 leading-tight">{n.title}</div>
                                                 </a>
                                             )}
                                         </For>
@@ -536,13 +638,13 @@ export default function ResearchPanelView() {
                                     </div>
                                 </div>
                                 <div class="col-span-1">
-                                    <h5 class="text-xs font-black text-slate-800 border-b border-slate-200 pb-1 mb-2">MANAGEMENT</h5>
+                                    <h5 class="text-xs font-black text-slate-800 border-b border-slate-200 pb-1 mb-2">Management</h5>
                                     <div class="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1 text-xs">
                                         <For each={fullData()?.fundamental?.snapshot?.companyOfficers?.slice(0, 4)}>
                                             {(o) => (
                                                 <div class="border-b border-slate-100 pb-1">
                                                     <div class="font-bold text-slate-800">{o.name || '-'}</div>
-                                                    <div class="text-[9px] text-slate-400 font-bold uppercase">{o.title || '-'}</div>
+                                                    <div class="text-[9px] text-slate-400 font-bold">{o.title || '-'}</div>
                                                 </div>
                                             )}
                                         </For>
@@ -554,7 +656,7 @@ export default function ResearchPanelView() {
                             </div>
 
                             {/* Section 1: Strategic Overview (Wiki) */}
-                            <div class="section-title">1. STRATEGIC OVERVIEW & BUSINESS INTEL</div>
+                            <div class="section-title">1. Strategic Overview & Business Intel</div>
                             <p class="text-sm text-slate-600 leading-relaxed text-justify">
                                 {fullData()?.fundamental?.snapshot?.wikipedia_summary || 'No overview available for this asset ticker.'}
                             </p>
@@ -563,7 +665,7 @@ export default function ResearchPanelView() {
                             <div id="ai-stage-1" innerHTML={reports()[1]} class="text-justify my-6"></div>
 
                             {/* Section 2: Fundamental Factsheet with Tabs */}
-                            <div class="section-title">2. FUNDAMENTAL FACTSHEET</div>
+                            <div class="section-title">2. Fundamental Factsheet</div>
 
                             {/* Tabs Header */}
                             <div class="flex gap-2 border-b border-slate-200 text-left text-xs mb-4">
@@ -826,6 +928,7 @@ export default function ResearchPanelView() {
                     </Show>
                 </div>
             </div>
+            </Show> {/* end single mode */}
         </div>
     );
 }

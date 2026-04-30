@@ -8,8 +8,8 @@ import PolicyDivergenceTracker from '../components/institutional/PolicyDivergenc
 const FOREX_API = import.meta.env.VITE_FOREX_API;
 const GNEWS_API = import.meta.env.VITE_GNEWS_API;
 
-const fmt = (v, d = 2) => (v == null || isNaN(v)) ? '0.00' : Number(v).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
-const fmtPct = (v) => (v == null || isNaN(v)) ? '0.00%' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`;
+const fmt = (v, d = 2) => (v == null || isNaN(v) || v === 0) ? '---' : Number(v).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
+const fmtPct = (v) => (v == null || isNaN(v)) ? '---' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`;
 const signColor = (v) => v > 0 ? 'text-emerald-400' : v < 0 ? 'text-red-400' : 'text-text_secondary';
 
 function StatBox({ label, value, sub, color }) {
@@ -247,11 +247,18 @@ export default function ForexIntelligenceView(props) {
         '1W': '5d', '1M': '1mo', '3M': '3mo', '6M': '6mo', '1Y': '1y', '5Y': '5y', 'ALL': 'max'
       };
       const period = rangeMap[range] || '6mo';
-      const resp = await fetch(`${FOREX_API}/api/forex/detail/${symbol}?period=${period}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+      const resp = await fetch(`${FOREX_API}/api/forex/detail/${symbol}?period=${period}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
       const json = await resp.json();
       if (json.status === 'success') {
         setDetail(json.data);
         fetchNews(symbol, json.data.name);
+      } else {
+        setDetail(null);
       }
     } catch (e) {
       console.error("Forex Detail fetch error:", e);

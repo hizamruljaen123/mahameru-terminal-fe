@@ -22,8 +22,12 @@ function EntityRealTimeChart(props) {
     // PHASE 1: Deep Intraday Load / Periodic Reconciliation
     // Fetches the full historical minute series to ensure data integrity
     const fetchFullIntraday = async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+        
         try {
-            const res = await fetch(`${import.meta.env.VITE_ENTITY_URL}/api/entity/realtime/${props.symbol}`);
+            const res = await fetch(`${import.meta.env.VITE_ENTITY_URL}/api/entity/realtime/${props.symbol}`, { signal: controller.signal });
+            clearTimeout(timeoutId);
             const data = await res.json();
 
             setMarketOpen(data.isStreaming !== false);
@@ -32,16 +36,10 @@ function EntityRealTimeChart(props) {
                 setRtData(prev => {
                     if (!prev || !prev.intraday) return data;
 
-                    // Intelligent Merge Logic:
-                    // We trust the history fetch for finalized bars, 
-                    // but we 'patch' it with the latest live data if needed.
+                    // Intelligent Merge Logic
                     const freshIntraday = [...data.intraday];
                     const lastHist = freshIntraday[freshIntraday.length - 1];
 
-                    // If the current live state has a newer price/tick 
-                    // and it's within the same minute as the last historical bar, 
-                    // we allow the live tick to overwrite the historical 'close' 
-                    // since history might be slightly lagged.
                     if (prev.price && lastHist) {
                         const timeNow = prev.timestamp?.split(':').slice(0, 2).join(':');
                         if (lastHist.time === timeNow) {
@@ -57,6 +55,7 @@ function EntityRealTimeChart(props) {
             }
         } catch (e) {
             console.error("RT Recon Error", e);
+            if (e.name === 'AbortError') setRtData(prev => ({ ...prev, timeout: true }));
         } finally {
             setLoading(false);
         }
@@ -452,8 +451,12 @@ const EntityAnalysisView = (props) => {
 
     const fetchMarketIndices = async () => {
         setMarketLoading(true);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
+        
         try {
-            const res = await fetch(`${import.meta.env.VITE_ENTITY_URL}/api/entity/market-indices`);
+            const res = await fetch(`${import.meta.env.VITE_ENTITY_URL}/api/entity/market-indices`, { signal: controller.signal });
+            clearTimeout(timeoutId);
             const data = await res.json();
             setMarketIndices(data);
         } catch (err) {
@@ -469,10 +472,12 @@ const EntityAnalysisView = (props) => {
 
         if (searchController) searchController.abort();
         searchController = new AbortController();
+        const timeoutId = setTimeout(() => searchController.abort(), 10000);
 
         setLoading(true);
         try {
             const res = await fetch(`${import.meta.env.VITE_ENTITY_URL}/api/entity/search?q=${encodeURIComponent(searchQuery())}`, { signal: searchController.signal });
+            clearTimeout(timeoutId);
             const data = await res.json();
             setSearchResults(data.quotes || []);
         } catch (err) {
@@ -648,7 +653,12 @@ const EntityAnalysisView = (props) => {
                     <div class="w-24 h-0.5 bg-text_accent/10 rounded-full overflow-hidden">
                         <div class="h-full bg-text_accent animate-progress-indefinite" style="width: 40%"></div>
                     </div>
-                    <span class="text-text_accent animate-pulse font-black tracking-[0.4em] uppercase text-[9px]">PROCESSING DATA...</span>
+                    <span class="text-text_accent animate-pulse font-black tracking-[0.4em] uppercase text-[9px]">
+                        {searchController?.signal.aborted ? 'TIMEOUT EXCEEDED' : 'PROCESSING DATA...'}
+                    </span>
+                    <Show when={searchController?.signal.aborted}>
+                        <button onClick={handleSearch} class="text-[8px] font-black text-white/40 hover:text-text_accent uppercase tracking-widest border border-white/10 px-2 py-1">RETRY_SEARCH</button>
+                    </Show>
                 </div>
             </Show>
 

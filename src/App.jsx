@@ -117,18 +117,33 @@ function App() {
 
     const startStream = () => {
       if (eventSource) eventSource.close();
-      eventSource = new EventSource(`${import.meta.env.VITE_API_BASE}/stream`);
+      const streamUrl = `${import.meta.env.VITE_API_BASE}/stream`;
+      console.log(`[STREAM] Connecting to ${streamUrl}...`);
+      eventSource = new EventSource(streamUrl);
+
+      eventSource.onopen = () => {
+        console.log("[STREAM] SSE Connection Established.");
+        setStatus(prev => ({ ...prev, message: 'STABLE_STREAM' }));
+      };
 
       eventSource.onmessage = (event) => {
-        const parsed = JSON.parse(event.data);
-        if (parsed.status) setStatus(parsed.status);
-        if (parsed.news) mergeData(parsed.news);
-        if (parsed.updates) mergeData(parsed.updates);
+        try {
+          const parsed = JSON.parse(event.data);
+          if (parsed.status) setStatus(parsed.status);
+          if (parsed.news) mergeData(parsed.news);
+          if (parsed.updates) mergeData(parsed.updates);
+          // Heartbeat indicator
+          setStatus(prev => ({ ...prev, last_heartbeat: Date.now() }));
+        } catch (e) {
+          console.error("[STREAM] Parse error:", e);
+        }
       };
 
       eventSource.onerror = (err) => {
-        console.warn("Stream Disconnected. Backend may be offline.");
+        console.warn("[STREAM] Connection lost. Attempting reconnection in 5s...");
+        setStatus(prev => ({ ...prev, message: 'RECONNECTING' }));
         eventSource.close();
+        setTimeout(startStream, 5000);
       };
     };
 
@@ -154,75 +169,64 @@ function App() {
     initLoad();
 
     // Satellite Services
-    fetch(`${import.meta.env.VITE_SKY_API}/api/sky/countries`).then(r => r.json()).then(setCountries);
+    fetch(`${import.meta.env.VITE_SKY_API}/api/sky/countries`).then(r => r.json()).then(setCountries).catch(e => console.error("Country sync failed:", e));
     applyTheme(theme());
 
     // ================================================================
     // SOCKET.IO — Real-time live stream from backup_service (port 5004)
-    // This runs IN PARALLEL with SSE stream from news_service (port 5101)
-    // SSE = batched full refresh every 3s
-    // SocketIO = instant push on each new DB insert
     // ================================================================
     const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_BACKUP_URL || 'https://api.asetpedia.online/backup';
     
-    // Improved Socket.io initialization with explicit path handling
     let socketOptions = {
-      transports: ['websocket'], // Force websocket to bypass polling session issues
+      transports: ['websocket'],
       upgrade: false,
-      rememberUpgrade: false,
-      perMessageDeflate: false, // Fix for 'Invalid frame header' on some proxies
       reconnectionAttempts: Infinity,
       reconnectionDelay: 2000,
-      timeout: 30000,
+      reconnectionDelayMax: 10000,
+      timeout: 20000,
     };
 
-    // If the URL has a path (like /backup), we might need to specify it for Socket.io
     try {
       const urlObj = new URL(SOCKET_URL);
       if (urlObj.pathname && urlObj.pathname !== '/') {
         socketOptions.path = `${urlObj.pathname.replace(/\/$/, '')}/socket.io/`;
       }
-    } catch (e) {
-      console.warn("[SOCKET] URL parsing failed for", SOCKET_URL);
-    }
+    } catch (e) {}
 
     const socket = io(SOCKET_URL, socketOptions);
 
     socket.on('connect', () => {
       setSocketConnected(true);
-      console.log(`[SOCKET] Connected successfully to live stream (${socket.id})`);
-      // Subscribe to all categories
+      console.log(`[SOCKET] Connected to feed (${socket.id})`);
       socket.emit('subscribe', { categories: [] });
     });
 
-    socket.on('disconnect', () => {
+    socket.on('reconnect_attempt', () => {
+      console.log('[SOCKET] Attempting to reconnect...');
+    });
+
+    socket.on('disconnect', (reason) => {
       setSocketConnected(false);
-      console.warn('[SOCKET] Disconnected from live stream');
+      console.warn(`[SOCKET] Disconnected: ${reason}`);
     });
 
     socket.on('connect_error', (err) => {
+      setSocketConnected(false);
       console.error(`[SOCKET] Connection Error: ${err.message}`);
-    });
-
-    socket.on('error', (err) => {
-      console.error(`[SOCKET] General Error: ${err}`);
     });
 
     socket.on('new_articles', (payload) => {
       const articles = payload.articles || [];
       if (articles.length === 0) return;
 
-      // Increment live counter for the notification badge
       setLiveCount(prev => prev + articles.length);
 
-      // Build a category-grouped object and merge into app state
       const incoming = {};
       articles.forEach(art => {
         const cat = (art.category || 'UNCATEGORIZED').toUpperCase();
         if (!incoming[cat]) incoming[cat] = [];
         incoming[cat].push({
           ...art,
-          // Normalize timestamp — could be unix float or ISO string from socket
           timestamp: typeof art.timestamp === 'number'
             ? art.timestamp
             : new Date(art.timestamp).getTime() / 1000,
@@ -230,7 +234,6 @@ function App() {
       });
 
       mergeData(incoming);
-      console.log(`[SOCKET] +${articles.length} live articles injected`);
     });
 
     // === ALERT MANAGER: init price polling + connect socket for keyword alerts

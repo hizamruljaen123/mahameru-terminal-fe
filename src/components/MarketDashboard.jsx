@@ -218,7 +218,7 @@ export function MarketHoursHeatmap(props) {
 
   const GLOBAL_INDICES_CONFIG = [
     {
-      region: 'ASIA PASIFIK & AUSTRALIA',
+      region: 'ASIA PACIFIC & AUSTRALIA',
       items: [
         { name: 'IDX Composite', ticker: '^JKSE', zone: 'Asia/Jakarta', open: '09:00', close: '16:00', defaultPrice: 7072, defaultChange: -0.48 },
         { name: 'STI Index - Singapore', ticker: '^STI', zone: 'Asia/Singapore', open: '09:00', close: '17:00', defaultPrice: 4888, defaultChange: -0.10 },
@@ -232,7 +232,7 @@ export function MarketHoursHeatmap(props) {
       ]
     },
     {
-      region: 'AMERIKA SERIKAT',
+      region: 'UNITED STATES',
       items: [
         { name: 'S&P 500', ticker: '^GSPC', zone: 'America/New_York', open: '09:30', close: '16:00', defaultPrice: 7129, defaultChange: -0.13 },
         { name: 'Dow Jones Industrial Average', ticker: '^DJI', zone: 'America/New_York', open: '09:30', close: '16:00', defaultPrice: 48849, defaultChange: -0.60 },
@@ -241,7 +241,7 @@ export function MarketHoursHeatmap(props) {
       ]
     },
     {
-      region: 'EROPA',
+      region: 'EUROPE',
       items: [
         { name: 'FTSE 100', ticker: '^FTSE', zone: 'Europe/London', open: '08:00', close: '16:30', defaultPrice: 10213, defaultChange: -1.16 },
         { name: 'DAX PERFORMANCE-INDEX', ticker: '^GDAXI', zone: 'Europe/Berlin', open: '09:00', close: '17:30', defaultPrice: 23955, defaultChange: -0.27 },
@@ -251,7 +251,7 @@ export function MarketHoursHeatmap(props) {
       ]
     },
     {
-      region: 'GLOBAL / LAINNYA',
+      region: 'GLOBAL / OTHERS',
       items: [
         { name: 'NYSE Composite (DJ)', ticker: '^NYA', zone: 'America/New_York', open: '09:30', close: '16:00', defaultPrice: 22746, defaultChange: -0.39 },
         { name: 'NYSE AMEX COMPOSITE INDEX', ticker: '^XAX', zone: 'America/New_York', open: '09:30', close: '16:00', defaultPrice: 8927, defaultChange: 0.44 }
@@ -397,7 +397,7 @@ export function MarketHoursHeatmap(props) {
                 <div class="flex flex-col gap-0.5 min-w-0 flex-1">
                   <span class="text-[10px] font-black tracking-tight text-white uppercase truncate leading-tight">{market.name}</span>
                   <div class="flex items-center gap-1 mt-0.5">
-                    <span class="text-[7.5px] font-bold opacity-50 tracking-wider truncate uppercase">{market.region.replace(' & AUSTRALIA', '').replace('AMERIKA SERIKAT', 'USA').replace('EROPA', 'EU')}</span>
+                    <span class="text-[7.5px] font-bold opacity-50 tracking-wider truncate uppercase">{market.region.replace(' & AUSTRALIA', '').replace('UNITED STATES', 'USA').replace('EUROPE', 'EU')}</span>
                     <span class="text-[8.5px] font-mono font-black px-1 py-0.25 rounded bg-black/60 text-text_accent border border-text_accent/20">{market.localTime}</span>
                   </div>
                 </div>
