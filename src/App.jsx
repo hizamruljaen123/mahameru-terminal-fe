@@ -30,6 +30,7 @@ import CorrelationView from './views/CorrelationView';
 import AlertCenterView from './views/AlertCenterView';
 import EntityCorrelationView from './views/entity-correlation/EntityCorrelationView';
 import WorkspaceView from './views/WorkspaceView';
+import ResearchPanelView from './views/ResearchPanelView';
 import { alertManager } from './utils/alertManager';
 
 function App() {
@@ -304,6 +305,7 @@ function App() {
     '/crisis-disaster': 'crisis-disaster',
     '/government-facility': 'government-facility',
     '/entity-correlation': 'entity-correlation',
+    '/research-panel': 'research-panel',
     '/workspace': 'workspace',
   };
 
@@ -481,6 +483,10 @@ function App() {
 
           <Show when={view() === 'entity-correlation'}>
             <EntityCorrelationView />
+          </Show>
+
+          <Show when={view() === 'research-panel'}>
+            <ResearchPanelView />
           </Show>
 
           <Show when={view() === 'workspace'}>
