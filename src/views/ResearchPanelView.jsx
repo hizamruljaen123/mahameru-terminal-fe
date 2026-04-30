@@ -24,8 +24,8 @@ const loadHtml2Pdf = () => {
 };
 
 export default function ResearchPanelView() {
-    const RESEARCH_API = import.meta.env.VITE_RESEARCH_API || 'http://localhost:5202';
-    
+    const RESEARCH_API = import.meta.env.VITE_RESEARCH_API;
+
     const [symbol, setSymbol] = createSignal('');
     const [model, setModel] = createSignal('deepseek-v4-flash');
     const [loading, setLoading] = createSignal(false);
@@ -36,16 +36,16 @@ export default function ResearchPanelView() {
     const [activeFundTab, setActiveFundTab] = createSignal('valuation');
     const [recommendations, setRecommendations] = createSignal([]);
     const [taData, setTaData] = createSignal(null);
-    
+
     // AI generated sections
     const [reports, setReports] = createSignal({
         1: '', 2: '', 3: '', 4: '', 5: ''
     });
-    
+
     let chartContainer;
     let myChart = null;
     let reportContainerRef; // for PDF
-    
+
     const addLog = (msg) => {
         setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
     };
@@ -65,10 +65,10 @@ export default function ResearchPanelView() {
     });
 
     const formatNumber = (num) => {
-        if(num == null) return 'N/A';
-        if(Math.abs(num) >= 1e12) return (num/1e12).toFixed(2) + ' T';
-        if(Math.abs(num) >= 1e9) return (num/1e9).toFixed(2) + ' B';
-        if(Math.abs(num) >= 1e6) return (num/1e6).toFixed(2) + ' M';
+        if (num == null) return 'N/A';
+        if (Math.abs(num) >= 1e12) return (num / 1e12).toFixed(2) + ' T';
+        if (Math.abs(num) >= 1e9) return (num / 1e9).toFixed(2) + ' B';
+        if (Math.abs(num) >= 1e6) return (num / 1e6).toFixed(2) + ' M';
         return num.toLocaleString();
     };
 
@@ -76,10 +76,10 @@ export default function ResearchPanelView() {
         try {
             const res = await fetch(`${RESEARCH_API}/api/data/chart?symbol=${sym}&period=${period}`);
             const json = await res.json();
-            if(json.status === 'success' && json.data.length > 0) {
+            if (json.status === 'success' && json.data.length > 0) {
                 renderChart(json.data);
             }
-        } catch(e) {
+        } catch (e) {
             console.error("Failed to fetch chart", e);
         }
     };
@@ -89,7 +89,7 @@ export default function ResearchPanelView() {
         if (!myChart) {
             myChart = echarts.init(chartContainer);
         }
-        
+
         const dates = historicalData.map(d => d.date);
         const data = historicalData.map(d => [d.open, d.close, d.low, d.high]);
         const volumes = historicalData.map(d => d.volume);
@@ -132,8 +132,8 @@ export default function ResearchPanelView() {
 
     const handleSearch = async (e) => {
         e.preventDefault();
-        if(!symbol()) return;
-        
+        if (!symbol()) return;
+
         setLoading(true);
         setProgress(10);
         setLogs([]);
@@ -141,49 +141,49 @@ export default function ResearchPanelView() {
         setReports({ 1: '', 2: '', 3: '', 4: '', 5: '' });
         setRecommendations([]);
         setTaData(null);
-        
+
         let aggregatedData = { symbol: symbol() };
-        
+
         try {
             // 1. Fundamental
             addLog("Fetching Fundamental Data...");
             const fRes = await fetch(`${RESEARCH_API}/api/data/fundamental?symbol=${symbol()}`);
             const fData = await fRes.json();
-            if(fData.status === 'success') {
+            if (fData.status === 'success') {
                 aggregatedData.fundamental = fData.data;
                 setProgress(30);
             }
-            
+
             // 2. Market (Baseline 1y for AI)
             addLog("Fetching Market Data...");
             const mRes = await fetch(`${RESEARCH_API}/api/data/market?symbol=${symbol()}`);
             const mData = await mRes.json();
-            if(mData.status === 'success') {
+            if (mData.status === 'success') {
                 aggregatedData.market = mData.data;
                 setProgress(50);
             }
-            
+
             // 3.5 TA Analysis
             addLog("Fetching Proprietary Technical Analysis...");
             try {
                 const taRes = await fetch(`https://api.asetpedia.online/ta/api/ta/analyze/${symbol()}`);
                 const taJson = await taRes.json();
-                if(taJson && !taJson.error) {
+                if (taJson && !taJson.error) {
                     aggregatedData.ta = taJson;
                     setTaData(taJson);
                 }
-            } catch(e) {
+            } catch (e) {
                 console.error("Failed to fetch TA data", e);
             }
 
             setFullData(aggregatedData);
-            
+
             // 4. Sequential AI Generation
             let generatedStages = {};
             for (let stage = 1; stage <= 5; stage++) {
                 addLog(`Generating Stage ${stage}...`);
                 setProgress(70 + (stage * 6));
-                
+
                 const repRes = await fetch(`${RESEARCH_API}/api/analyze/report`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -200,32 +200,32 @@ export default function ResearchPanelView() {
                 const decoder = new TextDecoder();
                 let stageText = '';
                 let buffer = '';
-                
-                while(true) {
+
+                while (true) {
                     const { done, value } = await reader.read();
-                    if(done) break;
-                    
+                    if (done) break;
+
                     buffer += decoder.decode(value, { stream: true });
                     let boundary = buffer.indexOf('\n');
-                    while(boundary !== -1) {
+                    while (boundary !== -1) {
                         const line = buffer.substring(0, boundary).trim();
                         buffer = buffer.substring(boundary + 1);
-                        
+
                         if (line.startsWith('data: ')) {
                             try {
                                 const obj = JSON.parse(line.substring(6));
-                                if(obj.content) {
+                                if (obj.content) {
                                     stageText += obj.content;
-                                    setReports(prev => ({...prev, [stage]: window.marked ? window.marked.parse(stageText) : stageText}));
+                                    setReports(prev => ({ ...prev, [stage]: window.marked ? window.marked.parse(stageText) : stageText }));
                                 }
-                            } catch(e) {}
+                            } catch (e) { }
                         }
                         boundary = buffer.indexOf('\n');
                     }
                 }
                 generatedStages[stage] = stageText;
             }
-            
+
             setProgress(100);
             addLog("Synthesis Complete.");
 
@@ -239,11 +239,11 @@ export default function ResearchPanelView() {
     const handleSavePDF = () => {
         if (!window.html2pdf || !reportContainerRef) return;
         const opt = {
-            margin:       0.5,
-            filename:     `${symbol()}_Research_Report.pdf`,
-            image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, useCORS: true, logging: false },
-            jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+            margin: 0.5,
+            filename: `${symbol()}_Research_Report.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, logging: false },
+            jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
         };
         // Add a temporary class to justify text before printing
         reportContainerRef.classList.add('print-justify');
@@ -254,7 +254,7 @@ export default function ResearchPanelView() {
 
     return (
         <div class="flex-1 flex flex-col bg-bg_main overflow-hidden text-text_primary text-[10px] relative">
-            
+
             {/* Header Form */}
             <div class="px-6 py-4 bg-bg_sidebar border-b border-border_main flex justify-between items-center shrink-0">
                 <div class="flex items-center gap-4">
@@ -271,14 +271,14 @@ export default function ResearchPanelView() {
             <div class="flex-1 flex overflow-hidden">
                 {/* Left Sidebar: Context & Data Modules */}
                 <div class="w-[300px] border-r border-border_main flex flex-col bg-bg_sidebar overflow-y-auto win-scroll p-4 gap-4 shrink-0">
-                    
+
                     <div class="glass-panel p-3 flex flex-col gap-3">
                         <h3 class="text-[9px] font-black text-text_accent tracking-widest border-b border-border_main pb-1 uppercase">CONTROL PANEL</h3>
                         <form onSubmit={handleSearch} class="flex flex-col gap-3">
                             <div class="relative">
                                 <label class="text-[8px] text-text_secondary font-black uppercase tracking-wider block mb-1">Enter Ticker</label>
-                                <input 
-                                    type="text" 
+                                <input
+                                    type="text"
                                     class="w-full bg-black border border-border_main px-3 py-2 text-[11px] font-mono text-white outline-none focus:border-text_accent uppercase"
                                     placeholder="e.g., BBCA.JK, AAPL"
                                     value={symbol()}
@@ -295,7 +295,7 @@ export default function ResearchPanelView() {
                                     <div class="absolute z-50 bg-bg_sidebar border border-border_main w-full max-h-48 overflow-y-auto mt-1 flex flex-col shadow-2xl">
                                         <For each={recommendations()}>
                                             {(rec) => (
-                                                <button 
+                                                <button
                                                     type="button"
                                                     class="text-left px-3 py-2 text-[9px] hover:bg-text_accent hover:text-bg_main font-mono border-b border-border_main/30 text-white transition-colors flex flex-col"
                                                     onClick={() => {
@@ -313,7 +313,7 @@ export default function ResearchPanelView() {
                             </div>
                             <div>
                                 <label class="text-[8px] text-text_secondary font-black uppercase tracking-wider block mb-1">AI Engine Model</label>
-                                <select 
+                                <select
                                     class="w-full bg-black border border-border_main px-3 py-2 text-[11px] font-mono text-white outline-none focus:border-text_accent"
                                     value={model()}
                                     onChange={(e) => setModel(e.target.value)}
@@ -323,15 +323,15 @@ export default function ResearchPanelView() {
                                     <option value="deepseek-v4-pro">DeepSeek V4 Pro</option>
                                 </select>
                             </div>
-                            <button 
-                                type="submit" 
+                            <button
+                                type="submit"
                                 class="w-full bg-text_accent text-bg_main py-2 font-black uppercase hover:bg-white transition-colors tracking-widest disabled:opacity-50 text-[10px]"
                                 disabled={loading()}
                             >
                                 {loading() ? 'ANALYZING...' : 'SYNTHESIZE'}
                             </button>
-                            <button 
-                                type="button" 
+                            <button
+                                type="button"
                                 class="w-full border border-text_accent text-text_accent py-2 font-black uppercase hover:bg-text_accent hover:text-bg_main transition-colors tracking-widest disabled:opacity-50 text-[10px]"
                                 disabled={loading() || (!fullData() && !reports()[1])}
                                 onClick={handleSavePDF}
@@ -403,8 +403,8 @@ export default function ResearchPanelView() {
                         </div>
                     </Show>
                 </div>
-<div class="flex-1 flex flex-col overflow-y-auto win-scroll bg-[#0b0f19] p-8">
-                    
+                <div class="flex-1 flex flex-col overflow-y-auto win-scroll bg-[#0b0f19] p-8">
+
                     <Show when={fullData() || reports()[1]}>
                         <div class="paper-report bg-white shadow-2xl mx-auto max-w-6xl p-16 relative font-sans text-justify text-[#1e293b] normal-case" ref={reportContainerRef}>
                             <style>
@@ -564,12 +564,12 @@ export default function ResearchPanelView() {
 
                             {/* Section 2: Fundamental Factsheet with Tabs */}
                             <div class="section-title">2. FUNDAMENTAL FACTSHEET</div>
-                            
+
                             {/* Tabs Header */}
                             <div class="flex gap-2 border-b border-slate-200 text-left text-xs mb-4">
                                 <For each={['valuation', 'profitability', 'income', 'balance']}>
                                     {(tab) => (
-                                        <button 
+                                        <button
                                             class={`px-4 py-2 font-black uppercase transition-all border-b-2 ${activeFundTab() === tab ? 'border-sky-600 text-sky-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
                                             onClick={() => setActiveFundTab(tab)}
                                         >
@@ -675,7 +675,7 @@ export default function ResearchPanelView() {
                                             <thead class="bg-slate-50">
                                                 <tr>
                                                     <th class="p-2 border border-slate-200 font-bold uppercase text-slate-500">Metric</th>
-                                                    <For each={Object.keys(fullData().fundamental.financials).sort((a,b)=>b.localeCompare(a))}>
+                                                    <For each={Object.keys(fullData().fundamental.financials).sort((a, b) => b.localeCompare(a))}>
                                                         {(y) => <th class="p-2 border border-slate-200 text-right font-bold text-slate-700">{y}</th>}
                                                     </For>
                                                 </tr>
@@ -685,7 +685,7 @@ export default function ResearchPanelView() {
                                                     {(m) => (
                                                         <tr>
                                                             <td class="p-2 border border-slate-200 font-bold text-slate-800">{m}</td>
-                                                            <For each={Object.keys(fullData().fundamental.financials).sort((a,b)=>b.localeCompare(a))}>
+                                                            <For each={Object.keys(fullData().fundamental.financials).sort((a, b) => b.localeCompare(a))}>
                                                                 {(y) => {
                                                                     const val = fullData().fundamental.financials[y][m];
                                                                     return <td class="p-2 border border-slate-200 text-right">{val != null ? formatNumber(val) : '-'}</td>;
@@ -707,7 +707,7 @@ export default function ResearchPanelView() {
                             <div class="flex justify-end gap-1 mb-4 text-xs font-bold">
                                 <For each={['1mo', '3mo', '6mo', '1y', '3y', '5y']}>
                                     {(p) => (
-                                        <button 
+                                        <button
                                             class={`px-2 py-1 uppercase border rounded transition ${chartPeriod() === p ? 'border-sky-600 bg-sky-600 text-white font-black' : 'border-slate-200 text-slate-500 hover:border-slate-400 bg-white'}`}
                                             onClick={() => {
                                                 setChartPeriod(p);
