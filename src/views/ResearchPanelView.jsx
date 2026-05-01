@@ -36,15 +36,6 @@ const loadKaTeX = () => {
     });
 };
 
-const loadHtml2Pdf = () => {
-    return new Promise((resolve) => {
-        if (window.html2pdf) return resolve();
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-        script.onload = () => resolve();
-        document.head.appendChild(script);
-    });
-};
 
 const REPORT_STYLES = `
   .paper-report {
@@ -142,7 +133,7 @@ export default function ResearchPanelView() {
     let chartContainer;
     let rsiContainer;
     let macdContainer;
-    let reportContainerRef; // for PDF
+    let reportContainerRef;
 
     const addLog = (msg) => {
         setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
@@ -231,7 +222,7 @@ export default function ResearchPanelView() {
     };
 
     onMount(async () => {
-        await Promise.all([loadMarked(), loadHtml2Pdf(), loadKaTeX()]);
+        await Promise.all([loadMarked(), loadKaTeX()]);
         loadHistory();
         fetchModels();
     });
@@ -608,98 +599,7 @@ export default function ResearchPanelView() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         addLog("Markdown Report Exported.");
-    };
-
-    const handleSavePDF = async () => {
-        const el = reportContainerRef;
-        if (!window.html2pdf || !el) return;
-
-        addLog("Initializing institutional PDF engine...");
-
-        // 1. Create Iframe Sandbox
-        const iframe = document.createElement('iframe');
-        Object.assign(iframe.style, {
-            position: 'fixed',
-            left: '-10000px',
-            top: '0',
-            width: '1200px',
-            height: '1000px'
-        });
-        document.body.appendChild(iframe);
-
-        const doc = iframe.contentWindow.document;
-        const reportHtml = el.innerHTML;
-
-        // 2. Build complete document
-        doc.open();
-        doc.write(`
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
-            <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
-            <style>
-                body { background: white; margin: 0; padding: 60px; font-family: 'Roboto', sans-serif; }
-                .paper-report { background: white; color: #1e293b; width: 100%; }
-                .paper-report h1 { font-family: 'Outfit', sans-serif; font-size: 2.25rem; font-weight: 900; color: #0f172a; margin-bottom: 1.5rem; }
-                .paper-report h2 { font-family: 'Outfit', sans-serif; font-size: 1.5rem; font-weight: 800; color: #1e293b; margin-top: 2rem; margin-bottom: 1rem; }
-                .paper-report h3 { font-family: 'Outfit', sans-serif; font-size: 1.25rem; font-weight: 700; color: #0369a1; margin-top: 1.5rem; margin-bottom: 0.75rem; }
-                .paper-report p, .paper-report li { font-size: 0.95rem; line-height: 1.8; margin-bottom: 1.25rem; color: #334155; text-align: justify; }
-                .paper-report table { width: 100%; font-size: 0.85rem; border-collapse: collapse; margin-bottom: 1.5rem; }
-                .paper-report th { background: #f8fafc; color: #0f172a; font-weight: 700; padding: 0.75rem; border-bottom: 2px solid #cbd5e1; }
-                .paper-report td { padding: 0.75rem; border-bottom: 1px solid #e2e8f0; color: #475569; }
-                .section-title { font-size: 1rem; font-weight: 800; color: #0284c7; border-bottom: 1.5px solid #0284c7; padding-bottom: 4px; margin-top: 2rem; margin-bottom: 1rem; }
-                .img-snapshot { width: 100%; height: auto; display: block; margin: 20px 0; border: 1px solid #eee; }
-                canvas { display: none !important; }
-            </style>
-          </head>
-          <body>
-            <div class="paper-report">${reportHtml}</div>
-          </body>
-          </html>
-        `);
-        doc.close();
-
-        // 3. Sync Canvases
-        const origCanvases = el.querySelectorAll('canvas');
-        const iframeCanvases = doc.querySelectorAll('canvas');
-        origCanvases.forEach((canvas, i) => {
-            try {
-                const img = doc.createElement('img');
-                img.src = canvas.toDataURL('image/png', 1.0);
-                img.className = 'img-snapshot';
-                if (iframeCanvases[i]) {
-                    iframeCanvases[i].parentNode.replaceChild(img, iframeCanvases[i]);
-                }
-            } catch (e) { }
-        });
-
-        // 4. Capture
-        const opt = {
-            margin: [10, 10, 10, 10],
-            filename: `${symbol()}_Research_Report.pdf`,
-            image: { type: 'jpeg', quality: 1.0 },
-            html2canvas: {
-                scale: 2,
-                useCORS: true,
-                backgroundColor: '#ffffff',
-                width: 1200,
-                windowWidth: 1200
-            },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        };
-
-        try {
-            addLog("Generating institutional document...");
-            await new Promise(r => setTimeout(r, 1000));
-            await window.html2pdf().set(opt).from(doc.body).save();
-            addLog("PDF Export Complete.");
-        } catch (err) {
-            addLog(`PDF Export Failed: ${err.message}`, 'error');
-        } finally {
-            document.body.removeChild(iframe);
-        }
-    };
+    };;
 
     return (
         <div class="flex-1 flex flex-col bg-bg_main overflow-hidden text-text_primary text-[10px] relative">
@@ -853,18 +753,6 @@ export default function ResearchPanelView() {
                                             <span class="text-[7px] font-black uppercase tracking-tighter text-white/40 group-hover:text-white">Analyze</span>
                                         </button>
 
-                                        <button
-                                            type="button"
-                                            disabled={loading() || (!fullData() && !reports()[1])}
-                                            onClick={handleSavePDF}
-                                            class="flex flex-col items-center justify-center gap-1.5 p-2 rounded border bg-white/5 border-white/10 hover:border-rose-400/50 hover:bg-rose-400/10 transition-all disabled:opacity-30 group"
-                                            title="Export PDF"
-                                        >
-                                            <svg class="w-4 h-4 text-white/60 group-hover:text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                            </svg>
-                                            <span class="text-[7px] font-black uppercase tracking-tighter text-white/40 group-hover:text-white">PDF</span>
-                                        </button>
 
                                         <button
                                             type="button"

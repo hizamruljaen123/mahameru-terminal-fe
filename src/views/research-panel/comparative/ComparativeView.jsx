@@ -9,7 +9,6 @@ import LeadershipTrailPanel from './components/LeadershipTrailPanel';
 import LegalCasePanel from './components/LegalCasePanel';
 import AIAnalysisStream from './components/AIAnalysisStream';
 import GlossaryPanel from './components/GlossaryPanel';
-import { BarChartPDF, FinancialTablePDF, SparklinePDF } from './components/PDFCharts';
 
 const GET_STAGE_NAMES = (language = 'en') => {
   const isId = language === 'id';
@@ -350,108 +349,6 @@ export default function ComparativeView() {
     addLog("✓ Research bundle successfully exported as ZIP.");
   };
 
-  const handleSavePDF = async () => {
-    const el = reportContainerRef();
-    if (!el) return;
-
-    // Load html2pdf
-    await new Promise(resolve => {
-      if (window.html2pdf) return resolve();
-      const s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-      s.onload = resolve;
-      document.head.appendChild(s);
-    });
-
-    addLog("Initializing secure PDF rendering engine...");
-
-    // 1. Create a clean sandbox (Iframe)
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.left = '-10000px';
-    iframe.style.top = '0';
-    iframe.style.width = '1200px';
-    iframe.style.height = '1000px';
-    document.body.appendChild(iframe);
-
-    const doc = iframe.contentWindow.document;
-
-    // 2. Prepare the content
-    const reportHtml = el.innerHTML;
-
-    // 3. Inject full document with styles
-    doc.open();
-    doc.write(`
-      <!DOCTYPE html>
-        <html>
-          <head>
-            <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
-              <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
-                <style>
-                  body {background: white; margin: 0; padding: 40px; font-family: 'Roboto', sans-serif; -webkit-print-color-adjust: exact; }
-                  ${REPORT_STYLES}
-                  /* Custom overrides for PDF */
-                  .paper-report { box-shadow: none !important; border: none !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }
-                  canvas { display: none !important; } /* We will replace these */
-                  .img-snapshot { width: 100%; height: auto; display: block; margin: 20px 0; border: 1px solid #eee; }
-                  .page-break { page-break-before: always; height: 0; margin: 0; border: none; }
-                </style>
-              </head>
-              <body>
-                <div class="paper-report">
-                  ${reportHtml}
-                </div>
-              </body>
-            </html>
-            `);
-    doc.close();
-
-    // 4. Handle Canvases (Replace with images in the iframe)
-    const origCanvases = el.querySelectorAll('canvas');
-
-    // We need to find the equivalent positions. 
-    // A better way is to find canvases in the iframe and replace them.
-    const iframeCanvases = doc.querySelectorAll('canvas');
-    origCanvases.forEach((canvas, i) => {
-      try {
-        const img = doc.createElement('img');
-        img.src = canvas.toDataURL('image/png', 1.0);
-        img.alt = 'Analysis Chart Snapshot';
-        img.className = 'img-snapshot';
-        if (iframeCanvases[i]) {
-          iframeCanvases[i].parentNode.replaceChild(img, iframeCanvases[i]);
-        }
-      } catch (e) { console.error(e); }
-    });
-
-    // 5. Generate PDF from Iframe
-    const symbols = Object.keys(rawData()).join('_vs_');
-    const opt = {
-      margin: [10, 10, 10, 10],
-      filename: `${symbols}_Comparative_Analysis.pdf`,
-      image: { type: 'jpeg', quality: 1.0 },
-      html2canvas: {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        width: 1200,
-        windowWidth: 1200
-      },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-
-    try {
-      addLog("Capturing high-fidelity intelligence...");
-      // Wait for font loading and rendering
-      await new Promise(r => setTimeout(r, 1000));
-      await window.html2pdf().set(opt).from(doc.body).save();
-      addLog("Institutional Export Successful.");
-    } catch (err) {
-      addLog(`Export Error: ${err.message}`, 'error');
-    } finally {
-      document.body.removeChild(iframe);
-    }
-  };
 
   const totalProgress = () => {
     if (phase() === 'data') return Math.round(progress() * 0.5);
@@ -572,18 +469,6 @@ export default function ComparativeView() {
                 <span class="text-[7px] font-black uppercase tracking-tighter text-white/40 group-hover:text-white">New</span>
               </button>
 
-              {/* Row 2: File Operations */}
-              <button
-                onClick={handleSavePDF}
-                disabled={!reports()[8]}
-                class="flex flex-col items-center justify-center gap-1.5 p-2 rounded border bg-white/5 border-white/10 hover:border-rose-400/50 hover:bg-rose-400/10 transition-all disabled:opacity-30 group"
-                title="Export PDF"
-              >
-                <svg class="w-4 h-4 text-white/60 group-hover:text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                </svg>
-                <span class="text-[7px] font-black uppercase tracking-tighter text-white/40 group-hover:text-white">PDF</span>
-              </button>
 
               <button
                 onClick={handleExportZIP}
