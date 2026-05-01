@@ -87,9 +87,14 @@ export default function LegalCasePanel(props) {
                               {formatDate(item.providerPublishTime || item.timestamp)}
                             </span>
                           </div>
-                          <div class="text-[9px] font-semibold text-white/70 hover:text-white leading-snug line-clamp-2 transition-colors">
+                          <div class="text-[9px] font-semibold text-white/70 hover:text-white leading-snug transition-colors">
                             {item.title}
                           </div>
+                          <Show when={item.description}>
+                            <div class="text-[7px] text-white/40 leading-relaxed mt-1 line-clamp-2">
+                              {item.description}
+                            </div>
+                          </Show>
                         </a>
                       );
                     }}

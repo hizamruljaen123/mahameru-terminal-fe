@@ -54,53 +54,120 @@ export function BarChartPDF(props) {
   );
 }
 
-// ─── SVG Sparkline (PDF-safe — uses SVG polyline, not canvas) ───
+// ─── SVG Candlestick + Overlays (PDF-safe) ───
 export function SparklinePDF(props) {
-  const vals = () => (props.data || []).map(d => d.close || d.Close || d.value || 0).filter(v => !isNaN(v));
-  const w = () => props.width || 200;
-  const h = () => props.height || 50;
+  const data = () => props.data || [];
+  const ta = () => props.ta || {};
+  const isFull = () => props.type === 'full';
+  
+  const w = () => props.width || (isFull() ? 300 : 200);
+  const h = () => props.height || (isFull() ? 100 : 50);
 
-  const points = () => {
-    const v = vals();
-    if (v.length < 2) return '';
-    const min = Math.min(...v);
-    const max = Math.max(...v);
-    const range = max - min || 1;
-    return v.map((val, i) => {
-      const x = (i / (v.length - 1)) * w();
-      const y = h() - ((val - min) / range) * (h() - 6) - 3;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(' ');
+  const getMinMax = () => {
+    const d = data().slice(-60); // Last 60 days
+    if (d.length === 0) return { min: 0, max: 1 };
+    
+    let prices = d.flatMap(x => [x.high ?? x.High ?? x.close, x.low ?? x.Low ?? x.close]);
+    
+    // Include TA if present for scaling
+    if (ta()?.indicators?.bb?.upper) {
+      const bb = ta().indicators.bb;
+      prices.push(...bb.upper.slice(-60), ...bb.lower.slice(-60));
+    }
+    
+    prices = prices.filter(v => typeof v === 'number' && v > 0);
+    const minVal = prices.length ? Math.min(...prices) * 0.98 : 0;
+    const maxVal = prices.length ? Math.max(...prices) * 1.02 : 1;
+    return { min: minVal, max: maxVal };
   };
 
-  const chgPct = () => {
-    const v = vals();
-    if (v.length < 2) return null;
-    return ((v[v.length - 1] - v[0]) / v[0] * 100).toFixed(1);
+  const stats = () => getMinMax();
+  const range = () => (stats().max - stats().min) || 1;
+
+  const scaleY = (val) => h() - ((val - stats().min) / range()) * h();
+  const scaleX = (i, total) => (i / (total - 1)) * w();
+
+  const candles = () => {
+    const d = data().slice(-60);
+    const n = d.length;
+    if (n < 2) return [];
+    return d.map((item, i) => {
+      const open = item.open ?? item.Open ?? item.close;
+      const close = item.close ?? item.Close ?? item.open;
+      const high = item.high ?? item.High ?? Math.max(open, close);
+      const low = item.low ?? item.Low ?? Math.min(open, close);
+      
+      const x = scaleX(i, n);
+      const yOpen = scaleY(open);
+      const yClose = scaleY(close);
+      const yHigh = scaleY(high);
+      const yLow = scaleY(low);
+      
+      return {
+        x,
+        y1: Math.min(yOpen, yClose),
+        h: Math.abs(yOpen - yClose) || 0.5,
+        yh1: yHigh,
+        yh2: yLow,
+        isUp: close >= open
+      };
+    });
+  };
+
+  const renderPath = (arr, color, width = 1, dashed = false) => {
+    if (!arr || arr.length < 2) return null;
+    const d = arr.slice(-60).map((v, i) => {
+      const x = scaleX(i, 60);
+      const y = scaleY(v);
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
+    }).join(' ');
+    return <path d={d} fill="none" stroke={color} stroke-width={width} stroke-dasharray={dashed ? "2,2" : "none"} />;
   };
 
   return (
-    <div style="break-inside: avoid; page-break-inside: avoid; margin-bottom: 6px;">
+    <div style="break-inside: avoid; page-break-inside: avoid; margin-bottom: 10px;">
       <Show when={props.label}>
-        <div style="font-size: 8px; font-weight: 700; color: #475569; margin-bottom: 3px;">{props.label}</div>
+        <div style="font-size: 8px; font-weight: 800; color: #334155; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.05em;">{props.label}</div>
       </Show>
-      <Show when={vals().length >= 2} fallback={<div style="font-size: 8px; color: #cbd5e1; font-style: italic;">No price data</div>}>
+      <div style={`position: relative; width: ${w()}px; height: ${h()}px; background: #f8fafc; border: 1px solid #e2e8f0;`}>
         <svg width={w()} height={h()} style="display: block; overflow: visible;">
-          <polyline
-            points={points()}
-            fill="none"
-            stroke={props.color || '#0ea5e9'}
-            stroke-width="1.5"
-            stroke-linejoin="round"
-            stroke-linecap="round"
-          />
+          {/* BB Area */}
+          <Show when={isFull() && ta()?.indicators?.bb}>
+             {(() => {
+                const bb = ta().indicators.bb;
+                const up = bb.upper.slice(-60);
+                const lo = bb.lower.slice(-60);
+                let path = `M ${scaleX(0, 60)} ${scaleY(up[0])} `;
+                for(let i=1; i<up.length; i++) path += `L ${scaleX(i, 60)} ${scaleY(up[i])} `;
+                for(let i=lo.length-1; i>=0; i--) path += `L ${scaleX(i, 60)} ${scaleY(lo[i])} `;
+                path += 'Z';
+                return <path d={path} fill="#e2e8f0" opacity="0.4" />;
+             })()}
+          </Show>
+
+          {/* Indicators */}
+          <Show when={isFull() && ta()?.indicators}>
+            {renderPath(ta().indicators.sma?.sma20, '#f59e0b', 0.8)}
+            {renderPath(ta().indicators.sma?.sma50, '#3b82f6', 0.8)}
+            {renderPath(ta().indicators.bb?.upper, '#94a3b8', 0.5, true)}
+            {renderPath(ta().indicators.bb?.lower, '#94a3b8', 0.5, true)}
+          </Show>
+
+          {/* Candles */}
+          <For each={candles()}>
+            {(c) => (
+              <g>
+                <line x1={c.x} y1={c.yh1} x2={c.x} y2={c.yh2} stroke={c.isUp ? '#10b981' : '#ef4444'} stroke-width="0.5" />
+                <rect x={c.x - 1.5} y={c.y1} width="3" height={c.h} fill={c.isUp ? '#10b981' : '#ef4444'} />
+              </g>
+            )}
+          </For>
         </svg>
-        <Show when={chgPct() !== null}>
-          <div style={`font-size: 8px; font-weight: 800; color: ${Number(chgPct()) >= 0 ? '#10b981' : '#ef4444'};`}>
-            {Number(chgPct()) >= 0 ? '▲' : '▼'} {Math.abs(Number(chgPct()))}% (period)
-          </div>
-        </Show>
-      </Show>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin-top: 3px;">
+        <div style="font-size: 7px; color: #94a3b8; font-family: monospace;">{stats().min.toFixed(2)}</div>
+        <div style="font-size: 7px; color: #94a3b8; font-family: monospace;">{stats().max.toFixed(2)}</div>
+      </div>
     </div>
   );
 }

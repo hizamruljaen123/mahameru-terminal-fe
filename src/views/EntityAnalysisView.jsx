@@ -418,7 +418,7 @@ const EntityAnalysisView = (props) => {
     const [activeTab, setActiveTab] = createSignal("profile");
     const [marketIndices, setMarketIndices] = createSignal([]);
     const [marketLoading, setMarketLoading] = createSignal(false);
-    const [selectedRange, setSelectedRange] = createSignal('1M');
+    const [selectedRange, setSelectedRange] = createSignal('6M');
 
     const RANGES = ['1W', '1M', '3M', '6M', '1Y', '5Y', 'ALL'];
     const rangeMap = {
@@ -500,7 +500,7 @@ const EntityAnalysisView = (props) => {
 
         try {
             // 1. PHASE 1: Fetch Core Profile Data (Fast)
-            const period = rangeMap[selectedRange()] || '1mo';
+            const period = rangeMap[selectedRange()] || '6mo';
             const res = await fetch(`${import.meta.env.VITE_ENTITY_URL}/api/entity/profile/${symbol}?period=${period}`, { signal });
             const data = await res.json();
 
@@ -769,13 +769,23 @@ const EntityAnalysisView = (props) => {
 
                                                     {/* Right Column: Strategic Insight */}
                                                     <div class="lg:w-1/2 min-w-0 lg:border-l lg:border-white/5 lg:pl-8 flex flex-col">
-                                                        <div class="flex items-center gap-2 mb-3">
-                                                            <span class="text-[10px] font-black text-text_accent uppercase tracking-[0.2em]">STRATEGIC_OVERVIEW</span>
-                                                            <div class="h-px bg-text_accent/20 flex-1"></div>
+                                                        <div class="space-y-4">
+                                                            <p class="text-[13px] text-text_secondary/80 leading-relaxed font-medium line-clamp-4 group-hover:line-clamp-none transition-all duration-500">
+                                                                {profile().metrics.longBusinessSummary || "No strategic overview available in current intelligence node."}
+                                                            </p>
+                                                            <Show when={profile().metrics.wikipedia_summary && profile().metrics.wikipedia_summary !== "Tidak ada ringkasan Wikipedia."}>
+                                                                <div class="pt-4 border-t border-white/5 animate-in fade-in slide-in-from-top-2 duration-700">
+                                                                    <div class="text-[8px] font-black text-text_accent/60 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
+                                                                        <div class="w-1 h-1 bg-text_accent rounded-full animate-pulse"></div>
+                                                                        Wikipedia Intelligence Node
+                                                                    </div>
+                                                                    <p class="text-[12px] text-text_secondary/60 italic leading-relaxed line-clamp-3 group-hover:line-clamp-none transition-all duration-500">
+                                                                        {profile().metrics.wikipedia_summary}
+                                                                    </p>
+                                                                </div>
+                                                            </Show>
                                                         </div>
-                                                        <p class="text-[13px] text-text_secondary/80 leading-relaxed font-medium line-clamp-5 group-hover:line-clamp-none transition-all duration-700">
-                                                            {profile().metrics.longBusinessSummary || "No strategic overview available in current intelligence node."}
-                                                        </p>
+
                                                     </div>
                                                 </div>
                                             </div>

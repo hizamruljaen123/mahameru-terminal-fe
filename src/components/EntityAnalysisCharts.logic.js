@@ -7,7 +7,7 @@ export const useEntityAnalysisCharts = (symbolAccessor) => {
     const [loading, setLoading] = createSignal(true);
     const [intradayHistory, setIntradayHistory] = createSignal([]);
     const [fullHistory, setFullHistory] = createSignal([]);
-    const [period, setPeriod] = createSignal('1y');
+    const [period, setPeriod] = createSignal('6mo');
 
     const [showDrilldown, setShowDrilldown] = createSignal(false);
     const [seasonalityYears, setSeasonalityYears] = createSignal([]);
@@ -92,7 +92,7 @@ export const useEntityAnalysisCharts = (symbolAccessor) => {
 
     window.addEventListener('resize', handleResize);
 
-    const fetchFullHistory = async (sym, p = '1y') => {
+    const fetchFullHistory = async (sym, p = '6mo') => {
         try {
             const res = await fetch(`${import.meta.env.VITE_ENTITY_URL}/api/entity/history/${sym}?period=${p}`);
             const data = await res.json();

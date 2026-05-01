@@ -103,7 +103,10 @@ export default function FundamentalComparePanel(props) {
 
       {/* Metrics Table */}
       <div class="rounded border border-white/5 overflow-hidden">
-        <For each={METRICS}>
+        <For each={METRICS.filter(metric => {
+          // Hide row if all companies show "—" for this metric
+          return companies().some(comp => metric.fmt(getVal(comp, metric.key)) !== '—');
+        })}>
           {(metric, mi) => {
             const winner = getWinner(metric.key);
             return (
@@ -131,6 +134,48 @@ export default function FundamentalComparePanel(props) {
           }}
         </For>
       </div>
+
+      {/* Wikipedia Strategic Overview */}
+      <Show when={companies().some(c => {
+        const wiki = c?.fundamental?.snapshot?.wikipedia_summary || c?.fundamentalEnriched?.snapshot?.wikipedia_summary;
+        return wiki && wiki !== "Tidak ada ringkasan Wikipedia.";
+      })}>
+        <div class="mt-4 space-y-4">
+          <div class="flex items-center gap-3">
+             <h3 class="text-[8px] font-black text-text_accent tracking-[0.4em] uppercase">
+              Wikipedia Strategic Intelligence
+            </h3>
+            <div class="h-px bg-white/5 flex-1"></div>
+          </div>
+          <div class="grid gap-4" style={{ 'grid-template-columns': `repeat(${companies().length}, 1fr)` }}>
+            <For each={companies().filter(comp => {
+              const wiki = comp?.fundamental?.snapshot?.wikipedia_summary || comp?.fundamentalEnriched?.snapshot?.wikipedia_summary;
+              return wiki && wiki !== "Tidak ada ringkasan Wikipedia.";
+            })}>
+              {(comp, i) => {
+                const c = colorMap[COLORS[i()]];
+                const wiki = comp?.fundamental?.snapshot?.wikipedia_summary || comp?.fundamentalEnriched?.snapshot?.wikipedia_summary;
+                return (
+                  <div class={`${c.bg} border ${c.border} rounded-lg p-5 space-y-3 relative overflow-hidden group/wiki`}>
+                    <div class="absolute top-0 right-0 p-2 opacity-5 pointer-events-none font-black text-4xl">{comp.symbol}</div>
+                    <div class="flex items-center gap-2">
+                      <div class={`w-1.5 h-1.5 rounded-full ${c.badge.split(' ')[0]}`}></div>
+                      <span class={`text-[9px] font-black ${c.text} uppercase tracking-widest`}>{comp.symbol} Profile</span>
+                    </div>
+                    <p class="text-[10px] text-white/70 leading-relaxed font-bold mb-2">
+                      {comp?.fundamental?.snapshot?.longBusinessSummary?.slice(0, 300)}...
+                    </p>
+                    <p class="text-[9px] text-white/40 leading-relaxed font-medium italic border-t border-white/5 pt-2">
+                      {wiki}
+                    </p>
+                  </div>
+                );
+              }}
+            </For>
+          </div>
+        </div>
+      </Show>
+
     </div>
   );
 }

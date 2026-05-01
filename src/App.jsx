@@ -96,24 +96,43 @@ function App() {
       });
     };
 
-    // 1. INITIAL CACHE LOAD
-    const initLoad = async () => {
-      try {
-        const response = await fetch(`${import.meta.env.VITE_API_BASE}/api/news/data`);
-        const parsed = await response.json();
+    // 1. PROGRESSIVE INITIAL LOAD (Replaces heavy /api/news/data)
+    const initLoad = () => {
+      console.log("[INIT] Starting progressive category stream...");
+      
+      const streamUrl = `${import.meta.env.VITE_API_BASE}/api/news/stream-categories?limit=15`;
+      const source = new EventSource(streamUrl);
 
-        if (parsed.status) setStatus(parsed.status);
-        if (parsed.news) mergeData(parsed.news);
-        
-        // Immediate release of loading screen to show the progressive UI
-        setIsLoading(false);
-      } catch (err) {
-        console.error("Initial Load Error:", err);
-        setIsLoading(false);
-      }
+      source.onmessage = (event) => {
+        try {
+          const parsed = JSON.parse(event.data);
+          
+          if (parsed.category && parsed.news) {
+            mergeData({ [parsed.category]: parsed.news });
+            // Release loading screen as soon as first data arrives
+            setIsLoading(false);
+          }
 
-      startStream();
+          if (parsed.done) {
+            console.log("[INIT] Progressive load complete.");
+            source.close();
+            // Start the main live stream after initial categories are loaded
+            startStream();
+          }
+        } catch (e) {
+          console.error("[INIT] Stream parse error:", e);
+        }
+      };
+
+      source.onerror = (err) => {
+        console.error("[INIT] Progressive stream error:", err);
+        source.close();
+        setIsLoading(false);
+        // Fallback to start main stream anyway
+        startStream();
+      };
     };
+
 
     const startStream = () => {
       if (eventSource) eventSource.close();

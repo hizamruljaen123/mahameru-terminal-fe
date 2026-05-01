@@ -2,6 +2,7 @@ import { createSignal, createEffect, onCleanup, onMount, Show } from 'solid-js';
 import { initAdvancedAnalysis, setupToggles } from './EntityAdvancedLogic.js';
 
 export default function EntityAdvancedView(props) {
+    const [activeIndex, setActiveIndex] = createSignal(0);
     const [isSidebarOpen, setIsSidebarOpen] = createSignal(true);
     const [collapsedGroups, setCollapsedGroups] = createSignal(new Set(['dynamicOscillators', 'deepQuant', 'neuralLab']));
 
@@ -13,7 +14,12 @@ export default function EntityAdvancedView(props) {
     };
 
     onMount(() => {
-        // Any initial mount logic if needed
+        const interval = setInterval(() => {
+            if (props.news && props.news.length > 0) {
+                setActiveIndex((prev) => (prev + 1) % props.news.length);
+            }
+        }, 3000);
+        onCleanup(() => clearInterval(interval));
     });
 
     createEffect(() => {
@@ -73,31 +79,20 @@ export default function EntityAdvancedView(props) {
                     <div class={`w-2 h-2 rounded-full ${props.newsLoading ? 'bg-amber-500 animate-pulse' : 'bg-green-500'} shadow-[0_0_10px_currentColor]`}></div>
                     <span class="text-[10px] font-black text-text_main uppercase tracking-[0.3em]">LIVE_INTEL_STREAM</span>
                 </div>
-                <div class="flex-1 overflow-hidden relative h-4">
-                    <div 
-                        class="absolute inset-y-0 left-0 flex items-center gap-16 whitespace-nowrap hover:[animation-play-state:paused]"
-                        style="animation: advancedTicker 80s linear infinite; display: flex; width: max-content;"
-                    >
-                        <style>{`
-                            @keyframes advancedTicker {
-                                0% { transform: translateX(0); }
-                                100% { transform: translateX(-50%); }
-                            }
-                        `}</style>
-                        <Show when={props.news && props.news.length > 0} fallback={<span class="text-[9px] text-text_dim italic uppercase opacity-40 tracking-widest">SYNCHRONIZING WITH GLOBAL RSS NODES...</span>}>
-                            {/* Double the list for seamless loop */}
-                            {[...props.news, ...props.news].map((item, idx) => (
-                                <a href={item.link} target="_blank" class="flex items-center gap-3 hover:text-amber-500 transition-colors group/news">
-                                    <span class="text-[10px] font-black text-text_secondary group-hover/news:text-text_main uppercase tracking-tight">{item.title}</span>
-                                    <span class="text-[8px] font-bold text-text_dim opacity-40 uppercase tabular-nums">[{item.publisher} // {new Date(item.time * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}]</span>
-                                    <div class="w-1.5 h-1.5 bg-border_main rotate-45 opacity-20"></div>
-                                </a>
+                <div class="flex-1 overflow-hidden relative h-5 flex items-center">
+                    <Show when={props.news && props.news.length > 0} fallback={<span class="text-[9px] text-text_dim italic uppercase opacity-40 tracking-widest">SYNCHRONIZING WITH GLOBAL RSS NODES...</span>}>
+                        <div class="relative w-full h-full">
+                            {props.news.map((item, idx) => (
+                                <Show when={idx === activeIndex()}>
+                                    <a href={item.link} target="_blank" class="absolute inset-0 flex items-center gap-4 hover:text-amber-500 transition-all duration-1000 animate-in fade-in slide-in-from-right-2 group/news">
+                                        <div class="px-2 py-0.5 bg-white/5 border border-white/10 rounded text-[8px] font-black text-text_accent shrink-0">INTEL_NODE_{idx + 1}</div>
+                                        <span class="text-[10px] font-black text-text_secondary group-hover/news:text-text_main uppercase tracking-tight truncate">{item.title}</span>
+                                        <span class="text-[8px] font-bold text-text_dim opacity-40 uppercase tabular-nums shrink-0">[{item.publisher} // {new Date(item.time * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}]</span>
+                                    </a>
+                                </Show>
                             ))}
-                        </Show>
-                    </div>
-                    {/* Fades for smooth edge transition */}
-                    <div class="absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-bg_header/80 to-transparent z-10 pointer-events-none"></div>
-                    <div class="absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-bg_header/80 to-transparent z-10 pointer-events-none"></div>
+                        </div>
+                    </Show>
                 </div>
             </div>
 

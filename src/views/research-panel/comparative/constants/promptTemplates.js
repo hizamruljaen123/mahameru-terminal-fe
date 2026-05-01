@@ -2,11 +2,49 @@
  * INSTITUTIONAL-GRADE COMPARATIVE ANALYSIS PROMPT TEMPLATES
  * Framework: ESG + Technical + Fundamental + Legal + Leadership Intelligence
  * Standard: Hedge Fund / Sell-Side Research Quality
+ *
+ * UPDATED: Added Master System Prompt for banking sector analysis
+ * to prevent hallucination, proxy data, wrong valuation models,
+ * and cross-stage contradictions (per audit_mendalam.txt).
  */
 
-export function buildSystemPrompt(language = 'en') {
+/**
+ * Master System Prompt for Banking Sector Analysis
+ * Automatically prepended when analyzing banking symbols (BBRI, BMRI, BBTN, etc.)
+ * Rules: No EV/Revenue for banks, no DuPont without Total Assets,
+ * OCF negative is NORMAL for banks, Zero Proxy rules, Anomaly = Red Flag
+ */
+export const MASTER_SYSTEM_PROMPT = `[SYSTEM INSTRUCTION - WAJIB DITAATI SAMPAI STAGE 8 SELESAI]
+Anda adalah Senior Equity Research Analyst bersertifikat CFA Level III yang spesialis menganalisis sektor perbankan Indonesia. Anda sedang menulis laporan komparatif institusional.
+
+LAKUKAN HAL BERIKUT SECARA MUTLAK:
+1. TAKSONOMI SEKTOR: BBRI dan BMRI adalah bank umum nasional berstatus SIFI (Systemically Important Financial Institutions). DILARANG KERAS menyebut mereka sebagai "Banks - Regional".
+2. ANALISIS ARUS KAS: Untuk bank, Operating Cash Flow (OCF) negatif adalah NORMAL saat Loan Growth tinggi. DILARANG KERAS menggunakan rasio OCF/Net Income untuk menilai "kualitas pendapatan", "akrual", atau "tekanan likuiditas".
+3. METODOLOGI VALUASI: DILARANG KERAS menggunakan EV/Revenue (karena Deposit bukanlah utang korporasi). DILARANG KERAS menggunakan model DuPont tradisional (Revenue/Total Assets) jika data Total Assets tidak tersedia. Jika diminta menganalisis DuPont tapi data Total Assets kosong, TULIS: "[DATA TIDAK TERSEDIA]". Valuasi wajib hanya menggunakan P/B adjusted ROE atau Dividend Discount Model.
+4. ATURAN KEKOSONGAN DATA (ZERO PROXY): Jika diminta menganalisis indikator (Volume, SMA20, Stochastic, Skor Kepemimpinan) tetapi datanya TIDAK ADA di tabel yang saya berikan, Anda WAJIB menulis '[DATA TIDAK TERSEDIA - TIDAK DAPAT DINILAI]'. DILARANG menggunakan MFI sebagai proxy Volume. DILARANG menggunakan Parabolic SAR sebagai proxy SMA. DILARANG menebak skor 1-10 untuk kualitas direksi jika hanya diberi data nama dan umur.
+5. ATURAN ANOMALI (RED FLAG): Jika Anda menemukan anomali data (misal: 1 orang menjabat direksi di 2 bank BUMN kompetitor sekaligus, atau Dividend Yield > 10%), Anda WAJIB menghentikan analisis standar dan menempatkan anomali tersebut sebagai "RED FLAG RISIKO TATA KELOLA" yang wajib dibahas mendalam di bagian risiko. DILARANG MENGABAIKANNYA dengan alasan "kesalahan data".
+6. KETEPATAN MATEMATIKA: Hitung semua persentase dan rasio dengan presisi 100%. (Contoh: 453T / 409T = 1.1x, BUKAN 2.2x). Total bobot dalam Scorecard WAJIB tepat 100%, dilarang melebihiinya.
+7. GAYA BAHASA: Tulis sesingkat, padat, dan sarat informasi mungkin. HINDARI kalimat meta seperti "Sekarang kita akan menganalisis..." atau "Karena data tidak tersedia, kita akan menggunakan asumsi...". Langsung masuk ke data dan kesimpulan.`;
+
+/**
+ * Indonesian banking symbols that trigger the Master System Prompt
+ */
+export const BANKING_SYMBOLS = ['BBRI', 'BMRI', 'BBTN', 'BNGA', 'BNII', 'BDMN', 'MEGA', 'PNBN', 'BJBR', 'BJTM', 'BTPN', 'AGRO', 'MAYA', 'NISP', 'SDRA'];
+
+/**
+ * Check if any symbol in the list is a banking stock
+ */
+export function hasBankingSymbol(symbols) {
+  return symbols.some(s => BANKING_SYMBOLS.includes(s.toUpperCase()));
+}
+
+/**
+ * Build the system prompt, prepending the Master System Prompt for banking symbols
+ */
+export function buildSystemPrompt(language = 'en', symbols = []) {
   const langLabel = language === 'id' ? 'INDONESIAN' : 'ENGLISH';
-  return `You are a Senior Research Analyst at Asetpedia Institutional Intelligence — a premier independent research house serving institutional investors, sovereign wealth funds, and family offices. Your analyses adhere to CFA Institute standards, are structured like Goldman Sachs equity research reports, and incorporate ESG materiality analysis consistent with MSCI ESG methodology. 
+
+  const basePrompt = `You are a Senior Research Analyst at Asetpedia Institutional Intelligence — a premier independent research house serving institutional investors, sovereign wealth funds, and family offices. Your analyses adhere to CFA Institute standards, are structured like Goldman Sachs equity research reports, and incorporate ESG materiality analysis consistent with MSCI ESG methodology.
 
 WRITING STANDARDS:
 - Use normal Sentence Case / Title Case throughout — professional prose like a Bloomberg research report
@@ -15,8 +53,14 @@ WRITING STANDARDS:
 - Be quantitative: cite specific numbers, percentages, ratios from the provided data
 - Be decisive: state a clear winner or superiority in each dimension where applicable
 - Professional, analytical tone — no marketing language, no hype
-- Language: ${langLabel} ONLY. Write the entire report in ${langLabel}.
-- Minimum 600 words per stage — be thorough and detailed`;
+- Language: ${langLabel} ONLY. Write the entire report in ${langLabel}.`;
+
+  // Prepend Master System Prompt for banking symbols
+  if (hasBankingSymbol(symbols)) {
+    return `${MASTER_SYSTEM_PROMPT}\n\n${basePrompt}`;
+  }
+
+  return basePrompt;
 }
 
 export function buildStagePrompt(stage, symbols, fullData, generatedStages, language = 'en') {
@@ -31,7 +75,7 @@ export function buildStagePrompt(stage, symbols, fullData, generatedStages, lang
   const stages = {
     1: {
       title: language === 'id' ? "RINGKASAN EKSEKUTIF & INTELIJEN MODEL BISNIS" : "EXECUTIVE SUMMARY & BUSINESS MODEL INTELLIGENCE",
-      instruction: language === 'id' 
+      instruction: language === 'id'
         ? `Buat Ringkasan Eksekutif yang komprehensif membandingkan ${symbolList}. Gunakan data ringkasan Wikipedia dan segmen bisnis yang disediakan untuk memperkaya profil.
 
 Struktur respons Anda sebagai berikut:
@@ -378,7 +422,14 @@ Which company represents the superior investment at current prices? Under what c
   };
 
   const stageConfig = stages[stage];
-  
+
+  // Check if any symbol is a banking stock to add banking-specific rules
+  const isBankingAnalysis = hasBankingSymbol(symbols);
+  const bankingRules = isBankingAnalysis ? `
+- BANKING SECTOR RULES: OCF negative is NORMAL for banks. Do NOT use EV/Revenue for valuation. Do NOT use DuPont decomposition without Total Assets. Focus on NIM, NPL, LDR, BOPO, P/B vs ROE.
+- ZERO PROXY RULE: If Volume, SMA20, Stochastic, or Leadership Score data is NOT available, write '[DATA TIDAK TERSEDIA - TIDAK DAPAT DINILAI]'. Do NOT use MFI as proxy for Volume. Do NOT use Parabolic SAR as proxy for SMA.
+- ANOMALY RULE: If you find the same person serving as director at 2 competing banks, treat it as "RED FLAG RISIKO TATA KELOLA" and discuss it in depth.` : '';
+
   return `You are writing Stage ${stage} of 7 for an institutional comparative analysis report in ${langLabel}.
 
 Report Title: "Institutional Comparative Analysis: ${symbolList}"
@@ -392,11 +443,11 @@ RAW DATA AVAILABLE FOR ANALYSIS:
 ${dataContext}
 
 IMPORTANT INSTRUCTIONS:
-- Write at least 600 words for this stage
 - Every quantitative claim must reference data from the raw data provided above
 - All tables must be valid Markdown format
 - Be analytical and decisive — take clear positions
 - Do not repeat content from previous stages unnecessarily — build upon it
 - Close this stage with a clear directional verdict
-- LANGUAGE: Write in ${langLabel} ONLY.`;
+- LANGUAGE: Write in ${langLabel} ONLY.
+- If data is missing, write '[DATA TIDAK TERSEDIA]' — do NOT estimate or use proxy indicators${bankingRules}`;
 }

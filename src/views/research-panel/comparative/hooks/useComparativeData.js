@@ -101,22 +101,60 @@ export function useComparativeData() {
       addLog(`[${symbol}] Initiating institutional news scan for ${name}...`);
       
       const sector = (result.fundamental?.snapshot?.sector || 'industry').trim().replace(/\n/g, ' ');
-      const country = (result.fundamental?.snapshot?.country || 'USA').trim().replace(/\n/g, ' ');
+      const countryName = (result.fundamental?.snapshot?.country || 'USA').trim().replace(/\n/g, ' ');
       
+      // Map common countries to GNews codes
+      const countryMap = { 'Indonesia': 'ID', 'Malaysia': 'MY', 'Singapore': 'SG', 'United States': 'US', 'USA': 'US' };
+      const countryCode = countryMap[countryName] || 'US';
+
+      // Extract top officers for precision search
+      const officers = (result.fundamental?.snapshot?.companyOfficers || [])
+        .slice(0, 2)
+        .map(o => o.name)
+        .filter(n => n && n.length > 3);
+
       const newsTopics = [
         { key: 'news', q: `${name} Company News latest developments`, label: 'General' },
         { key: 'legalNews', q: `${name} Lawsuit Legal Case Controversy Risk`, label: 'Legal/Risk' },
         { key: 'projectNews', q: `${name} Future Projects Expansion Investment Strategy`, label: 'Expansion' },
-        { key: 'leadershipNews', q: `${name} CEO Leadership Management Board`, label: 'Leadership' },
-        { key: 'sectorNews', q: `${sector} industry news global outlook trends ${country}`, label: 'Sector Intelligence' }
+        { key: 'sectorNews', q: `${sector} industry news global outlook trends ${countryName}`, label: 'Sector Intelligence' }
       ];
 
-      // Fetch all topics in parallel for this company - ALWAYS use English for better data depth
+      // Add officer-specific queries for Leadership Trail
+      if (officers.length > 0) {
+        officers.forEach(officer => {
+          newsTopics.push({ 
+            key: 'leadershipNews', 
+            q: `"${officer}" ${name} news development`, 
+            label: `Leadership: ${officer}`,
+            isStrict: true,
+            officerName: officer
+          });
+        });
+      } else {
+        newsTopics.push({ key: 'leadershipNews', q: `${name} CEO Leadership Management Board`, label: 'Leadership' });
+      }
+
+      // Fetch all topics in parallel for this company
       const newsResults = await Promise.all(newsTopics.map(async (topic) => {
         try {
-          const res = await fetchWithTimeout(`${RESEARCH_API}/api/gnews/search?q=${encodeURIComponent(topic.q)}&lang=en&country=US`, 10000);
+          // For legal news, we request a 10-year archive (using 10y period)
+          const isLegal = topic.key === 'legalNews';
+          const periodParam = isLegal ? '&period=10y' : '';
+          
+          const res = await fetchWithTimeout(`${RESEARCH_API}/api/gnews/search?q=${encodeURIComponent(topic.q)}&lang=en&country=${countryCode}${periodParam}`, 30000);
           const json = await res.json();
-          return { key: topic.key, data: json.data || [] };
+          let data = json.data || [];
+
+          // Strict filtering for leadership news to avoid generic junk
+          if (topic.isStrict && topic.officerName) {
+            data = data.filter(item => {
+              const text = (item.title + ' ' + (item.description || '')).toLowerCase();
+              return text.includes(topic.officerName.toLowerCase());
+            });
+          }
+
+          return { key: topic.key, data };
         } catch (e) {
           return { key: topic.key, data: [] };
         }
