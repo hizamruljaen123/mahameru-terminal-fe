@@ -192,6 +192,8 @@ export default function MahameruCopilot(props) {
             thought: '',
             isThinking: false,
             isStreaming: false,
+            isEditing: false,
+            tempContent: '',
             ...metadata,
         };
 
@@ -269,11 +271,12 @@ export default function MahameruCopilot(props) {
             components: [],
             isThinking: true,
             isStreaming: true,
-            steps: [],            // array of {step, label, sub?, progress}
             toolCalls: [],        // array of {tool, status}
             currentStep: null,
             timestamp: Date.now(),
-            model: selectedModel().label
+            model: selectedModel().label,
+            isEditing: false,
+            tempContent: ''
         }]);
 
         try {
@@ -432,25 +435,44 @@ export default function MahameruCopilot(props) {
         if (isLoading()) return;
         
         // Truncate messages to restart from the assistant message position
+        // Usually, we want to keep the history up to the user message BEFORE this assistant message
         const history = messages.slice(0, msgIdx);
         setMessages([...history]);
         
-        // Trigger chat again
-        await handleLLMChat();
+        // Trigger chat again using the last user message
+        const lastUserMsg = history[history.length - 1];
+        if (lastUserMsg && lastUserMsg.role === 'user') {
+            await handleLLMChat(lastUserMsg.content);
+        }
     }
 
-    function editMessage(msgIdx) {
-        if (isLoading()) return;
+    function startEditing(msgId) {
+        const idx = messages.findIndex(m => m.id === msgId);
+        if (idx === -1) return;
+        setMessages(idx, 'isEditing', true);
+        setMessages(idx, 'tempContent', messages[idx].content);
+    }
+
+    function cancelEditing(msgId) {
+        const idx = messages.findIndex(m => m.id === msgId);
+        if (idx === -1) return;
+        setMessages(idx, 'isEditing', false);
+    }
+
+    async function saveEdit(msgId) {
+        const idx = messages.findIndex(m => m.id === msgId);
+        if (idx === -1) return;
         
-        const msg = messages[msgIdx];
-        if (msg.role !== 'user') return;
+        const newContent = messages[idx].tempContent;
+        if (!newContent.trim()) return;
+
+        // Truncate history from here
+        const history = messages.slice(0, idx);
+        setMessages([...history]);
         
-        setInput(msg.content);
-        // Truncate messages from the user message position
-        setMessages(messages.slice(0, msgIdx));
-        
-        // Focus textarea
-        setTimeout(() => textareaRef?.focus(), 50);
+        // Send again
+        setInput(newContent);
+        handleSend();
     }
 
     // ---- Research stream ----
@@ -534,24 +556,62 @@ export default function MahameruCopilot(props) {
                             </Show>
 
                             {/* User message */}
+                            {/* User message */}
                             <Show when={msg.role === 'user'}>
                                 <div class="copilot-msg-user-row">
                                     <div class="copilot-msg-user-content">
-                                        {msg.content}
-                                        
-                                        {/* User Message Actions */}
-                                        <div class="copilot-msg-actions">
-                                            <button 
-                                                class="copilot-action-btn" 
-                                                title="Edit message"
-                                                onClick={() => editMessage(index())}
-                                            >
-                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                                                </svg>
-                                            </button>
-                                        </div>
+                                        <Show when={msg.isEditing} fallback={
+                                            <>
+                                                {msg.content}
+                                                <div class="copilot-msg-actions">
+                                                    <button 
+                                                        class="copilot-action-btn" 
+                                                        title="Edit message"
+                                                        onClick={() => startEditing(msg.id)}
+                                                    >
+                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            </>
+                                        }>
+                                            <div class="copilot-edit-container">
+                                                <textarea
+                                                    class="copilot-edit-textarea"
+                                                    value={msg.tempContent || ''}
+                                                    onInput={(e) => setMessages(index(), 'tempContent', e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                                            e.preventDefault();
+                                                            saveEdit(msg.id);
+                                                        } else if (e.key === 'Escape') {
+                                                            cancelEditing(msg.id);
+                                                        }
+                                                    }}
+                                                    ref={(el) => {
+                                                        if (el) {
+                                                            el.style.height = 'auto';
+                                                            el.style.height = el.scrollHeight + 'px';
+                                                            el.focus();
+                                                        }
+                                                    }}
+                                                />
+                                                <div class="copilot-edit-actions">
+                                                    <button class="copilot-edit-btn btn-save" onClick={() => saveEdit(msg.id)}>
+                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                                            <path d="M20 6L9 17l-5-5" />
+                                                        </svg>
+                                                    </button>
+                                                    <button class="copilot-edit-btn btn-cancel" onClick={() => cancelEditing(msg.id)}>
+                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                                            <path d="M18 6L6 18M6 6l12 12" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </Show>
                                     </div>
                                     <div class="copilot-avatar copilot-avatar-user">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -592,8 +652,8 @@ export default function MahameruCopilot(props) {
                                                                 }}
                                                             >
                                                                 <div class="copilot-step-icon">
-                                                                    <Show when={isDone || step.progress === 100} fallback={
-                                                                        <Show when={isCurrent} fallback={
+                                                                    <Show when={isDone || step.progress === 100 || !msg.isStreaming} fallback={
+                                                                        <Show when={isCurrent && msg.isStreaming} fallback={
                                                                             <span class="copilot-step-dot" />
                                                                         }>
                                                                             <span class="copilot-step-spinner" />
@@ -629,11 +689,11 @@ export default function MahameruCopilot(props) {
                                                                 'tc-error': tc.status === 'error',
                                                             }}
                                                         >
-                                                            <Show when={tc.status === 'start'}>
+                                                            <Show when={tc.status === 'start' && msg.isStreaming}>
                                                                 <span class="tc-spinner" />
                                                                 <span class="tc-label">{tc.tool}</span>
                                                             </Show>
-                                                            <Show when={tc.status === 'complete'}>
+                                                            <Show when={tc.status === 'complete' || (tc.status === 'start' && !msg.isStreaming)}>
                                                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#26a69a" stroke-width="3">
                                                                     <path d="M20 6L9 17l-5-5" />
                                                                 </svg>
