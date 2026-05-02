@@ -271,6 +271,7 @@ export default function MahameruCopilot(props) {
             components: [],
             isThinking: true,
             isStreaming: true,
+            steps: [],            // array of {step, label, sub?, progress}
             toolCalls: [],        // array of {tool, status}
             currentStep: null,
             timestamp: Date.now(),
