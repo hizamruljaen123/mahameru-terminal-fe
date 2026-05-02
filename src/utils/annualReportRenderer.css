@@ -1,0 +1,520 @@
+/* ===== Annual Report Renderer Styles ===== */
+/* Dark theme (matching the app's dark scheme) */
+
+.ar-report {
+    --bg: #ffffff;
+    --text: #1a1a1a;
+    --text-muted: #666666;
+    --accent: #005a9c;
+    --accent-light: #e6f0f9;
+    --border: #e0e0e0;
+    --table-hover: #f9f9f9;
+    --table-header-bg: #f5f7f9;
+    --section-gap: 3rem;
+    --narrative-bg: #fcfcfc;
+    --positive: #2e7d32;
+    --negative: #d32f2f;
+    --font-mono: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+    --shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+.ar-report * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+.ar-report {
+    font-family: 'Inter', 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    font-size: 14px;
+    text-transform: none !important; /* Override global uppercase */
+}
+
+/* ===== Report Container ===== */
+.ar-report .report-container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2rem;
+    background: #fff;
+}
+
+/* ===== Header ===== */
+.ar-report .report-header {
+    text-align: center;
+    margin-bottom: 3rem;
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 2rem;
+}
+
+.ar-report .report-header h1 {
+    font-size: 2.2rem;
+    color: var(--accent);
+    line-height: 1.2;
+    margin-bottom: 0.5rem;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+}
+
+.ar-report .report-header .subtitle {
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+    font-weight: 500;
+}
+
+.ar-report .report-header .metadata {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 0.5rem;
+    font-family: var(--font-mono);
+}
+
+.ar-report .report-header .report-date {
+    font-size: 0.75rem;
+    opacity: 0.6;
+    margin-top: 0.3rem;
+}
+
+/* ===== Sections ===== */
+.ar-report .report-section {
+    margin-bottom: var(--section-gap);
+    scroll-margin-top: 2rem;
+}
+
+.ar-report .section-title {
+    font-size: 1.5rem;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.6rem;
+    margin-bottom: 1.5rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+/* ===== Narrative Block ===== */
+.ar-report .narrative-block {
+    background: var(--narrative-bg);
+    padding: 1.5rem 2rem;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    border-left: 6px solid var(--accent);
+    margin-bottom: 2rem;
+    box-shadow: var(--shadow);
+}
+
+.ar-report .narrative-block p {
+    margin-bottom: 1rem;
+    color: #333;
+    text-align: justify; /* Rata kanan kiri */
+}
+
+.ar-report .narrative-block p:last-child {
+    margin-bottom: 0;
+}
+
+.ar-report .narrative-block p.headline {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--accent);
+    margin-bottom: 1.2rem;
+}
+
+/* Value drivers list */
+.ar-report .value-drivers {
+    list-style: none;
+    padding: 0;
+    margin: 1rem 0;
+}
+
+.ar-report .value-drivers li {
+    padding: 0.5rem 0 0.5rem 1.8rem;
+    position: relative;
+    border-bottom: 1px solid #f0f0f0;
+    color: #444;
+}
+
+.ar-report .value-drivers li:last-child {
+    border-bottom: none;
+}
+
+.ar-report .value-drivers li::before {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+    font-weight: bold;
+}
+
+/* ===== Mini Table (inline ratio analysis) ===== */
+.ar-report .mini-table {
+    margin-top: 1.5rem;
+    max-width: 600px;
+    border: 1px solid var(--border);
+}
+
+.ar-report .mini-table th {
+    font-size: 0.8rem;
+    background: var(--table-header-bg);
+}
+
+/* ===== Table ===== */
+.ar-report .report-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 2rem;
+    font-size: 0.9rem;
+    border: 1px solid var(--border);
+}
+
+.ar-report .report-table thead th {
+    background: var(--table-header-bg);
+    font-weight: 700;
+    text-align: left;
+    padding: 0.8rem 1rem;
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+    font-size: 0.8rem;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+}
+
+.ar-report .report-table thead th:not(:first-child) {
+    text-align: right;
+}
+
+.ar-report .report-table tbody td {
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+    color: #333;
+}
+
+.ar-report .report-table tbody tr:nth-child(even) {
+    background: #fafafa;
+}
+
+.ar-report .report-table tbody tr:hover {
+    background: var(--table-hover);
+}
+
+.ar-report .report-table .numeric {
+    text-align: right;
+    font-family: var(--font-mono);
+    font-weight: 500;
+}
+
+.ar-report .report-table .positive {
+    color: var(--positive);
+    font-weight: 700;
+}
+
+.ar-report .report-table .negative {
+    color: var(--negative);
+    font-weight: 700;
+}
+
+.ar-report .report-table .null-value {
+    text-align: center;
+    color: #999;
+    font-style: italic;
+}
+
+/* ===== Charts ===== */
+.ar-report .chart-container {
+    margin: 2rem 0;
+    padding: 2rem;
+    background: #ffffff;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+}
+
+.ar-report .chart-title {
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    color: var(--accent);
+    font-size: 1rem;
+    letter-spacing: 0.5px;
+    border-left: 4px solid var(--accent);
+    padding-left: 1rem;
+}
+
+.ar-report .chart-empty {
+    color: #999;
+    text-align: center;
+    padding: 2rem;
+    font-style: italic;
+}
+
+/* Bar Chart - Premium Refactoring */
+.ar-report .bar-chart-wrapper {
+    margin-top: 1.5rem;
+}
+
+.ar-report .chart-area {
+    position: relative;
+    height: 300px;
+    margin-bottom: 3.5rem;
+    padding-left: 60px;
+    padding-bottom: 40px;
+}
+
+.ar-report .y-axis-grid {
+    position: absolute;
+    top: 0;
+    left: 60px;
+    right: 0;
+    bottom: 40px;
+    pointer-events: none;
+}
+
+.ar-report .grid-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: #eee;
+}
+
+.ar-report .grid-label {
+    position: absolute;
+    left: -55px;
+    bottom: -6px;
+    font-size: 0.7rem;
+    color: #888;
+    font-family: var(--font-mono);
+    width: 50px;
+    text-align: right;
+    font-weight: 500;
+}
+
+.ar-report .bars-container {
+    position: relative;
+    height: 100%;
+    display: flex;
+    justify-content: space-around;
+    align-items: flex-end;
+}
+
+.ar-report .bar-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    justify-content: flex-end;
+}
+
+.ar-report .bar-set-wrapper {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    height: 100%;
+    width: 100%;
+    justify-content: center;
+}
+
+.ar-report .bar {
+    width: 28px;
+    min-height: 4px;
+    background: var(--accent);
+    border-radius: 4px 4px 0 0;
+    transition: all 0.6s cubic-bezier(0.165, 0.84, 0.44, 1);
+    position: relative;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.ar-report .bar.bar-single {
+    width: 56px;
+    border-radius: 6px 6px 0 0;
+}
+
+.ar-report .bar:hover {
+    filter: brightness(1.1);
+    transform: scaleX(1.05) translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    z-index: 10;
+}
+
+.ar-report .bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.2), transparent);
+    border-radius: inherit;
+}
+
+.ar-report .bar-value-label {
+    position: absolute;
+    top: -22px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.7rem;
+    font-family: var(--font-mono);
+    color: #444;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.ar-report .bar-category-label {
+    position: absolute;
+    bottom: -32px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #555;
+    letter-spacing: 0.5px;
+}
+
+/* Dual Axis Chart */
+.ar-report .dual-axis-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #fcfcfc;
+    padding: 2rem;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+}
+
+.ar-report .chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+    justify-content: center;
+    padding: 0.8rem 1.5rem;
+    background: #f5f5f5;
+    border-radius: 30px;
+}
+
+.ar-report .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.8rem;
+    color: #555;
+    font-weight: 600;
+}
+
+.ar-report .legend-color {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* ===== Subsection ===== */
+.ar-report .subsection {
+    margin-bottom: 1.8rem;
+}
+
+.ar-report .subsection-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.8rem;
+    color: var(--text);
+    border-left: 3px solid var(--accent);
+    padding-left: 0.8rem;
+}
+
+/* ===== Disclaimer ===== */
+.ar-report .disclaimer {
+    margin-top: 2.5rem;
+    padding: 1rem 1.2rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.72rem;
+    opacity: 0.5;
+    font-style: italic;
+    text-align: center;
+    line-height: 1.5;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 900px) {
+    .ar-report .report-header h1 {
+        font-size: 1.4rem;
+    }
+
+    .ar-report .section-title {
+        font-size: 1.2rem;
+    }
+
+    .ar-report .report-table {
+        font-size: 0.75rem;
+    }
+
+    .ar-report .report-table thead th,
+    .ar-report .report-table tbody td {
+        padding: 0.35rem 0.45rem;
+    }
+
+    .ar-report .bar-chart {
+        gap: 0.8rem;
+    }
+
+    .ar-report .bar {
+        width: 28px;
+    }
+}
+
+@media (max-width: 600px) {
+    .ar-report .report-header h1 {
+        font-size: 1.1rem;
+    }
+
+    .ar-report .narrative-block {
+        padding: 0.8rem;
+    }
+
+    .ar-report .bar {
+        width: 22px;
+    }
+}
+
+/* ===== Loading / Error States ===== */
+.ar-report-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem;
+    gap: 1rem;
+}
+
+.ar-report-loading .spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: ar-spin 0.8s linear infinite;
+}
+
+@keyframes ar-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.ar-report-error {
+    text-align: center;
+    padding: 2rem;
+    color: var(--negative);
+    font-size: 0.9rem;
+}
+
+.ar-report-empty {
+    text-align: center;
+    padding: 2rem;
+    color: #666;
+    font-style: italic;
+    font-size: 0.9rem;
+}

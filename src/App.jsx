@@ -41,7 +41,7 @@ import CorporateIntelView from './views/CorporateIntelView';
 import RegimeView from './views/RegimeView';
 import ESGView from './views/ESGView';
 import SupplyChainView from './views/SupplyChainView';
-
+import { MahameruCopilot } from './components/Copilot';
 function App() {
   const [data, setData] = createSignal({});
   const [status, setStatus] = createSignal({ message: 'INITIALIZING', last_source: '', count: 0, total: 0 });
@@ -363,6 +363,7 @@ function App() {
     '/crisis-disaster': 'crisis-disaster',
     '/government-facility': 'government-facility',
     '/entity-correlation': 'entity-correlation',
+    '/copilot': 'copilot',
     '/research-panel': 'research-panel',
     '/workspace': 'workspace',
     // === TIER 1: NEW INSTITUTIONAL VIEWS ===
@@ -552,6 +553,12 @@ function App() {
 
           <Show when={view() === 'entity-correlation'}>
             <EntityCorrelationView />
+          </Show>
+
+          <Show when={view() === 'copilot'}>
+            <div class="h-full flex flex-col overflow-hidden">
+              <MahameruCopilot />
+            </div>
           </Show>
 
           <Show when={view() === 'research-panel'}>

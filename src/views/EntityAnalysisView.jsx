@@ -425,7 +425,6 @@ const EntityAnalysisView = (props) => {
     const [marketLoading, setMarketLoading] = createSignal(false);
     const [fetchError, setFetchError] = createSignal(null);
     const [selectedRange, setSelectedRange] = createSignal('6M');
-
     const RANGES = ['1W', '1M', '3M', '6M', '1Y', '5Y', 'ALL'];
     const rangeMap = {
         '1W': '5d',
@@ -501,9 +500,10 @@ const EntityAnalysisView = (props) => {
         const signal = detailController.signal;
 
         setLoading(true);
-        setSearchResults([]);
         setProfile(null);
         setFetchError(null);
+        // Clear results when entity is finally selected
+        setSearchResults([]);
 
         try {
             // 1. PHASE 1: Fetch Core Profile Data (Fast)
@@ -638,20 +638,30 @@ const EntityAnalysisView = (props) => {
                     </button>
                 </form>
 
-                {/* Search Results Dropdown-style */}
-                <Show when={searchResults().length > 0}>
-                    <div class="absolute top-[calc(100%+8px)] left-0 w-full bg-bg_header border border-border_main p-2 rounded shadow-2xl z-[100] animate-in slide-in-from-top-2 duration-200 backdrop-blur-md">
+                {/* Search Results in main area (if no selected entity) */}
+                <Show when={!selectedEntity() && searchResults().length > 0}>
+                    <div class="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
                         <For each={searchResults()}>
                             {(item) => (
                                 <div
                                     onClick={() => selectEntity(item.symbol)}
-                                    class="p-3 hover:bg-bg_main cursor-pointer border-b border-border_main last:border-0 flex justify-between items-center group/item"
+                                    class="bg-bg_header/60 border border-border_main/30 p-5 rounded-lg hover:border-text_accent hover:bg-bg_header transition-all cursor-pointer group/card shadow-lg relative overflow-hidden"
                                 >
-                                    <div class="flex flex-col">
-                                        <span class="font-black text-text_accent group-hover/item:text-text_primary transition-colors">{item.symbol}</span>
-                                        <span class="text-[9px] text-text_secondary opacity-40 uppercase tracking-widest">{item.exchDisp}</span>
+                                    <div class="absolute top-0 right-0 p-2 opacity-5 font-black text-2xl group-hover/card:opacity-10 transition-all uppercase">{item.symbol}</div>
+                                    <div class="flex flex-col gap-2 relative z-10">
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-xs font-black text-text_accent uppercase tracking-[0.2em]">{item.symbol}</span>
+                                            <span class="text-[8px] px-2 py-0.5 bg-white/5 border border-white/10 text-text_secondary rounded uppercase font-black">{item.exchDisp}</span>
+                                        </div>
+                                        <h3 class="text-sm font-bold text-text_primary leading-tight group-hover/card:text-text_accent transition-colors">{item.longname || item.shortname || item.symbol}</h3>
+                                        <div class="mt-4 flex items-center justify-between">
+                                            <span class="text-[8px] text-text_secondary opacity-40 uppercase tracking-widest font-black">{item.typeDisp || 'EQUITY'}</span>
+                                            <div class="flex items-center gap-1 text-[9px] font-black text-text_accent uppercase opacity-0 group-hover/card:opacity-100 transition-all">
+                                                Analyze Node
+                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <span class="text-text_primary font-bold text-xs truncate ml-4 flex-1 text-right">{item.longname || item.shortname}</span>
                                 </div>
                             )}
                         </For>
@@ -678,7 +688,7 @@ const EntityAnalysisView = (props) => {
                 <div class="flex flex-col items-center justify-center py-20 space-y-4 border border-red-500/20 bg-red-500/5 rounded">
                     <div class="text-red-500 font-black tracking-widest uppercase text-xs">Intelligence Fetch Failed</div>
                     <div class="text-white/40 font-mono text-[10px]">{fetchError()}</div>
-                    <button 
+                    <button
                         onClick={() => selectEntity(selectedEntity())}
                         class="px-6 py-2 bg-red-500 text-bg_main font-black uppercase text-[10px] tracking-widest hover:bg-red-400 transition-all"
                     >
@@ -688,7 +698,7 @@ const EntityAnalysisView = (props) => {
             </Show>
 
             {/* View Switching Logic */}
-            <Show when={!selectedEntity()}>
+            <Show when={!selectedEntity() && searchResults().length === 0}>
                 <div class="space-y-10 animate-in fade-in zoom-in-95 duration-700">
                     {/* 1. Global Indices High-Density Heatmap */}
                     <div class="space-y-4">
@@ -1066,6 +1076,7 @@ const EntityAnalysisView = (props) => {
                                             <TechnicalAnalysisPanel symbol={selectedEntity()} showToolbar={false} />
                                         </div>
                                     </Show>
+
                                 </>
                             }
                         >

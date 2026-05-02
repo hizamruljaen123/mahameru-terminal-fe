@@ -174,6 +174,7 @@ export function Sidebar(props) {
             title: 'MAIN MENU',
             items: [
               { id: 'dashboard', label: 'Dashboard', icon: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10' },
+              { id: 'copilot', label: 'AI Copilot', icon: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z M8 9h8 M8 13h6' },
               { id: 'research-panel', label: 'Research Panel', icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6' },
               { id: 'workspace', label: 'Workspace', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
               { id: 'entity-correlation', label: 'Entity Correlation', icon: 'M12 2L2 7l10 5 10-5-10-5z M2 17l10 5 10-5 M2 12l10 5 10-5' },
@@ -235,11 +236,9 @@ export function Sidebar(props) {
         ]}>
           {(section) => (
             <>
-              <Show when={isOpen()}>
-                <div class="text-[8px] text-text_accent font-black px-6 mt-6 mb-2 tracking-[0.3em] opacity-30 uppercase border-l-2 border-text_accent/20 ml-3">
+                <div class="text-[8px] text-text_accent font-black px-6 mt-6 mb-2 tracking-[0.3em] opacity-30 border-l-2 border-text_accent/20 ml-3">
                   {section.title}
                 </div>
-              </Show>
 
               <For each={section.items}>
                 {(item) => (
@@ -258,7 +257,7 @@ export function Sidebar(props) {
                         </svg>
                       </div>
                       <Show when={isOpen()}>
-                        <span class="font-black text-[10px] tracking-widest uppercase">{item.label}</span>
+                        <span class="font-black text-[10px] tracking-widest">{item.label}</span>
                         <Show when={props.view() === item.id}>
                           <div class="ml-auto w-1 h-1 rounded-full bg-text_accent"></div>
                         </Show>
@@ -273,7 +272,7 @@ export function Sidebar(props) {
                           <input
                             type="text"
                             placeholder="Filter categories..."
-                            class="bg-[#050505] border-b border-white/10 text-[9px] px-2 py-1.5 mb-2 outline-none focus:border-text_accent/50 w-full font-mono text-text_accent uppercase"
+                            class="bg-[#050505] border-b border-white/10 text-[9px] px-2 py-1.5 mb-2 outline-none focus:border-text_accent/50 w-full font-mono text-text_accent"
                             value={catFilter()}
                             onInput={(e) => setCatFilter(e.target.value)}
                           />
@@ -295,7 +294,7 @@ export function Sidebar(props) {
                                       {cats.map(cat => (
                                         <button
                                           onClick={() => props.onCategorySelect(cat)}
-                                          class={`text-[9px] text-left py-1.5 hover:text-text_accent font-bold tracking-tight uppercase ${props.selectedCategory() === cat ? 'text-text_accent font-black shadow-[inset_2px_0_0_var(--text-accent)] pl-2' : 'text-text_secondary/40'}`}
+                                          class={`text-[9px] text-left py-1.5 hover:text-text_accent font-bold tracking-tight ${props.selectedCategory() === cat ? 'text-text_accent font-black shadow-[inset_2px_0_0_var(--text-accent)] pl-2' : 'text-text_secondary/40'}`}
                                         >
                                           {cat.replace('_', ' ')}
                                         </button>
@@ -398,7 +397,7 @@ export function Header(props) {
         <div class="flex flex-col group">
           <div class="flex items-center gap-2">
             <div class="w-1.5 h-1.5 bg-text_accent rounded-full"></div>
-            <h2 class="text-[14px] font-black tracking-[0.3em] text-text_primary leading-none uppercase font-mono group-hover:text-text_accent">
+            <h2 class="text-[14px] font-black tracking-[0.3em] text-text_primary leading-none font-mono group-hover:text-text_accent">
               {props.view().replace('-', ' ')}
             </h2>
           </div>

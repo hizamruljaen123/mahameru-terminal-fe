@@ -15,9 +15,11 @@
   },
   "dependencies": {
     "autoprefixer": "^10.4.17",
+    "dompurify": "^3.4.2",
     "echarts": "^6.0.0",
     "leaflet": "^1.9.4",
     "lightweight-charts": "^5.1.0",
+    "marked": "^18.0.3",
     "postcss": "^8.4.35",
     "socket.io-client": "^4.8.3",
     "solid-js": "^1.8.11",

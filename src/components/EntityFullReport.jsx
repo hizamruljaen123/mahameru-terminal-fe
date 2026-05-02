@@ -1,4 +1,5 @@
 import { createSignal, onMount, For, Show, onCleanup, createEffect } from 'solid-js';
+import AnnualReportHighlight from './AnnualReportHighlight.jsx';
 
 const EntityFullReport = (props) => {
     const [info, setInfo] = createSignal(null);
@@ -6,9 +7,13 @@ const EntityFullReport = (props) => {
     const [ownership, setOwnership] = createSignal(null);
     const [analyst, setAnalyst] = createSignal(null);
     const [events, setEvents] = createSignal(null);
-    
+
     // Global error/loading
     const [error, setError] = createSignal(null);
+
+    // Annual Report Highlight integration
+    const [showAnnualReport, setShowAnnualReport] = createSignal(false);
+    const [hasAnnualReportData, setHasAnnualReportData] = createSignal(false);
 
     let revenueChartRef;
     let balanceChartRef;
@@ -34,7 +39,7 @@ const EntityFullReport = (props) => {
         if (!financials() || !revenueChartRef) return;
         const revChart = window.echarts.getInstanceByDom(revenueChartRef) || window.echarts.init(revenueChartRef);
         chartInstances.push(revChart);
-        
+
         const dates = Object.keys(financials().income_statement).sort();
         const revenues = dates.map(d => financials().income_statement[d]["Total Revenue"]);
         const netIncome = dates.map(d => financials().income_statement[d]["Net Income"]);
@@ -121,6 +126,15 @@ const EntityFullReport = (props) => {
         fetch(`${BASE}/analyst/${symbol}`).then(r => r.json()).then(setAnalyst).catch(e => setError(e.message));
         fetch(`${BASE}/events/${symbol}`).then(r => r.json()).then(setEvents).catch(e => setError(e.message));
 
+        // Check annual report availability (using LIKE match in backend)
+        const entityBase = import.meta.env.VITE_ENTITY_URL;
+        fetch(`${entityBase}/api/entity/annual-report/${symbol}`)
+            .then(r => r.json())
+            .then(data => {
+                setHasAnnualReportData(data.exists && data.reports?.length > 0);
+            })
+            .catch(() => setHasAnnualReportData(false));
+
         const resizeHandler = () => chartInstances.forEach(c => c.resize());
         window.addEventListener('resize', resizeHandler);
         onCleanup(() => {
@@ -183,197 +197,246 @@ const EntityFullReport = (props) => {
     };
 
     return (
-        <div class="flex-1 overflow-auto scrollbar-thin p-1 space-y-8 animate-in fade-in duration-700">
-            <Show when={error()}>
-                <div class="p-6 border border-red-500/30 bg-red-500/10 rounded text-red-500 font-mono text-sm">
-                    [SYSTEM_FAILURE] Internal error accessing fundamental node: {error()}
+        <div class="flex-1 flex flex-col overflow-hidden">
+            {/* Annual Report Insight Banner - shown when data exists but not viewing it */}
+            <Show when={hasAnnualReportData() && !showAnnualReport()}>
+                <div class="shrink-0 bg-gradient-to-r from-purple-900/30 via-bg_header to-bg_header border-b border-purple-500/20 px-4 py-3 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="text-purple-400" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="16" y1="13" x2="8" y2="13" />
+                            <line x1="16" y1="17" x2="8" y2="17" />
+                        </svg>
+                        <span class="text-[10px] font-black text-purple-300 uppercase tracking-widest">
+                            Annual Report Insight Available
+                        </span>
+                    </div>
+                    <button
+                        onClick={() => setShowAnnualReport(true)}
+                        class="px-4 py-1.5 bg-purple-500 hover:bg-purple-400 text-white text-[10px] font-black rounded uppercase tracking-widest transition-all shadow-lg hover:shadow-purple-500/30"
+                    >
+                        Read Annual Insight
+                    </button>
                 </div>
             </Show>
 
-            {/* Header Section */}
-            <Show when={info()} fallback={<div class="h-32 bg-bg_header animate-pulse rounded border border-border_main"></div>}>
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div class="lg:col-span-2 space-y-6">
-                        <div class="bg-bg_header p-6 border border-border_main rounded shadow-2xl relative overflow-hidden group">
-                            <div class="absolute top-0 right-0 p-2 opacity-10 font-black text-4xl group-hover:opacity-20 transition-all pointer-events-none uppercase">{info().symbol}</div>
-                            <h2 class="text-2xl font-black text-text_primary uppercase mb-2">{info().longName}</h2>
-                            <p class="text-xs text-text_secondary leading-relaxed opacity-80">{info().longBusinessSummary}</p>
-                            <div class="mt-4 flex flex-wrap gap-4 text-[10px] font-black uppercase text-text_accent">
-                                <span>Sector: {info().sector}</span>
-                                <span class="opacity-30">|</span>
-                                <span>Industry: {info().industry}</span>
-                                <span class="opacity-30">|</span>
-                                <span>Employees: {formatValue(info().fullTimeEmployees)}</span>
-                            </div>
-                        </div>
+            {/* Annual Report Highlight View */}
+            <Show when={showAnnualReport()}>
+                <div class="flex-1 flex flex-col overflow-hidden">
+                    <div class="shrink-0 bg-bg_header px-4 py-2 border-b border-border_main flex items-center gap-3">
+                        <button
+                            onClick={() => setShowAnnualReport(false)}
+                            class="px-3 py-1 text-[9px] font-black border border-border_main/40 text-text_secondary hover:text-text_accent hover:border-text_accent/30 transition-all rounded uppercase tracking-widest flex items-center gap-1.5"
+                        >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
+                            BACK
+                        </button>
+                        <span class="text-[10px] font-black text-purple-400 uppercase tracking-widest">Annual Report Highlight</span>
+                        <div class="flex-1"></div>
+                        <span class="text-[8px] text-text_secondary/40 font-mono">{props.symbol}</span>
                     </div>
-                    <div class="bg-bg_header p-6 border border-border_main rounded space-y-4">
-                        <h3 class="text-[10px] font-black text-text_secondary uppercase tracking-[0.2em] border-b border-border_main pb-2">Institutional Overlook</h3>
-                        <div class="space-y-3">
-                            <div class="flex justify-between items-center text-[11px]">
-                                <span class="text-text_secondary opacity-60 uppercase">Market Cap</span>
-                                <span class="font-bold text-text_accent">{formatValue(info().marketCap)}</span>
-                            </div>
-                            <div class="flex justify-between items-center text-[11px]">
-                                <span class="text-text_secondary opacity-60 uppercase">Revenue (TTM)</span>
-                                <span class="font-bold text-emerald-500">{formatValue(info().totalRevenue)}</span>
-                            </div>
-                            <div class="flex justify-between items-center text-[11px]">
-                                <span class="text-text_secondary opacity-60 uppercase">EBITDA</span>
-                                <span class="font-bold text-blue-400">{formatValue(info().ebitda)}</span>
-                            </div>
-                            <div class="flex justify-between items-center text-[11px]">
-                                <span class="text-text_secondary opacity-60 uppercase">Target Price</span>
-                                <span class="font-bold text-amber-500">{formatValue(info().targetMeanPrice)}</span>
-                            </div>
-                        </div>
+                    <div class="flex-1 overflow-hidden">
+                        <AnnualReportHighlight symbol={props.symbol} />
                     </div>
                 </div>
             </Show>
 
-            {/* Quantitative Charts Section */}
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-8">
-                <div class="lg:col-span-6 bg-bg_header border border-border_main rounded p-4 h-[350px]">
-                    <h3 class="text-[10px] font-black text-text_accent uppercase tracking-widest mb-4">Strategic Trend: Rev/Income</h3>
-                    <Show when={financials()} fallback={<div class="w-full h-full bg-bg_main/10 animate-pulse"></div>}>
-                        <div ref={revenueChartRef} class="w-full h-full"></div>
+            {/* Normal Research Report Content */}
+            <Show when={!showAnnualReport()}>
+                <div class="flex-1 overflow-auto scrollbar-thin p-1 space-y-8 animate-in fade-in duration-700">
+                    <Show when={error()}>
+                        <div class="p-6 border border-red-500/30 bg-red-500/10 rounded text-red-500 font-mono text-sm">
+                            [SYSTEM_FAILURE] Internal error accessing fundamental node: {error()}
+                        </div>
                     </Show>
-                </div>
-                <div class="lg:col-span-3 bg-bg_header border border-border_main rounded p-4 h-[350px]">
-                    <h3 class="text-[10px] font-black text-text_accent uppercase tracking-widest mb-4">Liquidity Pulse</h3>
-                    <Show when={financials()} fallback={<div class="w-full h-full bg-bg_main/10 animate-pulse"></div>}>
-                        <div ref={balanceChartRef} class="w-full h-full"></div>
-                    </Show>
-                </div>
-                <div class="lg:col-span-3 bg-bg_header border border-border_main rounded p-4 h-[350px]">
-                    <h3 class="text-[10px] font-black text-text_accent uppercase tracking-widest mb-4">Consensus Mapping</h3>
-                    <Show when={analyst()} fallback={<div class="w-full h-full bg-bg_main/10 animate-pulse"></div>}>
-                        <div ref={recommendationChartRef} class="w-full h-full"></div>
-                    </Show>
-                </div>
-            </div>
 
-            {/* Quantitative Financial Intelligence Section */}
-            <div class="space-y-6 mt-12">
-                <div class="flex items-center gap-4">
-                    <h2 class="text-xl font-black text-text_accent uppercase tracking-[0.3em] border-l-4 border-text_accent pl-6 bg-gradient-to-r from-text_accent/10 to-transparent py-2">Quantitative Financial Intelligence</h2>
-                    <div class="flex-1 h-[2px] bg-gradient-to-r from-text_accent/20 to-transparent"></div>
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[500px]">
-                    <Show when={financials()} fallback={<div class="h-full bg-bg_header/20 animate-pulse rounded border border-border_main"></div>}>
-                        {renderTable(financials().income_statement, "Income Statement [TTM/Annual]")}
-                        {renderTable(financials().balance_sheet, "Balance Sheet [Capital Structure]")}
-                    </Show>
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-1 gap-6 h-[300px]">
-                    <Show when={financials()} fallback={<div class="h-full bg-bg_header/20 animate-pulse rounded border border-border_main"></div>}>
-                        {renderTable(financials().cash_flow, "Cash Flow Dynamics [Comparative Ledger]")}
-                    </Show>
-                </div>
-            </div>
-                
-            {/* Stakeholder & Insider Intelligence Dossier */}
-            <div class="mt-12 space-y-6">
-                <div class="flex items-center gap-4">
-                    <h2 class="text-xl font-black text-amber-500 uppercase tracking-[0.3em] border-l-4 border-amber-500 pl-6 bg-gradient-to-r from-amber-500/10 to-transparent py-2">Stakeholder Intelligence Dossier</h2>
-                    <div class="flex-1 h-[2px] bg-gradient-to-r from-amber-500/20 to-transparent"></div>
-                </div>
-
-                <Show when={ownership()} fallback={<div class="h-64 bg-bg_header/20 animate-pulse rounded border border-border_main"></div>}>
-                    <div class="border border-border_main rounded overflow-hidden bg-bg_header/5">
-                        <div class="grid grid-cols-1 lg:grid-cols-12">
-                            {/* Left: Shareholder Matrix */}
-                            <div class="lg:col-span-4 border-r border-border_main">
-                                <div class="bg-bg_header p-2 px-3 border-b border-border_main">
-                                    <h3 class="text-[10px] font-black text-text_accent uppercase tracking-widest text-center">Relative Shareholder Proximity</h3>
-                                </div>
-                                <div class="p-4 bg-bg_main/5">
-                                    <div ref={holdersChartRef} class="w-full h-[250px]"></div>
-                                    <div class="mt-4 grid grid-cols-1 gap-1.5 overflow-auto max-h-[150px] scrollbar-thin text-center text-[9px] text-text_secondary uppercase opacity-50">
-                                        [Aggregated Institutional Node Data]
+                    {/* Header Section */}
+                    <Show when={info()} fallback={<div class="h-32 bg-bg_header animate-pulse rounded border border-border_main"></div>}>
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div class="lg:col-span-2 space-y-6">
+                                <div class="bg-bg_header p-6 border border-border_main rounded shadow-2xl relative overflow-hidden group">
+                                    <div class="absolute top-0 right-0 p-2 opacity-10 font-black text-4xl group-hover:opacity-20 transition-all pointer-events-none uppercase">{info().symbol}</div>
+                                    <h2 class="text-2xl font-black text-text_primary uppercase mb-2">{info().longName}</h2>
+                                    <p class="text-xs text-text_secondary leading-relaxed opacity-80">{info().longBusinessSummary}</p>
+                                    <div class="mt-4 flex flex-wrap gap-4 text-[10px] font-black uppercase text-text_accent">
+                                        <span>Sector: {info().sector}</span>
+                                        <span class="opacity-30">|</span>
+                                        <span>Industry: {info().industry}</span>
+                                        <span class="opacity-30">|</span>
+                                        <span>Employees: {formatValue(info().fullTimeEmployees)}</span>
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Right: Institutional Whales */}
-                            <div class="lg:col-span-8 flex flex-col h-full overflow-hidden">
-                                <div class="bg-bg_header p-2 px-3 border-b border-border_main">
-                                    <h3 class="text-[10px] font-black text-text_accent uppercase tracking-widest">Institutional Whales [Top 10 Analysis]</h3>
-                                </div>
-                                <div class="flex-1 overflow-auto max-h-[450px] scrollbar-thin">
-                                    <table class="w-full text-left text-[9px] border-collapse">
-                                        <thead class="bg-bg_main text-text_secondary uppercase font-bold sticky top-0 z-10">
-                                            <tr>
-                                                <th class="p-2 border-r border-border_main">Entity Descriptor</th>
-                                                <th class="p-2 text-right border-r border-border_main">Shares Held</th>
-                                                <th class="p-2 text-right border-r border-border_main">% Node</th>
-                                                <th class="p-2 text-right border-r border-border_main">Value Node</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="divide-y divide-border_main/10 font-mono bg-bg_header/5">
-                                            <For each={Object.keys(ownership().institutional_holders?.Holder || {}).slice(0, 10)}>
-                                                {(idx) => (
-                                                    <tr class="hover:bg-bg_main transition-colors">
-                                                        <td class="p-1.5 px-3 text-text_primary font-bold border-r border-border_main/10">{ownership().institutional_holders.Holder[idx]}</td>
-                                                        <td class="p-1.5 px-3 text-right border-r border-border_main/10">{formatValue(ownership().institutional_holders.Shares[idx])}</td>
-                                                        <td class="p-1.5 px-3 text-right border-r border-border_main/10 text-text_accent font-black">{(ownership().institutional_holders.pctHeld[idx] * 100).toFixed(2)}%</td>
-                                                        <td class="p-1.5 px-3 text-right border-r border-border_main/10">{formatValue(ownership().institutional_holders.Value[idx])}</td>
-                                                    </tr>
-                                                )}
-                                            </For>
-                                        </tbody>
-                                    </table>
+                            <div class="bg-bg_header p-6 border border-border_main rounded space-y-4">
+                                <h3 class="text-[10px] font-black text-text_secondary uppercase tracking-[0.2em] border-b border-border_main pb-2">Institutional Overlook</h3>
+                                <div class="space-y-3">
+                                    <div class="flex justify-between items-center text-[11px]">
+                                        <span class="text-text_secondary opacity-60 uppercase">Market Cap</span>
+                                        <span class="font-bold text-text_accent">{formatValue(info().marketCap)}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center text-[11px]">
+                                        <span class="text-text_secondary opacity-60 uppercase">Revenue (TTM)</span>
+                                        <span class="font-bold text-emerald-500">{formatValue(info().totalRevenue)}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center text-[11px]">
+                                        <span class="text-text_secondary opacity-60 uppercase">EBITDA</span>
+                                        <span class="font-bold text-blue-400">{formatValue(info().ebitda)}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center text-[11px]">
+                                        <span class="text-text_secondary opacity-60 uppercase">Target Price</span>
+                                        <span class="font-bold text-amber-500">{formatValue(info().targetMeanPrice)}</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
+                    </Show>
 
-                        {/* Bottom: Infiltrator Dynamics (Full-Width) */}
-                        <div class="border-t border-border_main">
-                            <div class="bg-bg_header p-2 px-3 border-b border-border_main flex justify-between items-center">
-                                <h3 class="text-[10px] font-black text-amber-500 uppercase tracking-widest">Infiltrator Dynamics [Analytic Insider Transactions Record]</h3>
-                            </div>
-                            <div class="overflow-auto max-h-[300px] scrollbar-thin bg-bg_main/5">
-                                <table class="w-full text-left text-[9px] border-collapse">
-                                    <thead class="bg-bg_main text-text_secondary uppercase font-bold sticky top-0 z-10">
-                                        <tr>
-                                            <th class="p-2 px-3 border-r border-border_main">Insider Entity</th>
-                                            <th class="p-2 px-3 border-r border-border_main">Position Rank</th>
-                                            <th class="p-2 px-3 border-r border-border_main">Execution Modality</th>
-                                            <th class="p-2 px-3 text-right border-r border-border_main">Shares Volume</th>
-                                            <th class="p-2 px-3 text-right">Value Node</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-border_main/10 font-mono">
-                                        <For each={Object.keys(ownership().insider_transactions?.Insider || {}).slice(0, 15)}>
-                                            {(idx) => (
-                                                <tr class="hover:bg-bg_main/50 transition-colors">
-                                                    <td class="p-1 px-2 font-bold text-text_primary border-r border-border_main/10">
-                                                        <div class="truncate max-w-[150px]">{ownership().insider_transactions.Insider[idx]}</div>
-                                                    </td>
-                                                    <td class="p-1 px-2 uppercase text-text_secondary opacity-70 border-r border-border_main/10 truncate max-w-[120px]">{ownership().insider_transactions.Position[idx]}</td>
-                                                    <td class="p-1 px-2 border-r border-border_main/10">
-                                                        <span class={ownership().insider_transactions.Text[idx]?.toLowerCase().includes('sale') ? 'text-red-400' : 'text-emerald-400 uppercase'}>
-                                                            {ownership().insider_transactions.Text[idx]?.split(' ')[0] || "ACQUISITION"}
-                                                        </span>
-                                                    </td>
-                                                    <td class="p-1 px-3 text-right font-black border-r border-border_main/10 text-text_primary">{formatValue(ownership().insider_transactions.Shares[idx])}</td>
-                                                    <td class="p-1 px-3 text-right text-text_accent font-bold bg-text_accent/5">{formatValue(ownership().insider_transactions.Value[idx])}</td>
-                                                </tr>
-                                            )}
-                                        </For>
-                                    </tbody>
-                                </table>
-                            </div>
+                    {/* Quantitative Charts Section */}
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-8">
+                        <div class="lg:col-span-6 bg-bg_header border border-border_main rounded p-4 h-[350px]">
+                            <h3 class="text-[10px] font-black text-text_accent uppercase tracking-widest mb-4">Strategic Trend: Rev/Income</h3>
+                            <Show when={financials()} fallback={<div class="w-full h-full bg-bg_main/10 animate-pulse"></div>}>
+                                <div ref={revenueChartRef} class="w-full h-full"></div>
+                            </Show>
+                        </div>
+                        <div class="lg:col-span-3 bg-bg_header border border-border_main rounded p-4 h-[350px]">
+                            <h3 class="text-[10px] font-black text-text_accent uppercase tracking-widest mb-4">Liquidity Pulse</h3>
+                            <Show when={financials()} fallback={<div class="w-full h-full bg-bg_main/10 animate-pulse"></div>}>
+                                <div ref={balanceChartRef} class="w-full h-full"></div>
+                            </Show>
+                        </div>
+                        <div class="lg:col-span-3 bg-bg_header border border-border_main rounded p-4 h-[350px]">
+                            <h3 class="text-[10px] font-black text-text_accent uppercase tracking-widest mb-4">Consensus Mapping</h3>
+                            <Show when={analyst()} fallback={<div class="w-full h-full bg-bg_main/10 animate-pulse"></div>}>
+                                <div ref={recommendationChartRef} class="w-full h-full"></div>
+                            </Show>
                         </div>
                     </div>
-                </Show>
-            </div>
 
-            <div class="mt-8 text-center opacity-40 text-[9px] font-mono p-4 uppercase tracking-[0.5em]">
-                End of Intelligence Dossier // {new Date().toISOString()}
-            </div>
+                    {/* Quantitative Financial Intelligence Section */}
+                    <div class="space-y-6 mt-12">
+                        <div class="flex items-center gap-4">
+                            <h2 class="text-xl font-black text-text_accent uppercase tracking-[0.3em] border-l-4 border-text_accent pl-6 bg-gradient-to-r from-text_accent/10 to-transparent py-2">Quantitative Financial Intelligence</h2>
+                            <div class="flex-1 h-[2px] bg-gradient-to-r from-text_accent/20 to-transparent"></div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[500px]">
+                            <Show when={financials()} fallback={<div class="h-full bg-bg_header/20 animate-pulse rounded border border-border_main"></div>}>
+                                {renderTable(financials().income_statement, "Income Statement [TTM/Annual]")}
+                                {renderTable(financials().balance_sheet, "Balance Sheet [Capital Structure]")}
+                            </Show>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-1 gap-6 h-[300px]">
+                            <Show when={financials()} fallback={<div class="h-full bg-bg_header/20 animate-pulse rounded border border-border_main"></div>}>
+                                {renderTable(financials().cash_flow, "Cash Flow Dynamics [Comparative Ledger]")}
+                            </Show>
+                        </div>
+                    </div>
+
+                    {/* Stakeholder & Insider Intelligence Dossier */}
+                    <div class="mt-12 space-y-6">
+                        <div class="flex items-center gap-4">
+                            <h2 class="text-xl font-black text-amber-500 uppercase tracking-[0.3em] border-l-4 border-amber-500 pl-6 bg-gradient-to-r from-amber-500/10 to-transparent py-2">Stakeholder Intelligence Dossier</h2>
+                            <div class="flex-1 h-[2px] bg-gradient-to-r from-amber-500/20 to-transparent"></div>
+                        </div>
+
+                        <Show when={ownership()} fallback={<div class="h-64 bg-bg_header/20 animate-pulse rounded border border-border_main"></div>}>
+                            <div class="border border-border_main rounded overflow-hidden bg-bg_header/5">
+                                <div class="grid grid-cols-1 lg:grid-cols-12">
+                                    {/* Left: Shareholder Matrix */}
+                                    <div class="lg:col-span-4 border-r border-border_main">
+                                        <div class="bg-bg_header p-2 px-3 border-b border-border_main">
+                                            <h3 class="text-[10px] font-black text-text_accent uppercase tracking-widest text-center">Relative Shareholder Proximity</h3>
+                                        </div>
+                                        <div class="p-4 bg-bg_main/5">
+                                            <div ref={holdersChartRef} class="w-full h-[250px]"></div>
+                                            <div class="mt-4 grid grid-cols-1 gap-1.5 overflow-auto max-h-[150px] scrollbar-thin text-center text-[9px] text-text_secondary uppercase opacity-50">
+                                                [Aggregated Institutional Node Data]
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Right: Institutional Whales */}
+                                    <div class="lg:col-span-8 flex flex-col h-full overflow-hidden">
+                                        <div class="bg-bg_header p-2 px-3 border-b border-border_main">
+                                            <h3 class="text-[10px] font-black text-text_accent uppercase tracking-widest">Institutional Whales [Top 10 Analysis]</h3>
+                                        </div>
+                                        <div class="flex-1 overflow-auto max-h-[450px] scrollbar-thin">
+                                            <table class="w-full text-left text-[9px] border-collapse">
+                                                <thead class="bg-bg_main text-text_secondary uppercase font-bold sticky top-0 z-10">
+                                                    <tr>
+                                                        <th class="p-2 border-r border-border_main">Entity Descriptor</th>
+                                                        <th class="p-2 text-right border-r border-border_main">Shares Held</th>
+                                                        <th class="p-2 text-right border-r border-border_main">% Node</th>
+                                                        <th class="p-2 text-right border-r border-border_main">Value Node</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody class="divide-y divide-border_main/10 font-mono bg-bg_header/5">
+                                                    <For each={Object.keys(ownership().institutional_holders?.Holder || {}).slice(0, 10)}>
+                                                        {(idx) => (
+                                                            <tr class="hover:bg-bg_main transition-colors">
+                                                                <td class="p-1.5 px-3 text-text_primary font-bold border-r border-border_main/10">{ownership().institutional_holders.Holder[idx]}</td>
+                                                                <td class="p-1.5 px-3 text-right border-r border-border_main/10">{formatValue(ownership().institutional_holders.Shares[idx])}</td>
+                                                                <td class="p-1.5 px-3 text-right border-r border-border_main/10 text-text_accent font-black">{(ownership().institutional_holders.pctHeld[idx] * 100).toFixed(2)}%</td>
+                                                                <td class="p-1.5 px-3 text-right border-r border-border_main/10">{formatValue(ownership().institutional_holders.Value[idx])}</td>
+                                                            </tr>
+                                                        )}
+                                                    </For>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Bottom: Infiltrator Dynamics (Full-Width) */}
+                                <div class="border-t border-border_main">
+                                    <div class="bg-bg_header p-2 px-3 border-b border-border_main flex justify-between items-center">
+                                        <h3 class="text-[10px] font-black text-amber-500 uppercase tracking-widest">Infiltrator Dynamics [Analytic Insider Transactions Record]</h3>
+                                    </div>
+                                    <div class="overflow-auto max-h-[300px] scrollbar-thin bg-bg_main/5">
+                                        <table class="w-full text-left text-[9px] border-collapse">
+                                            <thead class="bg-bg_main text-text_secondary uppercase font-bold sticky top-0 z-10">
+                                                <tr>
+                                                    <th class="p-2 px-3 border-r border-border_main">Insider Entity</th>
+                                                    <th class="p-2 px-3 border-r border-border_main">Position Rank</th>
+                                                    <th class="p-2 px-3 border-r border-border_main">Execution Modality</th>
+                                                    <th class="p-2 px-3 text-right border-r border-border_main">Shares Volume</th>
+                                                    <th class="p-2 px-3 text-right">Value Node</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-border_main/10 font-mono">
+                                                <For each={Object.keys(ownership().insider_transactions?.Insider || {}).slice(0, 15)}>
+                                                    {(idx) => (
+                                                        <tr class="hover:bg-bg_main/50 transition-colors">
+                                                            <td class="p-1 px-2 font-bold text-text_primary border-r border-border_main/10">
+                                                                <div class="truncate max-w-[150px]">{ownership().insider_transactions.Insider[idx]}</div>
+                                                            </td>
+                                                            <td class="p-1 px-2 uppercase text-text_secondary opacity-70 border-r border-border_main/10 truncate max-w-[120px]">{ownership().insider_transactions.Position[idx]}</td>
+                                                            <td class="p-1 px-2 border-r border-border_main/10">
+                                                                <span class={ownership().insider_transactions.Text[idx]?.toLowerCase().includes('sale') ? 'text-red-400' : 'text-emerald-400 uppercase'}>
+                                                                    {ownership().insider_transactions.Text[idx]?.split(' ')[0] || "ACQUISITION"}
+                                                                </span>
+                                                            </td>
+                                                            <td class="p-1 px-3 text-right font-black border-r border-border_main/10 text-text_primary">{formatValue(ownership().insider_transactions.Shares[idx])}</td>
+                                                            <td class="p-1 px-3 text-right text-text_accent font-bold bg-text_accent/5">{formatValue(ownership().insider_transactions.Value[idx])}</td>
+                                                        </tr>
+                                                    )}
+                                                </For>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </Show>
+                    </div>
+
+                    <div class="mt-8 text-center opacity-40 text-[9px] font-mono p-4 uppercase tracking-[0.5em]">
+                        End of Intelligence Dossier // {new Date().toISOString()}
+                    </div>
+                </div>
+            </Show>
         </div>
     );
 };
