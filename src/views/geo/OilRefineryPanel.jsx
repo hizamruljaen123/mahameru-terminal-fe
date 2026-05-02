@@ -80,6 +80,11 @@ export default function OilRefineryPanel() {
   let selectionLayer = null;
   let accidentChart = null;
   let accidentChartRef = null;
+  let assetDistChartRef = null;
+  let capacityChartRef = null;
+  let countryChartRef = null;
+  let tradeFlowChartRef = null;
+  let riskHeatmapRef = null;
 
   const fetchRefineries = async () => {
     try {
@@ -259,20 +264,27 @@ export default function OilRefineryPanel() {
   };
 
   createEffect(() => {
-    if (view() === 'trades') fetchTrades();
-    if (view() === 'report') {
+    const v = view();
+    if (v === 'trades') fetchTrades();
+    if (v === 'report') {
       fetchAnalytics();
       fetchCombinedDBStats();
+      // Ensure all asset data is loaded for the report
+      fetchRefineries();
+      fetchLngFacilities();
+      fetchOffshorePlatforms();
+      fetchPetroleumTerminals();
+      fetchAccidents();
     } else {
       setTimeout(() => {
         if (mapInstance) mapInstance.invalidateSize();
       }, 100);
     }
-    if (view() === 'lng') fetchLngFacilities();
-    if (view() === 'offshore') fetchOffshorePlatforms();
-    if (view() === 'terminal') fetchPetroleumTerminals();
-    if (view() === 'accidents') fetchAccidents();
-    if (view() === 'fleet' || view() === 'combined') {
+    if (v === 'lng') fetchLngFacilities();
+    if (v === 'offshore') fetchOffshorePlatforms();
+    if (v === 'terminal') fetchPetroleumTerminals();
+    if (v === 'accidents') fetchAccidents();
+    if (v === 'fleet' || v === 'combined') {
       fetchRefineries();
       fetchLngFacilities();
       fetchOffshorePlatforms();
@@ -567,7 +579,8 @@ export default function OilRefineryPanel() {
         };
       }
       countryAgg[country].count++;
-      if (item.category === 'refinery') countryAgg[country].refs++;
+      const isRefinery = CAT_ORDER.includes(item.category);
+      if (isRefinery) countryAgg[country].refs++;
       if (item.category === 'lng') countryAgg[country].lngs++;
       if (item.category === 'offshore') countryAgg[country].offs++;
       if (item.category === 'terminal') countryAgg[country].terms++;
@@ -707,6 +720,118 @@ export default function OilRefineryPanel() {
   createEffect(() => {
     if (view() === 'accidents' && accidents().length > 0) {
        setTimeout(initAccidentChart, 200);
+    }
+  });
+
+  const initReportCharts = () => {
+    if (!window.echarts) return;
+
+    // 1. Asset Distribution
+    if (assetDistChartRef) {
+      const stats = combinedStats();
+      if (!stats || !stats.countries || stats.countries.length === 0) return;
+
+      const chart = window.echarts.init(assetDistChartRef, 'dark');
+      const refs = refineries();
+      const lng = lngFacilities();
+      const off = offshorePlatforms();
+      const terms = petroleumTerminals();
+
+      chart.setOption({
+        backgroundColor: 'transparent',
+        tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+        series: [{
+          type: 'pie',
+          radius: ['40%', '70%'],
+          avoidLabelOverlap: false,
+          itemStyle: { borderRadius: 10, borderColor: '#050b14', borderWidth: 2 },
+          label: { show: false, position: 'center' },
+          emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold' } },
+          data: [
+            { value: refs.length, name: 'REFINERIES', itemStyle: { color: '#f97316' } },
+            { value: lng.length, name: 'LNG TERMINALS', itemStyle: { color: '#06b6d4' } },
+            { value: off.length, name: 'OFFSHORE OPS', itemStyle: { color: '#f43f5e' } },
+            { value: terms.length, name: 'PETRO TERMINALS', itemStyle: { color: '#d946ef' } }
+          ]
+        }]
+      });
+    }
+
+    // 2. Capacity by Type
+    if (capacityChartRef) {
+      const chart = window.echarts.init(capacityChartRef, 'dark');
+      const refs = refineries();
+      const lng = lngFacilities();
+      const terms = petroleumTerminals();
+
+      const refCap = refs.reduce((acc, r) => acc + (r.capacity || 0), 0);
+      const lngCap = lng.reduce((acc, l) => acc + (l.capacity || 0), 0);
+      const termCap = terms.reduce((acc, t) => acc + (t.capacity || 0), 0);
+
+      chart.setOption({
+        backgroundColor: 'transparent',
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        grid: { top: 20, bottom: 40, left: 60, right: 20 },
+        xAxis: { type: 'category', data: ['REFINERY', 'LNG', 'TERMINAL'], axisLabel: { color: '#94a3b8', fontSize: 10 } },
+        yAxis: { type: 'value', axisLabel: { color: '#94a3b8', fontSize: 8, formatter: (v) => (v / 1000000).toFixed(1) + 'M' } },
+        series: [{
+          data: [
+            { value: refCap, itemStyle: { color: '#f97316' } },
+            { value: lngCap, itemStyle: { color: '#06b6d4' } },
+            { value: termCap, itemStyle: { color: '#d946ef' } }
+          ],
+          type: 'bar',
+          barWidth: '40%'
+        }]
+      });
+    }
+
+    // 3. Top Countries
+    if (countryChartRef) {
+      const chart = window.echarts.init(countryChartRef, 'dark');
+      const topCountries = combinedStats().countries.slice(0, 10);
+
+      chart.setOption({
+        backgroundColor: 'transparent',
+        tooltip: { trigger: 'axis' },
+        grid: { top: 20, bottom: 40, left: 80, right: 20 },
+        xAxis: { type: 'value', axisLabel: { color: '#94a3b8', fontSize: 8 } },
+        yAxis: { type: 'category', data: topCountries.map(c => c.name).reverse(), axisLabel: { color: '#94a3b8', fontSize: 8 } },
+        series: [{
+          data: topCountries.map(c => c.count).reverse(),
+          type: 'bar',
+          itemStyle: { color: new window.echarts.graphic.LinearGradient(1, 0, 0, 0, [{ offset: 0, color: '#f97316' }, { offset: 1, color: '#f9731633' }]) }
+        }]
+      });
+    }
+
+    // 4. Trade Intensity
+    if (tradeFlowChartRef) {
+      const chart = window.echarts.init(tradeFlowChartRef, 'dark');
+      const tradeData = trades().slice(0, 20);
+      
+      chart.setOption({
+        backgroundColor: 'transparent',
+        tooltip: { trigger: 'item' },
+        series: [{
+          type: 'treemap',
+          data: tradeData.map(t => ({
+            name: `${t.origin_name} → ${t.destination_name}`,
+            value: 1, // Just count for now if no volume
+            label: { show: true, fontSize: 8 }
+          })),
+          breadcrumb: { show: false },
+          itemStyle: { borderColor: '#050b14', borderWidth: 1 }
+        }]
+      });
+    }
+  };
+
+  createEffect(() => {
+    // Only initialize charts if we are in report view AND data is ready
+    if (view() === 'report' && combinedDBStats() && refineries().length > 0) {
+      // Small timeout to ensure DOM nodes (refs) are rendered
+      setTimeout(initReportCharts, 300);
     }
   });
 
@@ -1004,7 +1129,125 @@ export default function OilRefineryPanel() {
         </div>
 
         <div class={`flex-1 overflow-y-auto win-scroll bg-[#050b14] p-12 ${view() !== 'report' ? 'hidden' : ''}`}>
-          {/* REPORT CONTENT ... */}
+          <div class="max-w-7xl mx-auto space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {/* Header Section */}
+            <div class="flex justify-between items-end border-b border-white/10 pb-8">
+              <div>
+                <div class="flex items-center gap-3 mb-2">
+                  <span class="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+                  <span class="text-[10px] font-black text-orange-500 tracking-[0.4em] uppercase">Confidential Intelligence Report</span>
+                </div>
+                <h1 class="text-6xl font-black tracking-tighter text-white uppercase italic leading-none">GEO-INFRASTRUCTURE<br />ANALYTICS 2026</h1>
+                <p class="text-white/40 font-bold tracking-[0.2em] mt-4 flex items-center gap-4">
+                  <span>STRATEGIC ENERGY ASSET RECONNAISSANCE</span>
+                  <span class="w-12 h-px bg-white/10"></span>
+                  <span class="text-green-500/60 uppercase text-[9px]">Status: Live Data Stream</span>
+                </p>
+              </div>
+              <div class="text-right font-mono">
+                <div class="text-white/20 text-[9px] font-black uppercase tracking-widest mb-1">Observation Node</div>
+                <div class="text-white text-xs uppercase font-black">Mahameru-Terminal-Alpha</div>
+                <div class="text-orange-500 text-[10px] font-black mt-2">{new Date().toISOString()}</div>
+              </div>
+            </div>
+
+            {/* Top Stats */}
+            <div class="grid grid-cols-4 gap-6">
+              <div class="bg-white/2 border border-white/5 p-6 relative group hover:bg-orange-500/5 transition-all">
+                <div class="absolute top-0 left-0 w-1 h-full bg-orange-500"></div>
+                <div class="text-white/30 text-[9px] font-black uppercase tracking-widest mb-2">Total Monitored Assets</div>
+                <div class="text-4xl font-black text-white italic">{combinedStats().totalAssets}</div>
+                <div class="text-orange-500/40 text-[10px] font-black mt-1 uppercase tracking-tighter">Global Footprint</div>
+              </div>
+              <div class="bg-white/2 border border-white/5 p-6 relative group hover:bg-cyan-500/5 transition-all">
+                <div class="absolute top-0 left-0 w-1 h-full bg-cyan-500"></div>
+                <div class="text-white/30 text-[9px] font-black uppercase tracking-widest mb-2">Combined Capacity</div>
+                <div class="text-4xl font-black text-white italic">
+                  {((refineries().reduce((a, b) => a + (b.capacity || 0), 0) + 
+                     lngFacilities().reduce((a, b) => a + (b.capacity || 0), 0)) / 1000000).toFixed(2)}M
+                </div>
+                <div class="text-cyan-500/40 text-[10px] font-black mt-1 uppercase tracking-tighter">BBL Per Day Equivalent</div>
+              </div>
+              <div class="bg-white/2 border border-white/5 p-6 relative group hover:bg-rose-500/5 transition-all">
+                <div class="absolute top-0 left-0 w-1 h-full bg-rose-500"></div>
+                <div class="text-white/30 text-[9px] font-black uppercase tracking-widest mb-2">Active Incidents</div>
+                <div class="text-4xl font-black text-red-500 italic">{accidents().length}</div>
+                <div class="text-red-500/40 text-[10px] font-black mt-1 uppercase tracking-tighter">Emergency Logs</div>
+              </div>
+              <div class="bg-white/2 border border-white/5 p-6 relative group hover:bg-fuchsia-500/5 transition-all">
+                <div class="absolute top-0 left-0 w-1 h-full bg-fuchsia-500"></div>
+                <div class="text-white/30 text-[9px] font-black uppercase tracking-widest mb-2">Trade Lanes</div>
+                <div class="text-4xl font-black text-white italic">{tradeTotal()}</div>
+                <div class="text-fuchsia-500/40 text-[10px] font-black mt-1 uppercase tracking-tighter">Active Routes</div>
+              </div>
+            </div>
+
+            {/* Charts Row 1 */}
+            <div class="grid grid-cols-2 gap-8">
+              <div class="bg-white/2 border border-white/5 p-8 rounded-sm relative">
+                <div class="absolute top-4 left-4 flex items-center gap-2">
+                  <div class="w-1.5 h-1.5 bg-orange-500"></div>
+                  <h3 class="text-[10px] font-black text-white uppercase tracking-[0.2em]">Asset Composition Analysis</h3>
+                </div>
+                <div ref={assetDistChartRef} class="h-80 w-full mt-4"></div>
+                <div class="mt-4 grid grid-cols-4 gap-4">
+                  <div class="text-center">
+                    <div class="text-[8px] text-white/30 uppercase font-black mb-1">Refineries</div>
+                    <div class="text-xs font-black text-white">{refineries().length}</div>
+                  </div>
+                  <div class="text-center">
+                    <div class="text-[8px] text-white/30 uppercase font-black mb-1">LNG</div>
+                    <div class="text-xs font-black text-white">{lngFacilities().length}</div>
+                  </div>
+                  <div class="text-center">
+                    <div class="text-[8px] text-white/30 uppercase font-black mb-1">Offshore</div>
+                    <div class="text-xs font-black text-white">{offshorePlatforms().length}</div>
+                  </div>
+                  <div class="text-center">
+                    <div class="text-[8px] text-white/30 uppercase font-black mb-1">Terminals</div>
+                    <div class="text-xs font-black text-white">{petroleumTerminals().length}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="bg-white/2 border border-white/5 p-8 rounded-sm relative">
+                <div class="absolute top-4 left-4 flex items-center gap-2">
+                  <div class="w-1.5 h-1.5 bg-cyan-500"></div>
+                  <h3 class="text-[10px] font-black text-white uppercase tracking-[0.2em]">Operational Capacity Distribution</h3>
+                </div>
+                <div ref={capacityChartRef} class="h-80 w-full mt-4"></div>
+              </div>
+            </div>
+
+            {/* Charts Row 2 */}
+            <div class="grid grid-cols-3 gap-8">
+              <div class="col-span-2 bg-white/2 border border-white/5 p-8 rounded-sm relative">
+                 <div class="absolute top-4 left-4 flex items-center gap-2">
+                  <div class="w-1.5 h-1.5 bg-rose-500"></div>
+                  <h3 class="text-[10px] font-black text-white uppercase tracking-[0.2em]">Geospatial Asset Density (Top 10 Nations)</h3>
+                </div>
+                <div ref={countryChartRef} class="h-80 w-full mt-4"></div>
+              </div>
+              <div class="bg-white/2 border border-white/5 p-8 rounded-sm relative overflow-hidden">
+                <div class="absolute top-4 left-4 flex items-center gap-2">
+                  <div class="w-1.5 h-1.5 bg-fuchsia-500"></div>
+                  <h3 class="text-[10px] font-black text-white uppercase tracking-[0.2em]">Trade Flow Intensity</h3>
+                </div>
+                <div ref={tradeFlowChartRef} class="h-80 w-full mt-4"></div>
+                <div class="mt-4 p-4 border-t border-white/5 bg-white/2">
+                   <p class="text-[8px] text-white/40 leading-relaxed uppercase italic">Visualizing cargo movement priority based on origin-destination node pairs currently active in the Mahameru network.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Intelligence Footer */}
+            <div class="p-12 border border-white/5 bg-gradient-to-b from-white/2 to-transparent text-center">
+               <div class="text-[10px] font-black text-orange-500/40 uppercase tracking-[1em] mb-4">End of Intelligence Report</div>
+               <p class="text-[8px] text-white/20 max-w-2xl mx-auto uppercase leading-loose tracking-widest font-bold">
+                 This report is generated from real-time asset tracking and news intelligence. data may vary based on reporting frequency and jurisdictional disclosure levels. internal classification: top secret // mahameru intelligence systems.
+               </p>
+            </div>
+          </div>
         </div>
 
         <StrategicAssetDetail

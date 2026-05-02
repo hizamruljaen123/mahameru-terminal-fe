@@ -1,4 +1,4 @@
-import { createSignal, onMount, onCleanup, Show } from 'solid-js';
+import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
 import { io } from 'socket.io-client';
 import { Sidebar, Header, Footer } from './components/Shell';
 import LoadingScreen from './components/LoadingScreen';
@@ -32,6 +32,15 @@ import EntityCorrelationView from './views/entity-correlation/EntityCorrelationV
 import WorkspaceView from './views/WorkspaceView';
 import ResearchPanelView from './views/ResearchPanelView';
 import { alertManager } from './utils/alertManager';
+// === TIER 1: NEW INSTITUTIONAL VIEWS ===
+import MacroFixedIncomeFusionPanel from './views/MacroFixedIncomeFusionPanel';
+import VolatilityIntelligenceView from './views/VolatilityIntelligenceView';
+import OptionsIntelligenceView from './views/OptionsIntelligenceView';
+import CapitalFlowView from './views/CapitalFlowView';
+import CorporateIntelView from './views/CorporateIntelView';
+import RegimeView from './views/RegimeView';
+import ESGView from './views/ESGView';
+import SupplyChainView from './views/SupplyChainView';
 
 function App() {
   const [data, setData] = createSignal({});
@@ -49,6 +58,33 @@ function App() {
   const [crisisModule, setCrisisModule] = createSignal('conflict');
   const [liveCount, setLiveCount] = createSignal(0);       // live article counter
   const [socketConnected, setSocketConnected] = createSignal(false); // socket status
+
+  // State sync: if geoModule is set to an infra-exclusive module, redirect to infra view
+  const INFRA_MODULES = new Set([
+    'airport', 'port', 'power-plant', 'industrial-zone', 'datacenter',
+    'train-station', 'military', 'oil-facility',
+    'submarine-cable', 'infra-cctv', 'mines-data'
+  ]);
+  createEffect(() => {
+    const currentGeo = geoModule();
+    if (INFRA_MODULES.has(currentGeo) && view() === 'geointel') {
+      setInfraModule(currentGeo);
+      navigateTo('infrastructure');
+    }
+  });
+
+  // State sync: if infraModule is set to a geo-exclusive module, redirect to geo view
+  const GEO_MODULES = new Set([
+    'naval-fleet', 'flight-intel', 'geo-map', 'geo-trend',
+    'satellite-visual', 'weather'
+  ]);
+  createEffect(() => {
+    const currentInfra = infraModule();
+    if (GEO_MODULES.has(currentInfra) && view() === 'infrastructure') {
+      setGeoModule(currentInfra);
+      navigateTo('geointel');
+    }
+  });
 
   const handleGlobalSearch = async (q) => {
     setSearchQuery(q);
@@ -99,14 +135,14 @@ function App() {
     // 1. PROGRESSIVE INITIAL LOAD (Replaces heavy /api/news/data)
     const initLoad = () => {
       console.log("[INIT] Starting progressive category stream...");
-      
+
       const streamUrl = `${import.meta.env.VITE_API_BASE}/api/news/stream-categories?limit=15`;
       const source = new EventSource(streamUrl);
 
       source.onmessage = (event) => {
         try {
           const parsed = JSON.parse(event.data);
-          
+
           if (parsed.category && parsed.news) {
             mergeData({ [parsed.category]: parsed.news });
             // Release loading screen as soon as first data arrives
@@ -195,7 +231,7 @@ function App() {
     // SOCKET.IO — Real-time live stream from backup_service (port 5004)
     // ================================================================
     const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_BACKUP_URL || 'https://api.asetpedia.online/backup';
-    
+
     let socketOptions = {
       transports: ['websocket'],
       upgrade: false,
@@ -210,7 +246,7 @@ function App() {
       if (urlObj.pathname && urlObj.pathname !== '/') {
         socketOptions.path = `${urlObj.pathname.replace(/\/$/, '')}/socket.io/`;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const socket = io(SOCKET_URL, socketOptions);
 
@@ -329,6 +365,17 @@ function App() {
     '/entity-correlation': 'entity-correlation',
     '/research-panel': 'research-panel',
     '/workspace': 'workspace',
+    // === TIER 1: NEW INSTITUTIONAL VIEWS ===
+    '/bonds': 'bonds-macro',
+    '/volatility': 'volatility',
+    '/options': 'options',
+    '/macro-economics': 'bonds-macro',
+    '/bonds-macro': 'bonds-macro',
+    '/capital-flows': 'capital-flows',
+    '/corporate-intel': 'corporate-intel',
+    '/regime': 'regime',
+    '/esg': 'esg',
+    '/supply-chain': 'supply-chain',
   };
 
   // Immediate detection before first render
@@ -513,6 +560,39 @@ function App() {
 
           <Show when={view() === 'workspace'}>
             <WorkspaceView />
+          </Show>
+
+          {/* === TIER 1: NEW INSTITUTIONAL VIEWS === */}
+          <Show when={view() === 'bonds-macro' || view() === 'bonds' || view() === 'macro-economics'}>
+            <MacroFixedIncomeFusionPanel theme={theme} />
+          </Show>
+
+          <Show when={view() === 'volatility'}>
+            <VolatilityIntelligenceView theme={theme} />
+          </Show>
+
+          <Show when={view() === 'options'}>
+            <OptionsIntelligenceView theme={theme} />
+          </Show>
+
+          <Show when={view() === 'capital-flows'}>
+            <CapitalFlowView theme={theme} />
+          </Show>
+
+          <Show when={view() === 'corporate-intel'}>
+            <CorporateIntelView theme={theme} />
+          </Show>
+
+          <Show when={view() === 'regime'}>
+            <RegimeView theme={theme} />
+          </Show>
+
+          <Show when={view() === 'esg'}>
+            <ESGView theme={theme} />
+          </Show>
+
+          <Show when={view() === 'supply-chain'}>
+            <SupplyChainView theme={theme} />
           </Show>
 
         </div>

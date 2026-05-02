@@ -415,7 +415,7 @@ export default function SatelliteMappingPanel() {
 
   const fetchCountryData = async () => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_GEO_DATA_API}/api/geo/countries/lite`);
+      const res = await fetch(`${import.meta.env.VITE_GEO_DATA_API}/api/countries/lite`);
       const data = await res.json();
       if (data.status === 'success') {
           setCountries(data.data.map(c => ({
@@ -559,7 +559,7 @@ export default function SatelliteMappingPanel() {
      if (now - lastBackendCheck < 5000) return;
      lastBackendCheck = now;
      try {
-        const res = await fetch(`${import.meta.env.VITE_GEO_DATA_API}/api/geo/countries/in-range?lat=${lat}&lon=${lon}&radius=5.0`);
+        const res = await fetch(`${import.meta.env.VITE_GEO_DATA_API}/api/countries/in-range?lat=${lat}&lon=${lon}&radius=5.0`);
         const data = await res.json();
         if (data.status === 'success') setVerifiedCountries(data.data);
      } catch (e) {}

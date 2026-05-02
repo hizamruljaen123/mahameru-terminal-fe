@@ -143,12 +143,15 @@ export default function ForexIntelligenceView(props) {
     return detail()?.history || [];
   };
 
+  let pairsController = null;
   const fetchPairsList = async () => {
+    if (pairsController) pairsController.abort();
+    pairsController = new AbortController();
     try {
-      const resp = await fetch(`${FOREX_API}/api/forex/list`);
+      const resp = await fetch(`${FOREX_API}/api/forex/list`, { signal: pairsController.signal });
       const json = await resp.json();
       if (json.status === 'success') setPairs(json.data);
-    } catch (e) { console.error("Forex List error:", e); }
+    } catch (e) { if (e.name !== 'AbortError') console.error("Forex List error:", e); }
   };
 
   // Build smart economic query from currency symbol e.g. "EURUSD=X" → "Europe USA EUR USD"
@@ -187,9 +190,9 @@ export default function ForexIntelligenceView(props) {
       const url = `${GNEWS_API}/api/gnews/search?q=${encodeURIComponent(q)}&lang=${lang}&country=${country}`;
       const resp = await fetch(url);
       const json = await resp.json();
-      
+
       console.log(`[FOREX_INTEL] API Response for ${symbol}:`, json);
-      
+
       // Extraction logic: support flat array, .news, .results, or .data
       let data = [];
       if (Array.isArray(json)) {
@@ -205,11 +208,11 @@ export default function ForexIntelligenceView(props) {
         const cur2 = raw.slice(3, 6).toUpperCase();
         const fallbackQ = `${cur1} ${cur2} economy monetary policy`;
         console.log(`[FOREX_INTEL] Low results, triggering fallback: ${fallbackQ}`);
-        
+
         const fbResp = await fetch(`${GNEWS_API}/api/gnews/search?q=${encodeURIComponent(fallbackQ)}&lang=${lang}&country=${country}`);
         const fbJson = await fbResp.json();
         const fbData = Array.isArray(fbJson) ? fbJson : (fbJson.news || fbJson.results || fbJson.data || []);
-        
+
         if (fbData.length > 0) {
           // Merge and deduplicate
           const combined = [...data, ...fbData];
@@ -229,7 +232,7 @@ export default function ForexIntelligenceView(props) {
         time: item.time || item.timestamp || Math.floor(Date.now() / 1000),
         link: item.link || item.url || '#'
       }));
-      
+
       console.log(`[FOREX_INTEL] Formatted ${formatted.length} articles.`);
       setNews(formatted);
     } catch (e) {
@@ -240,19 +243,21 @@ export default function ForexIntelligenceView(props) {
     }
   };
 
+  let forexDetailController = null;
   const fetchDetail = async (symbol, range = '6M') => {
+    if (forexDetailController) forexDetailController.abort();
+    forexDetailController = new AbortController();
     setLoading(true);
     try {
       const rangeMap = {
         '1W': '5d', '1M': '1mo', '3M': '3mo', '6M': '6mo', '1Y': '1y', '5Y': '5y', 'ALL': 'max'
       };
       const period = rangeMap[range] || '6mo';
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      const timeoutId = setTimeout(() => forexDetailController.abort(), 10000); // 10s timeout
 
-      const resp = await fetch(`${FOREX_API}/api/forex/detail/${symbol}?period=${period}`, { signal: controller.signal });
+      const resp = await fetch(`${FOREX_API}/api/forex/detail/${symbol}?period=${period}`, { signal: forexDetailController.signal });
       clearTimeout(timeoutId);
-      
+
       const json = await resp.json();
       if (json.status === 'success') {
         setDetail(json.data);
@@ -261,7 +266,7 @@ export default function ForexIntelligenceView(props) {
         setDetail(null);
       }
     } catch (e) {
-      console.error("Forex Detail fetch error:", e);
+      if (e.name !== 'AbortError') console.error("Forex Detail fetch error:", e);
       setDetail(null);
     }
     setLoading(false);
@@ -277,6 +282,8 @@ export default function ForexIntelligenceView(props) {
     solidOnCleanup(() => {
       _mounted = false;
       clearInterval(syncItv);
+      if (pairsController) pairsController.abort();
+      if (forexDetailController) forexDetailController.abort();
     });
   });
 
@@ -606,7 +613,8 @@ export default function ForexIntelligenceView(props) {
                       <tbody class="divide-y divide-border_main/10">
                         <For each={detail()?.history?.slice().reverse().slice(0, 20)}>
                           {(row, idx) => {
-                            const prevRow = detail().history[detail().history.length - 1 - idx() - 1];
+                            const history = detail()?.history;
+                            const prevRow = history?.[(history?.length ?? 0) - 1 - idx() - 1];
                             const delta = prevRow ? row.Close - prevRow.Close : 0;
                             return (
                               <tr class="hover:bg-white/5 transition-colors">
@@ -676,8 +684,8 @@ export default function ForexIntelligenceView(props) {
 
                   <Show when={news().length === 0 && !newsLoading()}>
                     <div class="flex flex-col items-center justify-center h-full gap-3 opacity-30 py-20">
-                       <svg class="w-12 h-12 text-text_secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" /></svg>
-                       <span class="text-[10px] font-black text-text_secondary uppercase tracking-widest italic">No surveillance data found for {selectedSymbol()}</span>
+                      <svg class="w-12 h-12 text-text_secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" /></svg>
+                      <span class="text-[10px] font-black text-text_secondary uppercase tracking-widest italic">No surveillance data found for {selectedSymbol()}</span>
                     </div>
                   </Show>
                 </div>

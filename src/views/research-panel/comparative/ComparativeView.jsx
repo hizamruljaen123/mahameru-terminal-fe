@@ -1039,3 +1039,133 @@ export default function ComparativeView() {
     </div>
   );
 }
+
+// ─── PDF-OPTIMIZED COMPONENTS ────────────────────────────────────────────────
+
+function SparklinePDF(props) {
+  const normalizedData = () => {
+    const raw = props.data || [];
+    return raw.map(d => typeof d === 'object' ? (d.close ?? d.value ?? 0) : d);
+  };
+
+  const stats = () => {
+    const vals = normalizedData();
+    if (vals.length === 0) return { min: 0, max: 1, range: 1, last: 0 };
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    return { min, max, range: max - min || 1, last: vals[vals.length - 1] };
+  };
+
+  const points = () => {
+    const vals = normalizedData();
+    const { min, range } = stats();
+    if (vals.length === 0) return [];
+    
+    return vals.map((v, i) => ({
+      x: (i / (vals.length - 1)) * (props.width || 200),
+      y: (props.height || 50) - ((v - min) / range) * (props.height || 50)
+    }));
+  };
+
+  const pathData = () => {
+    const pts = points();
+    if (pts.length < 2) return '';
+    return `M ${pts[0].x} ${pts[0].y} ` + pts.slice(1).map(p => `L ${p.x} ${p.y}`).join(' ');
+  };
+
+  return (
+    <div class="flex flex-col gap-1">
+      <div class="flex justify-between items-center text-[7px] font-black text-slate-400 uppercase tracking-tighter">
+        <span>{props.label}</span>
+        <Show when={props.data?.length > 0}>
+          <span class="text-slate-600 font-mono font-bold">
+            {stats().last.toLocaleString()}
+          </span>
+        </Show>
+      </div>
+      <div class="bg-slate-50 border border-slate-100 rounded-sm p-1">
+        <svg 
+          width={props.width || 200} 
+          height={props.height || 50} 
+          viewBox={`0 0 ${props.width || 200} ${props.height || 50}`}
+          preserveAspectRatio="none"
+          class="overflow-visible"
+        >
+          {/* Support/Resistance if type is full */}
+          <Show when={props.type === 'full' && props.ta?.support_resistance}>
+            <For each={props.ta.support_resistance.supports}>
+              {(s) => {
+                const { min, range } = stats();
+                const h = props.height || 50;
+                const y = h - ((s - min) / range) * h;
+                return <line x1="0" y1={y} x2={props.width} y2={y} stroke="#ef4444" stroke-width="0.5" stroke-dasharray="2,2" opacity="0.4" />;
+              }}
+            </For>
+            <For each={props.ta.support_resistance.resistances}>
+              {(r) => {
+                const { min, range } = stats();
+                const h = props.height || 50;
+                const y = h - ((r - min) / range) * h;
+                return <line x1="0" y1={y} x2={props.width} y2={y} stroke="#10b981" stroke-width="0.5" stroke-dasharray="2,2" opacity="0.4" />;
+              }}
+            </For>
+          </Show>
+
+          <path
+            d={pathData()}
+            fill="none"
+            stroke={props.color || '#0ea5e9'}
+            stroke-width={props.type === 'full' ? 1.5 : 1}
+            stroke-linejoin="round"
+            stroke-linecap="round"
+          />
+          
+          {/* Area under the line */}
+          <path
+            d={`${pathData()} L ${props.width || 200} ${props.height || 50} L 0 ${props.height || 50} Z`}
+            fill={props.color || '#0ea5e9'}
+            fill-opacity="0.05"
+            stroke="none"
+          />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+function FinancialTablePDF(props) {
+  return (
+    <div class="my-6">
+      <div class="text-[9px] font-black text-slate-800 uppercase tracking-widest border-l-4 border-slate-800 pl-2 mb-3">
+        {props.title}
+      </div>
+      <table class="w-full border-collapse text-[9px]">
+        <thead>
+          <tr class="border-b-2 border-slate-200">
+            <th class="py-2 text-left text-slate-400 font-black uppercase tracking-tighter w-1/3">Metric Analysis</th>
+            <For each={props.companies}>
+              {(comp) => (
+                <th class="py-2 text-right text-slate-800 font-black uppercase">{comp.symbol}</th>
+              )}
+            </For>
+          </tr>
+        </thead>
+        <tbody>
+          <For each={props.rows}>
+            {(row, i) => (
+              <tr class={i() % 2 === 0 ? 'bg-slate-50/50' : 'bg-transparent'}>
+                <td class="py-2 border-b border-slate-100 text-slate-600 font-bold">{row.metric}</td>
+                <For each={row.values}>
+                  {(val) => (
+                    <td class="py-2 border-b border-slate-100 text-right text-slate-900 font-mono font-bold">{val}</td>
+                  )}
+                </For>
+              </tr>
+            )}
+          </For>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+

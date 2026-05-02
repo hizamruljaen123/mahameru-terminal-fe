@@ -114,7 +114,8 @@ export default function LiveMarketTerminal(props) {
         const newPrices = {};
         const newSentiment = {};
         Object.entries(msg.data).forEach(([s, data]) => {
-          const klines = (data.klines || []).sort((a, b) => a.time - b.time);
+          const rawKlines = Array.isArray(data.klines) ? data.klines : [];
+          const klines = rawKlines.sort((a, b) => a.time - b.time);
           assetKlines[s] = klines;
           if (klines.length > 0) {
             const last = klines[klines.length - 1];
@@ -123,7 +124,7 @@ export default function LiveMarketTerminal(props) {
             newSentiment[s] = last.close >= last.open ? 'BULLISH' : 'BEARISH';
           }
           newKlines[s] = [...klines];
-          newTrades[s] = (data.trades || []).slice(0, 50);
+          newTrades[s] = (Array.isArray(data.trades) ? data.trades : []).slice(0, 50);
           if (data.depth) newDepths[s] = data.depth;
         });
         setKlineStore(prev => ({ ...prev, ...newKlines }));

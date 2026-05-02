@@ -4,6 +4,7 @@ const RESEARCH_API = import.meta.env.VITE_RESEARCH_API;
 const MARKET_API = 'https://api.asetpedia.online/market';
 const TA_API = 'https://api.asetpedia.online/ta';
 const GNEWS_API = 'https://api.asetpedia.online/gnews';
+const OIL_REFINERY_API = import.meta.env.VITE_OIL_REFINERY_API || 'https://api.asetpedia.online/refinery';
 
 /**
  * Parallel data aggregation for up to 3 companies.
@@ -97,12 +98,12 @@ export function useComparativeData() {
       const name = (result.fundamental?.snapshot?.name || symbol).trim().replace(/\n/g, ' ');
       // Refined base query for better specification
       const baseQuery = `${name} (${symbol})`;
-      
+
       addLog(`[${symbol}] Initiating institutional news scan for ${name}...`);
-      
+
       const sector = (result.fundamental?.snapshot?.sector || 'industry').trim().replace(/\n/g, ' ');
       const countryName = (result.fundamental?.snapshot?.country || 'USA').trim().replace(/\n/g, ' ');
-      
+
       // Map common countries to GNews codes
       const countryMap = { 'Indonesia': 'ID', 'Malaysia': 'MY', 'Singapore': 'SG', 'United States': 'US', 'USA': 'US' };
       const countryCode = countryMap[countryName] || 'US';
@@ -123,9 +124,9 @@ export function useComparativeData() {
       // Add officer-specific queries for Leadership Trail
       if (officers.length > 0) {
         officers.forEach(officer => {
-          newsTopics.push({ 
-            key: 'leadershipNews', 
-            q: `"${officer}" ${name} news development`, 
+          newsTopics.push({
+            key: 'leadershipNews',
+            q: `"${officer}" ${name} news development`,
             label: `Leadership: ${officer}`,
             isStrict: true,
             officerName: officer
@@ -141,7 +142,7 @@ export function useComparativeData() {
           // For legal news, we request a 10-year archive (using 10y period)
           const isLegal = topic.key === 'legalNews';
           const periodParam = isLegal ? '&period=10y' : '';
-          
+
           const res = await fetchWithTimeout(`${RESEARCH_API}/api/gnews/search?q=${encodeURIComponent(topic.q)}&lang=en&country=${countryCode}${periodParam}`, 30000);
           const json = await res.json();
           let data = json.data || [];
@@ -181,7 +182,7 @@ export function useComparativeData() {
       result.leadershipNews = categorized.leadershipNews;
       result.projectNews = categorized.projectNews;
       result.sectorNews = categorized.sectorNews;
-      
+
       addLog(`[${symbol}] Deep scan complete. Found ${allNews.length} unique signals.`);
     } catch (e) {
       addLog(`[${symbol}] News scan failed: ${e.message}`, 'error');
@@ -199,6 +200,43 @@ export function useComparativeData() {
       result.sentiment = json.data || {};
     } catch (e) {
       result.sentiment = {};
+    }
+
+    // 8. Infrastructure Proximity — enriched from yfinance lat/lon data
+    try {
+      const lat = result.fundamental?.snapshot?.latitude;
+      const lon = result.fundamental?.snapshot?.longitude;
+      if (lat != null && lon != null) {
+        addLog(`[${symbol}] Scanning nearby infrastructure (${lat}, ${lon})...`);
+        const infraRes = await fetchWithTimeout(
+          `${OIL_REFINERY_API}/api/infrastructure/nearby?lat=${lat}&lon=${lon}&radius=100`, 10000
+        );
+        const infraJson = await infraRes.json();
+        if (infraJson.status === 'success' && Array.isArray(infraJson.data)) {
+          // Group by infra_type and count
+          const grouped = {};
+          infraJson.data.forEach(f => {
+            if (!grouped[f.infra_type]) grouped[f.infra_type] = [];
+            if (grouped[f.infra_type].length < 5) { // Keep top 5 nearest per type
+              grouped[f.infra_type].push({
+                name: f.name,
+                distance_km: Math.round(f.distance * 10) / 10
+              });
+            }
+          });
+          result.infrastructure = {
+            total: infraJson.data.length,
+            nearest: infraJson.data.slice(0, 3), // Top 3 overall nearest
+            grouped
+          };
+          addLog(`[${symbol}] Found ${infraJson.data.length} nearby infrastructure assets.`, 'success');
+        }
+      } else {
+        addLog(`[${symbol}] No geolocation data for infrastructure scan.`, 'info');
+      }
+    } catch (e) {
+      addLog(`[${symbol}] Infrastructure scan unavailable: ${e.message}`, 'error');
+      result.infrastructure = null;
     }
 
     return result;
@@ -222,10 +260,10 @@ export function useComparativeData() {
     try {
       // Fetch all companies in parallel
       const results = await Promise.all(activeSymbols.map(s => fetchCompanyData(s.toUpperCase())));
-      
+
       const aggregated = {};
       results.forEach(r => { aggregated[r.symbol] = r; });
-      
+
       setRawData(aggregated);
       setProgress(60);
       addLog(`Data collection complete. ${results.length} companies ready for AI synthesis.`, 'success');

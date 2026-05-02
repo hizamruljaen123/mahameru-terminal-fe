@@ -18,6 +18,8 @@ import InfraMacroProxy from '../components/institutional/InfraMacroProxy';
 // --- CONFIG & CONSTANTS ---
 const CRYPTO_API = import.meta.env.VITE_CRYPTO_API;
 const TA_API = import.meta.env.VITE_TA_URL;
+const CRYPTO_STREAM_API = import.meta.env.VITE_CRYPTO_STREAM_API;
+
 
 const fmt = (v, d = 2) => (v == null || isNaN(v)) ? 'N/A' : Number(v).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
 const fmtPct = (v) => (v == null || isNaN(v)) ? 'N/A' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`;
@@ -254,6 +256,23 @@ export default function CryptoIntelligenceView(props) {
   const [searchTerm, setSearchTerm] = createSignal('');
   const [selectedRange, setSelectedRange] = createSignal('1M');
 
+  // --- LIQUIDATIONS ---
+  const [liquidations, setLiquidations] = createSignal([]);
+  const [liqLoading, setLiqLoading] = createSignal(false);
+
+  const fetchLiquidations = async () => {
+    setLiqLoading(true);
+    try {
+      const resp = await fetch(`${CRYPTO_STREAM_API}/api/stream/liquidations?limit=50&min_usd=10000`);
+      const json = await resp.json();
+      if (json.status === 'success') {
+        const data = Array.isArray(json.data) ? json.data : [];
+        setLiquidations(data);
+      }
+    } catch (e) { console.error("Liquidations fetch error:", e); }
+    setLiqLoading(false);
+  };
+
   const RANGES = ['1W', '1M', '3M', '6M', '1Y', '5Y', 'ALL'];
 
   const getFilteredHistory = () => {
@@ -294,9 +313,9 @@ export default function CryptoIntelligenceView(props) {
       },
       series: [{
         name: 'MONTHLY RETURN', type: 'heatmap', data: stats().seasonality.matrix,
-        label: { 
-          show: true, 
-          fontSize: 8, 
+        label: {
+          show: true,
+          fontSize: 8,
           fontWeight: 'black',
           color: '#fff',
           formatter: (p) => p.value[2].toFixed(1) + '%'
@@ -315,17 +334,23 @@ export default function CryptoIntelligenceView(props) {
 
   // NOTE: resize listener for seasChart is handled inside createEffect lifecycle below
 
+  let coinsController = null;
   // 1. Fetch Top Coins List
   const fetchCoins = async () => {
+    if (coinsController) coinsController.abort();
+    coinsController = new AbortController();
     try {
-      const resp = await fetch(`${CRYPTO_API}/api/crypto/top?top=50`);
+      const resp = await fetch(`${CRYPTO_API}/api/crypto/top?top=50`, { signal: coinsController.signal });
       const json = await resp.json();
       if (json.status === 'success') setCoins(json.data);
-    } catch (e) { console.error("Coins fetch error:", e); }
+    } catch (e) { if (e.name !== 'AbortError') console.error("Coins fetch error:", e); }
   };
 
+  let cryptoDetailController = null;
   // 2. Fetch Detail for selected coin
   const fetchDetail = async (symbol, range = '1M') => {
+    if (cryptoDetailController) cryptoDetailController.abort();
+    cryptoDetailController = new AbortController();
     setLoading(true);
     try {
       const rangeMap = {
@@ -338,21 +363,28 @@ export default function CryptoIntelligenceView(props) {
         'ALL': 'max'
       };
       const period = rangeMap[range] || '1mo';
-      const resp = await fetch(`${CRYPTO_API}/api/crypto/detail/${symbol}?period=${period}`);
+      const timeoutId = setTimeout(() => cryptoDetailController.abort(), 20000); // 20s timeout (Monte Carlo is heavy)
+      const resp = await fetch(`${CRYPTO_API}/api/crypto/detail/${symbol}?period=${period}`, { signal: cryptoDetailController.signal });
+      clearTimeout(timeoutId);
       const json = await resp.json();
       if (json.status === 'success') setDetail(json.data);
-    } catch (e) { console.error("Detail fetch error:", e); }
+    } catch (e) { if (e.name !== 'AbortError') console.error("Detail fetch error:", e); }
     setLoading(false);
   };
 
+  let aiController = null;
   // 3. Fetch AI Analysis (10-Agent System)
   const fetchAIAnalysis = async (symbol) => {
+    if (aiController) aiController.abort();
+    aiController = new AbortController();
     setAiLoading(true);
     try {
-      const resp = await fetch(`${CRYPTO_API}/api/ai/analyze?symbol=${symbol}`);
+      const timeoutId = setTimeout(() => aiController.abort(), 15000); // 15s timeout for AI
+      const resp = await fetch(`${CRYPTO_API}/api/ai/analyze?symbol=${symbol}`, { signal: aiController.signal });
+      clearTimeout(timeoutId);
       const json = await resp.json();
       if (json.status === 'success') setAiVerdict(json.data);
-    } catch (e) { console.error("AI Analysis error:", e); }
+    } catch (e) { if (e.name !== 'AbortError') console.error("AI Analysis error:", e); }
     setAiLoading(false);
   };
 
@@ -390,41 +422,65 @@ export default function CryptoIntelligenceView(props) {
     window.addEventListener('resize', handleResize);
 
     // INTEGRATE LIVE STREAMING FOR SIDEBAR & HEADER
+    // Track prices at last full fetch to calculate approximate change_24h from WS delta
+    let priceSnapshot = {};
     const wsUrl = import.meta.env.VITE_CRYPTO_STREAM_WS || 'wss://api.asetpedia.online/ws/crypto';
-    const ws = new WebSocket(wsUrl);
+    let wsReconnectAttempt = 0;
+    let wsReconnectTimer = null;
+    let wsRef = null;
 
-    ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
-      if (msg.type === 'kline' || msg.type === 'trade') {
-        const symbol = msg.symbol; // e.g. BTCUSDT or BTC-USD
-        const baseSymbol = symbol.replace('USDT', '').replace('-USD', '');
-        const newPrice = msg.type === 'kline' ? msg.data.close : msg.data.p;
+    const connectWs = () => {
+      wsRef = new WebSocket(wsUrl);
+      wsRef.onopen = () => { wsReconnectAttempt = 0; };
+      wsRef.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === 'kline' || msg.type === 'trade') {
+            const symbol = msg.symbol;
+            const baseSymbol = symbol.replace('USDT', '').replace('-USD', '');
+            const newPrice = msg.type === 'kline' ? msg.data.close : msg.data.p;
 
-        // 1. Update Sidebar List
-        setCoins(prev => prev.map(c => {
-          if (c.symbol === baseSymbol || c.symbol === symbol) {
-            const sentiment = msg.type === 'kline' 
-              ? (msg.data.close >= msg.data.open ? 'BULLISH' : 'BEARISH')
-              : c.sentiment; // Keep existing for trade updates
-            return { ...c, price: newPrice, sentiment };
+            // 1. Update Sidebar List with approximate change_24h from price delta
+            setCoins(prev => prev.map(c => {
+              if (c.symbol === baseSymbol || c.symbol === symbol) {
+                const sentiment = msg.type === 'kline'
+                  ? (msg.data.close >= msg.data.open ? 'BULLISH' : 'BEARISH')
+                  : c.sentiment;
+                const snapPrice = priceSnapshot[c.symbol] || c.price_24h_ago || newPrice;
+                const approxChange = ((newPrice - snapPrice) / snapPrice) * 100;
+                return { ...c, price: newPrice, change_24h: approxChange, sentiment };
+              }
+              return c;
+            }));
+
+            // 2. Update Header Detail (if active)
+            if (selectedSymbol() === baseSymbol || selectedSymbol() === symbol) {
+              setDetail(prev => {
+                if (!prev) return prev;
+                return { ...prev, price: newPrice };
+              });
+            }
           }
-          return c;
-        }));
-
-        // 2. Update Header Detail (if active)
-        if (selectedSymbol() === baseSymbol || selectedSymbol() === symbol) {
-           setDetail(prev => {
-             if (!prev) return prev;
-             return { ...prev, price: newPrice };
-           });
-        }
-      }
+        } catch (err) { /* silently handle malformed WS messages */ }
+      };
+      wsRef.onclose = () => {
+        if (!_mounted) return;
+        const delay = Math.min(1000 * Math.pow(2, wsReconnectAttempt), 30000);
+        wsReconnectAttempt++;
+        wsReconnectTimer = setTimeout(() => { if (_mounted) connectWs(); }, delay);
+      };
+      wsRef.onerror = () => { /* onerror triggers onclose, reconnect handled there */ };
     };
+    connectWs();
 
     solidOnCleanup(() => {
       _mounted = false;
       window.removeEventListener('resize', handleResize);
-      ws.close();
+      if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+      if (wsRef) wsRef.close();
+      if (coinsController) coinsController.abort();
+      if (cryptoDetailController) cryptoDetailController.abort();
+      if (aiController) aiController.abort();
     });
   });
 
@@ -451,7 +507,8 @@ export default function CryptoIntelligenceView(props) {
     { id: 'advanced', label: '09 ADVANCED' },
     { id: 'live', label: '10 LIVE' },
     { id: 'explorer', label: '11 EXPLORER' },
-    { id: 'institutional', label: '12 INSTITUTIONAL' }
+    { id: 'institutional', label: '12 INSTITUTIONAL' },
+    { id: 'liquidations', label: '13 LIQUIDATIONS' }
   ];
 
   return (
@@ -489,27 +546,27 @@ export default function CryptoIntelligenceView(props) {
                     <span class="text-[8px] text-text_secondary font-bold group-hover:text-text_accent/60 transition-colors">{coin.symbol}</span>
                   </div>
                 </div>
-                  <div class="flex flex-col items-end shrink-0">
-                    <div class="flex items-center gap-1.5">
-                      <span class={`text-[7px] font-black px-1 rounded-[1px] ${coins().find(x=>x.symbol === coin.symbol)?.sentiment === 'BEARISH' ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}`}>
-                        {coins().find(x=>x.symbol === coin.symbol)?.sentiment || 'BULL'}
-                      </span>
-                      <span class="text-[10px] font-bold font-mono">
-                        ${fmt(coin.price || coin.quote?.USD?.price, (coin.price || coin.quote?.USD?.price) < 1 ? 4 : 2)}
-                      </span>
-                    </div>
-                    <span class={`text-[8px] font-black ${signColor(coin.change_24h || coin.quote?.USD?.percent_change_24h)}`}>
-                      {fmtPct(coin.change_24h || coin.quote?.USD?.percent_change_24h)}
+                <div class="flex flex-col items-end shrink-0">
+                  <div class="flex items-center gap-1.5">
+                    <span class={`text-[7px] font-black px-1 rounded-[1px] ${coins().find(x => x.symbol === coin.symbol)?.sentiment === 'BEARISH' ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}`}>
+                      {coins().find(x => x.symbol === coin.symbol)?.sentiment || 'BULL'}
+                    </span>
+                    <span class="text-[10px] font-bold font-mono">
+                      ${fmt(coin.price || coin.quote?.USD?.price, (coin.price || coin.quote?.USD?.price) < 1 ? 4 : 2)}
                     </span>
                   </div>
+                  <span class={`text-[8px] font-black ${signColor(coin.change_24h || coin.quote?.USD?.percent_change_24h)}`}>
+                    {fmtPct(coin.change_24h || coin.quote?.USD?.percent_change_24h)}
+                  </span>
+                </div>
               </button>
             )}
           </For>
         </div>
         <div class="px-4 py-2.5 bg-bg_header/20 border-t border-border_main flex items-center justify-between">
           <div class="flex items-center gap-3">
-             <div class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
-             <span class="text-[8px] font-black text-text_secondary uppercase tracking-widest">LIVE FEED: BINANCE CLOUD</span>
+            <div class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
+            <span class="text-[8px] font-black text-text_secondary uppercase tracking-widest">LIVE FEED: BINANCE CLOUD</span>
           </div>
           <span class="text-[8px] font-mono text-text_secondary/40">LATENCY: <span class="text-text_accent">SYNC</span></span>
         </div>
@@ -533,32 +590,32 @@ export default function CryptoIntelligenceView(props) {
           </For>
         </div>
 
-          {/* CONTENT SWITCHER */}
-          <div class="flex-1 overflow-y-auto win-scroll p-6 bg-black/5">
+        {/* CONTENT SWITCHER */}
+        <div class="flex-1 overflow-y-auto win-scroll p-6 bg-black/5">
 
-            <Show when={activeTab() === 'live'}>
-              <LiveMarketTerminal watchlist={liveWatchlist()} setWatchlist={setLiveWatchlist} />
-            </Show>
+          <Show when={activeTab() === 'live'}>
+            <LiveMarketTerminal watchlist={liveWatchlist()} setWatchlist={setLiveWatchlist} />
+          </Show>
 
-            <Show when={activeTab() === 'explorer'}>
-              <CryptoAssetExplorer 
-                onSelect={(sym) => {
-                  setSelectedSymbol(sym);
-                  setActiveTab('overview');
-                }}
-                onAddToLive={(sym) => {
-                  const pair = sym.includes('USDT') ? sym : `${sym}USDT`;
-                  setLiveWatchlist(prev => {
-                    if (prev.includes(pair)) return prev;
-                    if (prev.length >= 10) return [pair, ...prev.slice(0, 9)];
-                    return [pair, ...prev];
-                  });
-                  setActiveTab('live');
-                }}
-              />
-            </Show>
+          <Show when={activeTab() === 'explorer'}>
+            <CryptoAssetExplorer
+              onSelect={(sym) => {
+                setSelectedSymbol(sym);
+                setActiveTab('overview');
+              }}
+              onAddToLive={(sym) => {
+                const pair = sym.includes('USDT') ? sym : `${sym}USDT`;
+                setLiveWatchlist(prev => {
+                  if (prev.includes(pair)) return prev;
+                  if (prev.length >= 10) return [pair, ...prev.slice(0, 9)];
+                  return [pair, ...prev];
+                });
+                setActiveTab('live');
+              }}
+            />
+          </Show>
 
-            <Show when={activeTab() === 'overview'}>
+          <Show when={activeTab() === 'overview'}>
             <div class="flex flex-col gap-6 animate-in slide-in-from-right-4 duration-500">
 
               {/* HISTORICAL CANDLESTICK AREA (MOVED TO TOP) */}
@@ -688,10 +745,10 @@ export default function CryptoIntelligenceView(props) {
               </div>
 
               <div class="grid grid-cols-12 gap-6">
-                 {/* LIQUIDITY HEATMAP (Institutional Class) */}
-                 <div class="col-span-12 h-[450px]">
-                   <LiquidityHeatmap symbol={selectedSymbol()} />
-                 </div>
+                {/* LIQUIDITY HEATMAP (Institutional Class) */}
+                <div class="col-span-12 h-[450px]">
+                  <LiquidityHeatmap symbol={selectedSymbol()} />
+                </div>
               </div>
 
               {/* AI MULTI-AGENT DOSSIER (HIGH DENSITY) */}
@@ -798,7 +855,7 @@ export default function CryptoIntelligenceView(props) {
 
           <Show when={activeTab() === 'technical'}>
             <div class="h-full flex flex-col gap-6 animate-in fade-in duration-500 overflow-y-auto win-scroll pr-2 pb-10">
-              
+
               {/* TOP ROW: HEATMAPS (SIDE-BY-SIDE) */}
               <div class="grid grid-cols-12 gap-6 h-[450px] shrink-0">
                 {/* SEASONALITY */}
@@ -966,8 +1023,8 @@ export default function CryptoIntelligenceView(props) {
                           <div class="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-text_accent scale-y-0 group-hover:scale-y-100 transition-transform"></div>
                           <div class="flex flex-col shrink-0 w-32">
                             <div class="flex items-center gap-2">
-                               <div class="w-1 h-1 rounded-full bg-blue-500"></div>
-                               <span class="text-[9px] font-black text-blue-400 uppercase tracking-widest">{item.source}</span>
+                              <div class="w-1 h-1 rounded-full bg-blue-500"></div>
+                              <span class="text-[9px] font-black text-blue-400 uppercase tracking-widest">{item.source}</span>
                             </div>
                             <span class="text-[8px] font-black text-text_secondary opacity-30 uppercase mt-0.5 tabular-nums">{item.date}</span>
                           </div>
@@ -975,8 +1032,8 @@ export default function CryptoIntelligenceView(props) {
                             <h3 class="text-[13px] font-black text-text_primary group-hover:text-text_accent transition-colors leading-tight tracking-tight uppercase truncate">{item.title}</h3>
                           </div>
                           <div class="shrink-0 flex items-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                             <span class="text-[8px] font-black text-text_accent tracking-[0.2em]">ACCESS_INTEL</span>
-                             <svg class="w-3.5 h-3.5 text-text_accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6m4-3h6v6m-11 5L21 3" /></svg>
+                            <span class="text-[8px] font-black text-text_accent tracking-[0.2em]">ACCESS_INTEL</span>
+                            <svg class="w-3.5 h-3.5 text-text_accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6m4-3h6v6m-11 5L21 3" /></svg>
                           </div>
                         </a>
                       )}
@@ -1071,6 +1128,88 @@ export default function CryptoIntelligenceView(props) {
           </div>
         </Show>
 
+        {/* LIQUIDATIONS TAB */}
+        <Show when={activeTab() === 'liquidations'}>
+          <div class="h-full flex flex-col gap-6 animate-in slide-in-from-bottom-4 duration-500 overflow-y-auto win-scroll pr-2 pb-10">
+            <div class="flex items-center justify-between shrink-0">
+              <div class="flex items-center gap-3">
+                <div class="w-1.5 h-1.5 bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]" />
+                <span class="text-[10px] font-black tracking-[0.3em] text-text_primary uppercase font-mono">REAL-TIME LIQUIDATION STREAM</span>
+              </div>
+              <button
+                onClick={fetchLiquidations}
+                class="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/30 text-[8px] font-black text-red-500 hover:bg-red-500 hover:text-white transition-all uppercase"
+              >
+                <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>
+                REFRESH
+              </button>
+            </div>
+
+            <div class="flex flex-col border-2 border-red-500/20 bg-black/40 overflow-hidden">
+              <div class="px-5 py-3 bg-red-500/5 border-b border-red-500/10 flex items-center justify-between">
+                <span class="text-[8px] font-black text-red-400 tracking-[0.3em] uppercase">LIQUIDATION EVENTS ({'>'} $10K)</span>
+                <span class="text-[8px] font-black text-text_secondary font-mono">{liquidations().length} EVENTS</span>
+              </div>
+              <div class="flex-1 overflow-y-auto win-scroll">
+                <Show when={!liqLoading()} fallback={
+                  <div class="py-16 flex flex-col items-center gap-4">
+                    <div class="w-8 h-8 border-2 border-red-500 border-t-transparent animate-spin rounded-full"></div>
+                    <span class="text-[9px] font-black text-red-400 tracking-[0.3em] uppercase">FETCHING LIQUIDATIONS...</span>
+                  </div>
+                }>
+                  <Show when={liquidations().length > 0} fallback={
+                    <div class="py-16 flex flex-col items-center gap-4">
+                      <svg class="w-10 h-10 text-text_secondary/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10" /><path d="M16 16s-1.5-2-4-2-4 2-4 2M9 9h.01M15 9h.01" /></svg>
+                      <span class="text-[10px] font-black text-text_secondary/50 tracking-[0.2em] uppercase">NO LIQUIDATIONS DETECTED</span>
+                    </div>
+                  }>
+                    <table class="w-full text-left text-[10px] font-mono border-collapse">
+                      <thead class="bg-red-500/10 sticky top-0 z-10 border-b border-red-500/20">
+                        <tr>
+                          <th class="p-4 border-r border-red-500/10 text-red-400 font-black tracking-widest">TIME</th>
+                          <th class="p-4 border-r border-red-500/10 text-white font-black tracking-widest">SYMBOL</th>
+                          <th class="p-4 border-r border-red-500/10 text-white font-black tracking-widest">SIDE</th>
+                          <th class="p-4 border-r border-red-500/10 text-white font-black tracking-widest">PRICE</th>
+                          <th class="p-4 border-r border-red-500/10 text-white font-black tracking-widest">QTY</th>
+                          <th class="p-4 text-right text-white font-black tracking-widest">USD VALUE</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-red-500/5">
+                        <For each={liquidations()}>
+                          {(liq) => (
+                            <tr class="hover:bg-red-500/5 transition-colors group">
+                              <td class="p-4 border-r border-red-500/5 text-text_secondary font-mono text-[9px]">{liq.time || liq.event_time || 'N/A'}</td>
+                              <td class="p-4 border-r border-red-500/5 text-text_accent font-black group-hover:text-white transition-colors">{liq.symbol}</td>
+                              <td class="p-4 border-r border-red-500/5">
+                                <span class={`px-2 py-0.5 text-[8px] font-black rounded-sm ${liq.side === 'SELL' ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}`}>
+                                  {liq.side || liq.Side || 'N/A'}
+                                </span>
+                              </td>
+                              <td class="p-4 border-r border-red-500/5 text-text_primary font-mono font-bold">${fmt(liq.price, liq.price < 1 ? 4 : 2)}</td>
+                              <td class="p-4 border-r border-red-500/5 text-text_primary font-mono">{fmt(liq.qty || liq.quantity, 2)}</td>
+                              <td class="p-4 text-right text-red-400 font-black font-mono">${fmt(liq.usd_value || liq.usdValue || (liq.price * (liq.qty || liq.quantity)), 0)}</td>
+                            </tr>
+                          )}
+                        </For>
+                      </tbody>
+                    </table>
+                  </Show>
+                </Show>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-4 px-4 py-3 bg-black/30 border border-border_main/20 text-[8px] text-text_secondary">
+              <span class="uppercase tracking-widest font-black">DATA SOURCE: BINANCE LIQUIDATION STREAM</span>
+              <span class="text-text_secondary/30">|</span>
+              <span class="uppercase tracking-widest font-black">MIN THRESHOLD: $10,000 USD</span>
+              <span class="text-text_secondary/30">|</span>
+              <span class="text-text_accent font-black">
+                {(Array.isArray(liquidations()) ? liquidations() : []).filter(l => (l.side === 'SELL' || l.Side === 'SELL')).length} SELL / {(Array.isArray(liquidations()) ? liquidations() : []).filter(l => (l.side === 'BUY' || l.Side === 'BUY')).length} BUY
+              </span>
+            </div>
+          </div>
+        </Show>
+
         {/* FOOTER STATUS BAR */}
         <div class="h-10 border-t border-border_main bg-bg_header/20 shrink-0 flex items-center justify-between px-6">
           <div class="flex items-center gap-6 text-[9px] font-black text-text_secondary tracking-widest">
@@ -1086,7 +1225,7 @@ export default function CryptoIntelligenceView(props) {
             </div>
           </div>
           <div class="text-[10px] font-black text-text_primary skew-x-[-12deg] tracking-tighter italic">
-          ENQY TERMINAL // INSTITUTIONAL CRYPTO ANALYTICS v10
+            ENQY TERMINAL // INSTITUTIONAL CRYPTO ANALYTICS v10
           </div>
         </div>
 

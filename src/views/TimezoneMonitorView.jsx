@@ -71,7 +71,7 @@ export default function TimezoneMonitorView() {
 
     const fetchData = async () => {
         try {
-            const resp = await fetch(`${import.meta.env.VITE_GEO_DATA_API}/api/geo/timezone-map`);
+            const resp = await fetch(`${import.meta.env.VITE_GEO_DATA_API}/api/timezone-map`);
             const res = await resp.json();
             if (res.status === 'success') {
                 const sorted = res.data.sort((a, b) => a.name.localeCompare(b.name));

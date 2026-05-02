@@ -5,6 +5,7 @@ import PowerPlantPanel from './infra/PowerPlantPanel';
 import IndustrialZonePanel from './infra/IndustrialZonePanel';
 import DatacenterPanel from './infra/datacenter-panel/DatacenterPanel';
 import RailStationPanel from './infra/RailStationPanel';
+import MilitaryPanel from './infra/MilitaryPanel';
 import SubmarineCablePanel from './geo/SubmarineCablePanel';
 import OilRefineryPanel from './geo/OilRefineryPanel';
 import InfraCCTVPanel from './geo/InfraCCTVPanel';
@@ -39,6 +40,9 @@ export default function InfrastructureView(props) {
           </Match>
           <Match when={activeModule() === 'train-station'}>
             <RailStationPanel />
+          </Match>
+          <Match when={activeModule() === 'military'}>
+            <MilitaryPanel />
           </Match>
           <Match when={activeModule() === 'submarine-cable'}>
             <SubmarineCablePanel />

@@ -24,7 +24,7 @@ function EntityRealTimeChart(props) {
     const fetchFullIntraday = async () => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
-        
+
         try {
             const res = await fetch(`${import.meta.env.VITE_ENTITY_URL}/api/entity/realtime/${props.symbol}`, { signal: controller.signal });
             clearTimeout(timeoutId);
@@ -165,6 +165,9 @@ function EntityRealTimeChart(props) {
         chart.setOption(option);
     };
 
+    // Track current symbol reactively so WS handler always uses latest value
+    let currentSymbol = () => props.symbol;
+
     onMount(() => {
         setLoading(true);
         fetchFullIntraday();
@@ -174,11 +177,13 @@ function EntityRealTimeChart(props) {
 
         socket.on("connect", () => {
             console.log("[WS] CONNECTED TO DATA STREAM.");
-            if (props.symbol) socket.emit("subscribe", { symbol: props.symbol });
+            const sym = currentSymbol();
+            if (sym) socket.emit("subscribe", { symbol: sym });
         });
 
         socket.on("ticker_update", (data) => {
-            if (data.symbol === props.symbol) {
+            // Use currentSymbol() to always check against latest prop value
+            if (data.symbol === currentSymbol()) {
                 setMarketOpen(data.isStreaming !== false);
 
                 if (data.isStreaming === false) {
@@ -418,6 +423,7 @@ const EntityAnalysisView = (props) => {
     const [activeTab, setActiveTab] = createSignal("profile");
     const [marketIndices, setMarketIndices] = createSignal([]);
     const [marketLoading, setMarketLoading] = createSignal(false);
+    const [fetchError, setFetchError] = createSignal(null);
     const [selectedRange, setSelectedRange] = createSignal('6M');
 
     const RANGES = ['1W', '1M', '3M', '6M', '1Y', '5Y', 'ALL'];
@@ -453,7 +459,7 @@ const EntityAnalysisView = (props) => {
         setMarketLoading(true);
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 12000);
-        
+
         try {
             const res = await fetch(`${import.meta.env.VITE_ENTITY_URL}/api/entity/market-indices`, { signal: controller.signal });
             clearTimeout(timeoutId);
@@ -497,6 +503,7 @@ const EntityAnalysisView = (props) => {
         setLoading(true);
         setSearchResults([]);
         setProfile(null);
+        setFetchError(null);
 
         try {
             // 1. PHASE 1: Fetch Core Profile Data (Fast)
@@ -553,31 +560,36 @@ const EntityAnalysisView = (props) => {
                 { url: `${import.meta.env.VITE_GNEWS_API}/api/gnews/search?q=${encodeURIComponent(companyName)}`, key: 'news' }
             ];
 
-            let pending = fetchSources.length;
-            fetchSources.forEach(src => {
-                fetch(src.url, { signal })
-                    .then(r => r.json())
-                    .then(data => {
-                        if (data[src.key]) updateNews(data[src.key]);
-                    })
-                    .catch(() => { })
-                    .finally(() => {
-                        pending--;
-                        if (pending === 0 && !signal.aborted) setNewsLoading(false);
-                    });
+            // Use Promise.allSettled to avoid the risk of pending counter never reaching 0
+            Promise.allSettled(
+                fetchSources.map(src =>
+                    fetch(src.url, { signal })
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data[src.key] && !signal.aborted) updateNews(data[src.key]);
+                        })
+                )
+            ).then(() => {
+                if (!signal.aborted) setNewsLoading(false);
+            }).catch(() => {
+                if (!signal.aborted) setNewsLoading(false);
             });
 
         } catch (err) {
             if (err.name !== 'AbortError') {
                 console.error("Fetch profile failed", err);
+                setFetchError(err.message || "Failed to load asset intelligence node.");
                 setLoading(false);
             }
         }
     };
 
+    // Guard: only trigger selectEntity if the profile doesn't already match
+    // Prevents redundant calls when selectEntity internally updates selectedEntity signal
     createEffect(() => {
         const symbol = selectedEntity();
-        if (symbol) {
+        const current = profile();
+        if (symbol && (!current || current.symbol !== symbol)) {
             selectEntity(symbol);
         }
     });
@@ -662,6 +674,19 @@ const EntityAnalysisView = (props) => {
                 </div>
             </Show>
 
+            <Show when={fetchError()}>
+                <div class="flex flex-col items-center justify-center py-20 space-y-4 border border-red-500/20 bg-red-500/5 rounded">
+                    <div class="text-red-500 font-black tracking-widest uppercase text-xs">Intelligence Fetch Failed</div>
+                    <div class="text-white/40 font-mono text-[10px]">{fetchError()}</div>
+                    <button 
+                        onClick={() => selectEntity(selectedEntity())}
+                        class="px-6 py-2 bg-red-500 text-bg_main font-black uppercase text-[10px] tracking-widest hover:bg-red-400 transition-all"
+                    >
+                        RETRY_RECONNAISSANCE
+                    </button>
+                </div>
+            </Show>
+
             {/* View Switching Logic */}
             <Show when={!selectedEntity()}>
                 <div class="space-y-10 animate-in fade-in zoom-in-95 duration-700">
@@ -673,9 +698,9 @@ const EntityAnalysisView = (props) => {
                             <div class="h-px bg-border_main flex-1"></div>
                         </div>
                         <div class="border border-border_main bg-bg_header/30 rounded">
-                            <MarketHoursHeatmap 
-                                currentTime={() => new Date()} 
-                                noScroll={true} 
+                            <MarketHoursHeatmap
+                                currentTime={() => new Date()}
+                                noScroll={true}
                                 onSelect={(ticker) => { selectEntity(ticker); setActiveTab('profile'); }}
                             />
                         </div>
@@ -1044,14 +1069,14 @@ const EntityAnalysisView = (props) => {
                                 </>
                             }
                         >
-                            <IndexAnalysisView 
-                                symbol={selectedEntity()} 
+                            <IndexAnalysisView
+                                symbol={selectedEntity()}
                                 news={profile()?.news || []}
                                 newsLoading={newsLoading()}
                                 onSelectEntity={(sym) => {
                                     setSelectedEntity(sym);
                                     setActiveTab('profile');
-                                }} 
+                                }}
                             />
                         </Show>
                     </Show>

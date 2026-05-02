@@ -1,18 +1,11 @@
 import { Show, Switch, Match } from 'solid-js';
 import VesselRadarPanel from './geo/VesselRadarPanel';
 import GeoIntelligenceUnifiedPanel from './geo/GeoIntelligenceUnifiedPanel';
-
-
-import MinesDataPanel from './geo/MinesDataPanel';
 import FleetVesselPanel from './geo/fleet-vessel-panel/FleetVesselPanel';
 import OilFacilityPanel from './geo/OilFacilityPanel';
-import OilRefineryPanel from './geo/OilRefineryPanel';
-import SubmarineCablePanel from './geo/SubmarineCablePanel';
 import WeatherPanel from './geo/WeatherPanel';
 import GeoTrendPanel from './geo/GeoTrendPanel';
-import InfraCCTVPanel from './geo/InfraCCTVPanel';
 import MapsView from './MapsView';
-import GlobalEconomyPanel from './geo/GlobalEconomyPanel';
 import SatelliteMappingPanel from './geo/SatelliteMappingPanel';
 
 export default function GeoIntelView(props) {
@@ -32,16 +25,9 @@ export default function GeoIntelView(props) {
           <Match when={activeModule() === 'geo-trend'}>
             <GeoTrendPanel />
           </Match>
-
-
-          <Match when={activeModule() === 'mines-data'}><MinesDataPanel /></Match>
           <Match when={activeModule() === 'naval-fleet'}><FleetVesselPanel /></Match>
           <Match when={activeModule() === 'oil-facility'}><OilFacilityPanel /></Match>
-          <Match when={activeModule() === 'oil-refinery'}><OilRefineryPanel /></Match>
-          <Match when={activeModule() === 'submarine-cable'}><SubmarineCablePanel /></Match>
-          <Match when={activeModule() === 'infra-cctv'}><InfraCCTVPanel /></Match>
           <Match when={activeModule() === 'weather'}><WeatherPanel /></Match>
-          <Match when={activeModule() === 'global-economy'}><GlobalEconomyPanel /></Match>
           <Match when={activeModule() === 'satellite-visual'}><SatelliteMappingPanel /></Match>
         </Switch>
       </div>

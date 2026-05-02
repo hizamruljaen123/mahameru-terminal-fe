@@ -144,64 +144,69 @@ export default function CommoditiesIntelligenceView(props) {
     return detail()?.history || [];
   };
 
+  let listController = null;
   // 1. Fetch List
   const fetchList = async () => {
+    if (listController) listController.abort();
+    listController = new AbortController();
     try {
-      const resp = await fetch(`${COMMODITY_API}/api/commodities/highlights`);
+      const resp = await fetch(`${COMMODITY_API}/api/commodities/highlights`, { signal: listController.signal });
       const json = await resp.json();
       if (json.status === 'success') setCommodities(json.data);
-    } catch (e) { console.error("Commodity List error:", e); }
+    } catch (e) { if (e.name !== 'AbortError') console.error("Commodity List error:", e); }
   };
 
   // 2. Fetch News
   const fetchNews = async (symbol, name) => {
     setNewsLoading(true);
     try {
-        const query = `${name} Commodity News`;
-        const resp = await fetch(`${GNEWS_API}/api/gnews/search?q=${encodeURIComponent(query)}&lang=en`);
-        const json = await resp.json();
-        
-        let data = (json.status === 'success') ? (json.data || []) : [];
-        
-        // FALLBACK 1: If specific commodity news is thin, search for broader Supply/Demand and Economic impact news
-        if (data.length < 3) {
-            const fallbackQuery = `${name} Market Supply Demand Economics News`;
-            const fbResp = await fetch(`${GNEWS_API}/api/gnews/search?q=${encodeURIComponent(fallbackQuery)}&lang=en`);
-            const fbJson = await fbResp.json();
-            if (fbJson.status === 'success' && fbJson.data?.length > 0) {
-                data = [...data, ...fbJson.data.filter(f => !data.some(d => d.title === f.title))];
-            }
-        }
-        
-        // FALLBACK 2: Final fallback to general Commodity Market trends
-        if (data.length === 0) {
-            const genericQuery = "Global Commodity Markets Economic Outlook Trends";
-            const genResp = await fetch(`${GNEWS_API}/api/gnews/search?q=${encodeURIComponent(genericQuery)}&lang=en`);
-            const genJson = await genResp.json();
-            if (genJson.status === 'success') data = genJson.data || [];
-        }
+      const query = `${name} Commodity News`;
+      const resp = await fetch(`${GNEWS_API}/api/gnews/search?q=${encodeURIComponent(query)}&lang=en`);
+      const json = await resp.json();
 
-        setNews(data);
-    } catch (e) { 
-        console.error("News fetch error:", e);
-        setNews([]);
+      let data = (json.status === 'success') ? (json.data || []) : [];
+
+      // FALLBACK 1: If specific commodity news is thin, search for broader Supply/Demand and Economic impact news
+      if (data.length < 3) {
+        const fallbackQuery = `${name} Market Supply Demand Economics News`;
+        const fbResp = await fetch(`${GNEWS_API}/api/gnews/search?q=${encodeURIComponent(fallbackQuery)}&lang=en`);
+        const fbJson = await fbResp.json();
+        if (fbJson.status === 'success' && fbJson.data?.length > 0) {
+          data = [...data, ...fbJson.data.filter(f => !data.some(d => d.title === f.title))];
+        }
+      }
+
+      // FALLBACK 2: Final fallback to general Commodity Market trends
+      if (data.length === 0) {
+        const genericQuery = "Global Commodity Markets Economic Outlook Trends";
+        const genResp = await fetch(`${GNEWS_API}/api/gnews/search?q=${encodeURIComponent(genericQuery)}&lang=en`);
+        const genJson = await genResp.json();
+        if (genJson.status === 'success') data = genJson.data || [];
+      }
+
+      setNews(data);
+    } catch (e) {
+      console.error("News fetch error:", e);
+      setNews([]);
     }
     setNewsLoading(false);
   };
 
+  let detailController = null;
   // 3. Fetch Detail
   const fetchDetail = async (symbol, range = '6M') => {
+    if (detailController) detailController.abort();
+    detailController = new AbortController();
     setLoading(true);
     try {
       const rangeMap = {
         '1W': '5d', '1M': '1mo', '3M': '3mo', '6M': '6mo', '1Y': '1y', '5Y': '5y', 'ALL': 'max'
       };
       const period = rangeMap[range] || '6mo';
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
-      const resp = await fetch(`${COMMODITY_API}/api/commodities/detail/${symbol}?period=${period}`, { signal: controller.signal });
+      const timeoutId = setTimeout(() => detailController.abort(), 10000); // 10s timeout
+
+      const resp = await fetch(`${COMMODITY_API}/api/commodities/detail/${symbol}?period=${period}`, { signal: detailController.signal });
       clearTimeout(timeoutId);
 
       const json = await resp.json();
@@ -212,7 +217,7 @@ export default function CommoditiesIntelligenceView(props) {
         setDetail(null);
       }
     } catch (e) {
-      console.error("Commodity Detail fetch error:", e);
+      if (e.name !== 'AbortError') console.error("Commodity Detail fetch error:", e);
       setDetail(null);
     }
     setLoading(false);
@@ -228,6 +233,8 @@ export default function CommoditiesIntelligenceView(props) {
     solidOnCleanup(() => {
       _mounted = false;
       clearInterval(syncItv);
+      if (listController) listController.abort();
+      if (detailController) detailController.abort();
     });
   });
 
@@ -553,7 +560,8 @@ export default function CommoditiesIntelligenceView(props) {
                       <tbody class="divide-y divide-border_main/10">
                         <For each={detail()?.history?.slice().reverse().slice(0, 20)}>
                           {(row, idx) => {
-                            const prevRow = detail().history[detail().history.length - 1 - idx() - 1];
+                            const history = detail()?.history;
+                            const prevRow = history?.[(history?.length ?? 0) - 1 - idx() - 1];
                             const delta = prevRow ? row.Close - prevRow.Close : 0;
                             return (
                               <tr class="hover:bg-white/5 transition-colors">

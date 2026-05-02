@@ -2,13 +2,15 @@ import { createSignal, onMount, For, Show, Switch, Match, createEffect } from 's
 import * as echarts from 'echarts';
 
 
-// --- SERVICE RECTORS ---
+// --- SERVICE VECTORS ---
 const SENTIMENT_API = import.meta.env.VITE_SENTIMENT_API || `${import.meta.env.VITE_SENTIMENT_URL}/api/sentiment/summary-all`;
 const CRYPTO_API = import.meta.env.VITE_CRYPTO_API || import.meta.env.VITE_CRYPTO_API;
 const FOREX_API_BASE = import.meta.env.VITE_FOREX_API || import.meta.env.VITE_FOREX_API;
 const MACRO_NEWS_API = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_BASE;
 const DASHBOARD_API = import.meta.env.VITE_DASHBOARD_API;
 const MARKET_API = import.meta.env.VITE_MARKET_API;
+const REGIME_API = import.meta.env.VITE_REGIME_API;
+const SUPPLY_CHAIN_API = import.meta.env.VITE_SUPPLY_CHAIN_API;
 
 
 // --- TRADINGVIEW WIDGET HELPERS ---
@@ -122,7 +124,7 @@ function IndustryHeatmap(props) {
   onMount(() => {
     chart = echarts.init(chartRef);
     const handleResize = () => chart && chart.resize();
-    
+
     chart.on('click', (params) => {
       if (params.data && params.data.sector && props.onSelect) {
         props.onSelect(params.data.sector);
@@ -175,10 +177,10 @@ function IndustryHeatmap(props) {
               itemStyle: {
                 color: (ret > 0) ? (
                   ret > 5 ? '#064e3b' :
-                  ret > 2 ? '#065f46' : '#059669'
+                    ret > 2 ? '#065f46' : '#059669'
                 ) : (ret < 0) ? (
                   ret < -5 ? '#450a0a' :
-                  ret < -2 ? '#7f1d1d' : '#991b1b'
+                    ret < -2 ? '#7f1d1d' : '#991b1b'
                 ) : '#334155',
                 borderColor: '#000',
                 borderWidth: 2,
@@ -282,28 +284,28 @@ export function MarketHoursHeatmap(props) {
         hour: '2-digit', minute: '2-digit', second: '2-digit',
         hour12: false
       });
-      
+
       const parts = formatter.formatToParts(now);
       const partMap = {};
       parts.forEach(p => partMap[p.type] = p.value);
-      
+
       const year = parseInt(partMap.year);
       const month = parseInt(partMap.month) - 1;
       const day = parseInt(partMap.day);
       const hour = parseInt(partMap.hour);
       const minute = parseInt(partMap.minute);
-      
+
       const localDate = new Date(year, month, day, hour, minute);
       const dayOfWeek = localDate.getDay();
-      
+
       const [openH, openM] = m.open.split(':').map(Number);
       const [closeH, closeM] = m.close.split(':').map(Number);
-      
+
       const openTime = new Date(year, month, day, openH, openM);
       const closeTime = new Date(year, month, day, closeH, closeM);
-      
+
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-      
+
       if (isWeekend) {
         const daysToMon = dayOfWeek === 6 ? 2 : 1;
         const nextMonOpen = new Date(year, month, day + daysToMon, openH, openM);
@@ -350,21 +352,23 @@ export function MarketHoursHeatmap(props) {
   const getFlattenedMarkets = () => {
     const now = props.currentTime();
     const flattened = [];
-    
+
     GLOBAL_INDICES_CONFIG.forEach(regionBlock => {
       regionBlock.items.forEach(m => {
         const tickerData = indicesData()[m.ticker] || {};
         const status = getMarketStatus(m, now);
-        
-        const price = tickerData.price || m.defaultPrice;
-        const chg = tickerData.change_pct !== undefined ? tickerData.change_pct : m.defaultChange;
-        
-        const performanceColor = chg > 0.5 ? 'bg-emerald-950/40 border-emerald-500/40 hover:bg-emerald-900/40 text-emerald-400' :
-                                 chg > 0 ? 'bg-emerald-950/20 border-emerald-500/20 hover:bg-emerald-950/30 text-emerald-400/80' :
-                                 chg < -0.5 ? 'bg-red-950/40 border-red-500/40 hover:bg-red-900/40 text-red-400' :
-                                 chg < 0 ? 'bg-red-950/20 border-red-500/20 hover:bg-red-950/30 text-red-400/80' : 
-                                 'bg-slate-900/20 border-slate-700/20 hover:bg-slate-900/30 text-slate-400';
-                                 
+
+        // Show real API data only; show "―" when no live data (avoid stale hardcoded defaults)
+        const price = tickerData.price;
+        const chg = tickerData.change_pct;
+
+        const performanceColor = chg == null ? 'bg-slate-900/10 border-slate-700/10 text-slate-500' :
+          chg > 0.5 ? 'bg-emerald-950/40 border-emerald-500/40 hover:bg-emerald-900/40 text-emerald-400' :
+            chg > 0 ? 'bg-emerald-950/20 border-emerald-500/20 hover:bg-emerald-950/30 text-emerald-400/80' :
+              chg < -0.5 ? 'bg-red-950/40 border-red-500/40 hover:bg-red-900/40 text-red-400' :
+                chg < 0 ? 'bg-red-950/20 border-red-500/20 hover:bg-red-950/30 text-red-400/80' :
+                  'bg-slate-900/20 border-slate-700/20 hover:bg-slate-900/30 text-slate-400';
+
         flattened.push({
           ...m,
           ...status,
@@ -375,12 +379,12 @@ export function MarketHoursHeatmap(props) {
         });
       });
     });
-    
+
     return flattened;
   };
 
-  const containerClass = () => props.noScroll 
-    ? "w-full p-6 animate-in fade-in duration-700" 
+  const containerClass = () => props.noScroll
+    ? "w-full p-6 animate-in fade-in duration-700"
     : "w-full h-full p-6 overflow-y-auto scrollbar-hide animate-in fade-in duration-700";
 
   return (
@@ -388,11 +392,11 @@ export function MarketHoursHeatmap(props) {
       <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-2">
         <For each={getFlattenedMarkets()}>
           {(market) => (
-            <div 
+            <div
               onClick={() => props.onSelect && props.onSelect(market.ticker)}
               class={`flex flex-col justify-between p-2 border rounded ${market.performanceColor} transition-all duration-200 hover:scale-[1.02] cursor-pointer`}
             >
-              
+
               <div class="flex justify-between items-start gap-1">
                 <div class="flex flex-col gap-0.5 min-w-0 flex-1">
                   <span class="text-[10px] font-black tracking-tight text-white uppercase truncate leading-tight">{market.name}</span>
@@ -406,7 +410,7 @@ export function MarketHoursHeatmap(props) {
               <div class="flex justify-between items-end mt-2">
                 <div class="flex flex-col">
                   <span class="text-[13px] font-mono font-black leading-none">
-                    {market.change >= 0 ? '+' : ''}{market.change.toFixed(2)}%
+                    {market.change != null ? (market.change >= 0 ? '+' : '') + market.change.toFixed(2) + '%' : '―'}
                   </span>
                   <span class="text-[8px] font-mono font-bold opacity-50 mt-1 leading-none">
                     {market.price ? market.price.toLocaleString(undefined, { maximumFractionDigits: 1 }) : '---'}
@@ -455,10 +459,10 @@ function SectorPerformanceView() {
     const map = {};
     data().forEach(item => {
       if (!map[item.sector]) {
-        map[item.sector] = { 
-          name: item.sector, 
-          return: item.sector_return_ytd, 
-          industries: [] 
+        map[item.sector] = {
+          name: item.sector,
+          return: item.sector_return_ytd,
+          industries: []
         };
       }
       map[item.sector].industries.push(item);
@@ -499,8 +503,8 @@ function SectorPerformanceView() {
           <div class="px-3 py-2 border-b border-border_main bg-bg_main/5 flex justify-between items-center">
             <span class="text-[9px] font-black tracking-widest text-text_accent uppercase">SECTOR OVERVIEW</span>
             <div class="flex gap-2">
-               <span class="text-[7px] text-text_secondary/40 font-bold uppercase">11 SECTORS</span>
-               <div class="w-1 h-3 bg-text_accent"></div>
+              <span class="text-[7px] text-text_secondary/40 font-bold uppercase">11 SECTORS</span>
+              <div class="w-1 h-3 bg-text_accent"></div>
             </div>
           </div>
           <div class="flex-1 overflow-y-auto scrollbar-thin">
@@ -515,7 +519,7 @@ function SectorPerformanceView() {
                 <For each={grouped()}>
                   {(sect) => (
                     <>
-                      <tr 
+                      <tr
                         onClick={() => { toggleExpand(sect.name); setSelectedSector(sect.name); }}
                         class={`cursor-pointer hover:bg-white/5 transition-all group ${selectedSector() === sect.name ? 'bg-text_accent/5 border-l-2 border-l-text_accent' : ''}`}
                       >
@@ -524,19 +528,19 @@ function SectorPerformanceView() {
                           <span class="text-[11px] font-black text-text_primary uppercase tracking-wider">{sect.name}</span>
                           <span class={`text-[8px] font-bold ${expandedSectors().has(sect.name) ? 'rotate-90' : ''} transition-transform opacity-30`}>▶</span>
                         </td>
-                        <td class={`p-4 text-right pr-6 text-[12px] font-black font-mono ${sect.return >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                          {sect.return >= 0 ? '+' : ''}{sect.return.toFixed(2)}%
+                        <td class={`p-4 text-right pr-6 text-[12px] font-black font-mono ${(sect.return ?? 0) >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                          {(sect.return ?? 0) >= 0 ? '+' : ''}{(sect.return ?? 0).toFixed(2)}%
                         </td>
                       </tr>
                       <Show when={expandedSectors().has(sect.name)}>
-                        <For each={sect.industries.sort((a,b) => (b.industry_return_ytd || 0) - (a.industry_return_ytd || 0))}>
+                        <For each={sect.industries.sort((a, b) => (b.industry_return_ytd || 0) - (a.industry_return_ytd || 0))}>
                           {(ind) => {
                             const iRet = ind.industry_return_ytd || 0;
                             const sRet = ind.sector_return_ytd || 0;
                             // Fallback to sector return only if industry return is precisely 0 and we want to show 'something' 
                             // though with the backend fix this is less needed now.
                             const displayRet = (iRet === 0 && sRet !== 0) ? sRet : iRet;
-                            
+
                             return (
                               <tr class="bg-black/40 border-l-2 border-border_main/10 hover:bg-white/[0.03] transition-colors group/ind animate-in slide-in-from-left-2 duration-300">
                                 <td class="p-3 pl-12 flex items-center gap-3">
@@ -548,13 +552,13 @@ function SectorPerformanceView() {
                                 <td class="p-3 text-right pr-6">
                                   <div class="flex items-center justify-end gap-3">
                                     <div class="w-16 h-1 bg-white/5 rounded-full overflow-hidden hidden sm:block">
-                                      <div 
-                                        class={`h-full ${displayRet >= 0 ? 'bg-emerald-500/40' : 'bg-red-500/40'}`}
-                                        style={{ width: `${Math.min(Math.abs(displayRet) * 4, 100)}%` }}
+                                      <div
+                                        class={`h-full ${(displayRet ?? 0) >= 0 ? 'bg-emerald-500/40' : 'bg-red-500/40'}`}
+                                        style={{ width: `${Math.min(Math.abs(displayRet ?? 0) * 4, 100)}%` }}
                                       />
                                     </div>
-                                    <span class={`text-[10px] font-mono font-black ${displayRet >= 0 ? 'text-emerald-500/70' : 'text-red-400/70'}`}>
-                                      {displayRet >= 0 ? '+' : ''}{displayRet.toFixed(2)}%
+                                    <span class={`text-[10px] font-mono font-black ${(displayRet ?? 0) >= 0 ? 'text-emerald-500/70' : 'text-red-400/70'}`}>
+                                      {(displayRet ?? 0) >= 0 ? '+' : ''}{(displayRet ?? 0).toFixed(2)}%
                                     </span>
                                   </div>
                                 </td>
@@ -580,7 +584,7 @@ function SectorPerformanceView() {
                 <span class="text-[8px] bg-text_accent/10 border border-text_accent/30 text-text_accent px-2 py-0.5 rounded font-black uppercase tracking-widest animate-pulse">
                   FOCUS: {selectedSector()}
                 </span>
-                <button 
+                <button
                   onClick={() => setSelectedSector(null)}
                   class="text-[7px] text-text_secondary hover:text-text_accent border border-border_main px-2 py-0.5 uppercase font-bold transition-colors"
                 >
@@ -648,13 +652,22 @@ export default function MarketDashboard(props) {
   const [macroNews, setMacroNews] = createSignal([]);
   const [sentimentSummary, setSentimentSummary] = createSignal([]);
   const [aiVerdicts, setAiVerdicts] = createSignal([]);
+  const [regimeData, setRegimeData] = createSignal(null);
+  const [sectorRotation, setSectorRotation] = createSignal([]);
+  const [supplyChainData, setSupplyChainData] = createSignal(null);
   const [isLoading, setIsLoading] = createSignal(true);
+  const [error, setError] = createSignal(null);
 
 
+  let refreshTimer;
   onMount(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     fetchGlobalIntelligence();
-    return () => clearInterval(timer);
+    refreshTimer = setInterval(() => fetchGlobalIntelligence(), 60000);
+    return () => {
+      clearInterval(timer);
+      clearInterval(refreshTimer);
+    };
   });
 
   const fetchGlobalIntelligence = async () => {
@@ -681,9 +694,15 @@ export default function MarketDashboard(props) {
         setCryptoMovers(freshData.crypto);
 
         const topSymbols = cRes.data.slice(0, 5).map(c => c.symbol);
-        const aiResults = await Promise.all(topSymbols.map(s =>
-          fetch(`${import.meta.env.VITE_CRYPTO_API}/api/ai/analyze?symbol=${s}`).then(r => r.json()).catch(() => null)
-        ));
+        // Per-fetch timeout (15s) prevents one slow AI endpoint from blocking the entire intelligence update
+        const fetchWithTimeout = (url, timeout = 15000) =>
+          Promise.race([
+            fetch(url).then(r => r.json()),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeout))
+          ]).catch(() => null);
+        const aiResults = await Promise.allSettled(topSymbols.map(s =>
+          fetchWithTimeout(`${import.meta.env.VITE_CRYPTO_API}/api/ai/analyze?symbol=${s}`)
+        )).then(results => results.map(r => r.status === 'fulfilled' ? r.value : null));
 
         freshData.ai = aiResults.filter(r => r && r.status === 'success').map(r => ({
           symbol: r.data.symbol,
@@ -710,8 +729,33 @@ export default function MarketDashboard(props) {
         setSentimentSummary(sRes.data);
       }
 
+      // Fetch regime data
+      try {
+        const regimeRes = await fetch(`${REGIME_API}/api/regime/current`).then(r => r.json());
+        if (regimeRes.status === 'success') setRegimeData(regimeRes.data);
+      } catch (e) {
+        console.warn("Regime fetch failed:", e);
+      }
+
+      // Fetch sector rotation
+      try {
+        const rotRes = await fetch(`${MARKET_API}/api/market/sector-rotation`).then(r => r.json());
+        if (rotRes.status === 'success') setSectorRotation(rotRes.data?.rotation || rotRes.data || []);
+      } catch (e) {
+        console.warn("Sector rotation fetch failed:", e);
+      }
+
+      // Fetch supply chain pressure
+      try {
+        const scRes = await fetch(`${SUPPLY_CHAIN_API}/api/supply-chain/summary`).then(r => r.json());
+        if (scRes.status === 'success') setSupplyChainData(scRes.data);
+      } catch (e) {
+        console.warn("Supply chain fetch failed:", e);
+      }
+
     } catch (err) {
       console.error("Critical Intelligence Sync Error:", err);
+      setError("Failed to sync market intelligence. Data may be stale.");
     } finally {
       setIsLoading(false);
     }
@@ -723,6 +767,16 @@ export default function MarketDashboard(props) {
 
   return (
     <div class="flex flex-col space-y-6">
+      {/* Error Banner */}
+      <Show when={error()}>
+        <div class="flex items-center gap-3 px-4 py-2 bg-red-950/30 border border-red-500/30 rounded text-[9px] font-black text-red-400 uppercase tracking-widest">
+          <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+          <span class="flex-1">{error()}</span>
+          <button onClick={() => setError(null)} class="opacity-60 hover:opacity-100 transition-opacity">
+            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          </button>
+        </div>
+      </Show>
       <div class="h-10 border-b border-border_main bg-bg_header/50 flex items-center justify-between px-4 shrink-0 rounded">
         <div class="flex items-center gap-4">
           <nav class="flex items-center gap-1">
@@ -737,11 +791,13 @@ export default function MarketDashboard(props) {
           </nav>
         </div>
         <div class="flex items-center gap-4">
-          <marquee class="text-[9px] text-text_secondary/40 font-bold uppercase tracking-tighter w-64">
-            <For each={aiVerdicts()}>
-              {(v) => <span class="mr-10 text-emerald-400">[{v.symbol}]: {v.action} // {v.summary}</span>}
-            </For>
-          </marquee>
+          <div class="text-[9px] text-text_secondary/40 font-bold uppercase tracking-tighter w-64 overflow-hidden whitespace-nowrap relative">
+            <div class="animate-marquee inline-block">
+              <For each={aiVerdicts()}>
+                {(v) => <span class="mx-10 text-emerald-400">[{v.symbol}]: {v.action} // {v.summary}</span>}
+              </For>
+            </div>
+          </div>
           <button onClick={() => fetchGlobalIntelligence(true)} class="p-1 hover:bg-bg_main/5 rounded transition-colors" title="Force Refresh Deep Intel">
             <svg class={`w-3 h-3 text-text_secondary ${isLoading() ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M23 4v6h-6" /><path d="M1 20v-6h6" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>
           </button>
@@ -776,17 +832,17 @@ export default function MarketDashboard(props) {
                   <div class="w-1 h-3 bg-amber-500"></div>
                 </div>
                 <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-4 scrollbar-thin">
-                   <For each={macroNews()}>
-                     {(news) => (
-                       <div 
-                         onClick={() => news.link && window.open(news.link, '_blank')}
-                         class="flex flex-col gap-1 group cursor-pointer border-l border-amber-500/20 pl-3 hover:border-amber-500 transition-all"
-                       >
-                         <span class="text-[7px] text-amber-500 font-black uppercase tracking-widest">{news.source}</span>
-                         <h4 class="text-[10px] text-text_primary font-bold leading-tight group-hover:text-amber-200 transition-colors uppercase">{news.title}</h4>
-                       </div>
-                     )}
-                   </For>
+                  <For each={macroNews()}>
+                    {(news) => (
+                      <div
+                        onClick={() => news.link && window.open(news.link, '_blank')}
+                        class="flex flex-col gap-1 group cursor-pointer border-l border-amber-500/20 pl-3 hover:border-amber-500 transition-all"
+                      >
+                        <span class="text-[7px] text-amber-500 font-black uppercase tracking-widest">{news.source}</span>
+                        <h4 class="text-[10px] text-text_primary font-bold leading-tight group-hover:text-amber-200 transition-colors uppercase">{news.title}</h4>
+                      </div>
+                    )}
+                  </For>
                   <Show when={macroNews().length === 0 && !isLoading()}>
                     <div class="text-[9px] text-text_secondary/40 italic p-10 text-center">AWAITING DATA FEED...</div>
                   </Show>
@@ -839,10 +895,10 @@ export default function MarketDashboard(props) {
                               </div>
                             </td>
                             <td class="p-3 text-right">
-                              <span class="text-[10px] text-text_primary font-mono font-bold">${coin.price < 1 ? coin.price.toFixed(6) : coin.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                              <span class="text-[10px] text-text_primary font-mono font-bold">${(coin.price ?? 0) < 1 ? (coin.price ?? 0).toFixed(6) : (coin.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </td>
-                            <td class={`p-3 text-right text-[10px] font-black ${coin.change_24h >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                              {coin.change_24h >= 0 ? '+' : ''}{coin.change_24h.toFixed(2)}%
+                            <td class={`p-3 text-right text-[10px] font-black ${(coin.change_24h ?? 0) >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                              {(coin.change_24h ?? 0) >= 0 ? '+' : ''}{(coin.change_24h ?? 0).toFixed(2)}%
                             </td>
                             <td class="p-3 text-right pr-6">
                               <span class="text-[9px] text-text_secondary/40 font-mono">${(coin.market_cap / 1e9).toFixed(2)}B</span>
@@ -896,8 +952,133 @@ export default function MarketDashboard(props) {
               </div>
             </div>
 
-            {/* ROW 4: INSTITUTIONAL INFRASTRUCTURE PROXY */}
+            {/* ROW 4: INSTITUTIONAL INTELLIGENCE — Regime + Sector Rotation + Supply Chain */}
+            <div class="grid grid-cols-12 gap-4">
+              <div class="col-span-12 xl:col-span-4 bg-bg_header/30 border border-border_main flex flex-col h-[320px]">
+                <div class="bg-bg_main/5 px-4 py-2 border-b border-border_main flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div class="w-1 h-3 bg-purple-500"></div>
+                    <span class="text-[9px] font-black tracking-widest text-text_primary uppercase">REGIME INDICATOR</span>
+                  </div>
+                  <Show when={regimeData()}>
+                    <span class={`px-2 py-0.5 text-[7px] font-black tracking-widest uppercase ${(regimeData()?.regime || '').includes('CRISIS') ? 'bg-red-900/60 text-red-400 border border-red-700/50' :
+                        (regimeData()?.regime || '').includes('RISK_OFF') || regimeData()?.regime === 'FLIGHT_TO_SAFETY' ? 'bg-orange-900/60 text-orange-400 border border-orange-700/50' :
+                          regimeData()?.regime === 'MIXED_SIGNALS' ? 'bg-amber-900/60 text-amber-400 border border-amber-700/50' :
+                            (regimeData()?.regime || '').includes('RISK_ON') || regimeData()?.regime === 'GROWTH_LED' ? 'bg-emerald-900/60 text-emerald-400 border border-emerald-700/50' :
+                              'bg-gray-800 text-gray-400 border border-gray-700/50'
+                      }`}>{regimeData()?.regime?.replace(/_/g, ' ') || 'N/A'}</span>
+                  </Show>
+                </div>
+                <div class="flex-1 p-4 flex flex-col justify-center">
+                  <Show when={regimeData()} fallback={<div class="text-[8px] text-text_secondary/40 text-center">Loading regime data...</div>}>
+                    <div class="text-center">
+                      <div class="text-4xl font-black font-mono" classList={{
+                        'text-emerald-400': (regimeData()?.risk_score ?? 5) <= 3,
+                        'text-amber-400': (regimeData()?.risk_score ?? 5) > 3 && (regimeData()?.risk_score ?? 5) <= 5,
+                        'text-orange-400': (regimeData()?.risk_score ?? 5) > 5 && (regimeData()?.risk_score ?? 5) <= 7,
+                        'text-red-400': (regimeData()?.risk_score ?? 5) > 7,
+                      }}>{(regimeData()?.risk_score ?? 5).toFixed(1)}</div>
+                      <div class="text-[8px] text-text_secondary/40 uppercase tracking-wider mt-1">Risk Score /10</div>
+                      <div class="mt-2 text-[8px] text-text_secondary/60 leading-relaxed max-w-xs mx-auto">
+                        {regimeData()?.description || regimeData()?.regime_label || 'Analyzing market conditions...'}
+                      </div>
+                      <Show when={regimeData()?.vix_confirm != null}>
+                        <div class="mt-2 text-[7px] text-text_secondary/40">
+                          VIX Confirmation: <span class="font-mono font-black" classList={{
+                            'text-emerald-400': (regimeData()?.vix_confirm ?? 20) < 15,
+                            'text-amber-400': (regimeData()?.vix_confirm ?? 20) >= 15 && (regimeData()?.vix_confirm ?? 20) < 25,
+                            'text-red-400': (regimeData()?.vix_confirm ?? 20) >= 25,
+                          }}>{(regimeData()?.vix_confirm ?? 0).toFixed(1)}</span>
+                        </div>
+                      </Show>
+                    </div>
+                  </Show>
+                </div>
+              </div>
 
+              <div class="col-span-12 xl:col-span-4 bg-bg_header/30 border border-border_main flex flex-col h-[320px]">
+                <div class="bg-bg_main/5 px-4 py-2 border-b border-border_main flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div class="w-1 h-3 bg-cyan-500"></div>
+                    <span class="text-[9px] font-black tracking-widest text-text_primary uppercase">SECTOR ROTATION</span>
+                  </div>
+                </div>
+                <div class="flex-1 p-2 overflow-y-auto">
+                  <Show when={sectorRotation().length} fallback={<div class="text-[8px] text-text_secondary/40 text-center p-4">Loading rotation data...</div>}>
+                    <table class="w-full text-[7px] font-mono">
+                      <thead>
+                        <tr class="text-text_secondary/40 uppercase tracking-wider border-b border-border_main/20">
+                          <th class="text-left py-1 px-1">Sector</th>
+                          <th class="text-right py-1 px-1">1M</th>
+                          <th class="text-right py-1 px-1">3M</th>
+                          <th class="text-right py-1 px-1">6M</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <For each={sectorRotation().slice(0, 8)}>
+                          {(s) => (
+                            <tr class="border-b border-border_main/5 hover:bg-bg_main/10">
+                              <td class="py-1 px-1 text-text_primary truncate max-w-[80px]">{s.sector || s.name || '-'}</td>
+                              <td class={`py-1 px-1 text-right font-mono ${(s.perf_1m ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{(s.perf_1m ?? 0) >= 0 ? '+' : ''}{(s.perf_1m ?? 0).toFixed(1)}%</td>
+                              <td class={`py-1 px-1 text-right font-mono ${(s.perf_3m ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{(s.perf_3m ?? 0) >= 0 ? '+' : ''}{(s.perf_3m ?? 0).toFixed(1)}%</td>
+                              <td class={`py-1 px-1 text-right font-mono ${(s.perf_6m ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{(s.perf_6m ?? 0) >= 0 ? '+' : ''}{(s.perf_6m ?? 0).toFixed(1)}%</td>
+                            </tr>
+                          )}
+                        </For>
+                      </tbody>
+                    </table>
+                  </Show>
+                </div>
+              </div>
+
+              <div class="col-span-12 xl:col-span-4 bg-bg_header/30 border border-border_main flex flex-col h-[320px]">
+                <div class="bg-bg_main/5 px-4 py-2 border-b border-border_main flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div class="w-1 h-3 bg-amber-500"></div>
+                    <span class="text-[9px] font-black tracking-widest text-text_primary uppercase">SUPPLY CHAIN</span>
+                  </div>
+                  <Show when={supplyChainData()}>
+                    <span class={`px-2 py-0.5 text-[7px] font-black tracking-widest uppercase ${(supplyChainData()?.regime || '') === 'CRISIS' ? 'bg-red-900/60 text-red-400 border border-red-700/50' :
+                        (supplyChainData()?.regime || '') === 'ELEVATED' ? 'bg-orange-900/60 text-orange-400 border border-orange-700/50' :
+                          (supplyChainData()?.regime || '') === 'NORMAL' ? 'bg-emerald-900/60 text-emerald-400 border border-emerald-700/50' :
+                            (supplyChainData()?.regime || '') === 'LOW' ? 'bg-green-900/60 text-green-400 border border-green-700/50' :
+                              'bg-blue-900/60 text-blue-400 border border-blue-700/50'
+                      }`}>{supplyChainData()?.regime || 'N/A'}</span>
+                  </Show>
+                </div>
+                <div class="flex-1 p-4 flex flex-col justify-center">
+                  <Show when={supplyChainData()} fallback={<div class="text-[8px] text-text_secondary/40 text-center">Loading supply chain data...</div>}>
+                    <div class="text-center">
+                      <div class="text-4xl font-black font-mono" classList={{
+                        'text-red-400': (supplyChainData()?.index ?? 50) >= 75,
+                        'text-orange-400': (supplyChainData()?.index ?? 50) >= 60 && (supplyChainData()?.index ?? 50) < 75,
+                        'text-amber-400': (supplyChainData()?.index ?? 50) >= 40 && (supplyChainData()?.index ?? 50) < 60,
+                        'text-emerald-400': (supplyChainData()?.index ?? 50) < 40,
+                      }}>{(supplyChainData()?.index ?? 50).toFixed(1)}</div>
+                      <div class="text-[8px] text-text_secondary/40 uppercase tracking-wider mt-1">Pressure Index /100</div>
+                      <div class="mt-3 w-full h-2 bg-bg_main/50 rounded-full overflow-hidden">
+                        <div class="h-full rounded-full transition-all duration-700" style={{
+                          width: `${Math.min(supplyChainData()?.index ?? 50, 100)}%`,
+                          background: (supplyChainData()?.index ?? 50) >= 75 ? '#ef4444' : (supplyChainData()?.index ?? 50) >= 60 ? '#f97316' : (supplyChainData()?.index ?? 50) >= 40 ? '#f59e0b' : '#34d399'
+                        }} />
+                      </div>
+                      <Show when={supplyChainData()?.categories}>
+                        <div class="mt-3 flex flex-wrap gap-2 justify-center">
+                          <For each={Object.entries(supplyChainData().categories)}>
+                            {([cat, score]) => (
+                              <span class="text-[6px] px-1.5 py-0.5 border border-border_main/30 font-mono font-black" style={{
+                                color: score >= 75 ? '#ef4444' : score >= 60 ? '#f97316' : score >= 40 ? '#f59e0b' : '#34d399',
+                                borderColor: `${score >= 75 ? '#ef4444' : score >= 60 ? '#f97316' : score >= 40 ? '#f59e0b' : '#34d399'}40`
+                              }}>{cat.toUpperCase()} {score.toFixed(0)}</span>
+                            )}
+                          </For>
+                        </div>
+                      </Show>
+                    </div>
+                  </Show>
+                </div>
+              </div>
+            </div>
 
             {/* ROW 5: MARKET BULLETINS & MACRO CHART */}
             <div class="grid grid-cols-12 gap-4">
@@ -912,7 +1093,7 @@ export default function MarketDashboard(props) {
                     <div class="border-l-2 border-orange-500 pl-3 py-1">
                       <span class="text-[7px] text-orange-400 font-bold uppercase tracking-[0.2em] mb-1 block italic">CRYPTO UPDATE</span>
                       <p class="text-[9px] text-text_primary font-medium uppercase leading-tight font-mono">
-                        {cryptoMovers()[0] ? `${cryptoMovers()[0].symbol} LEADING VOLUMETRIC MOVEMENT WITH ${cryptoMovers()[0].change_24h.toFixed(2)}% DELTA.` : 'FETCHING DATA...'}
+                        {cryptoMovers()[0] ? `${cryptoMovers()[0].symbol} LEADING VOLUMETRIC MOVEMENT WITH ${(cryptoMovers()[0].change_24h ?? 0).toFixed(2)}% DELTA.` : 'FETCHING DATA...'}
                       </p>
                     </div>
                     <div class="border-l-2 border-indigo-400 pl-3 py-1">

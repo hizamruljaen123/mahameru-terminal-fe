@@ -301,7 +301,7 @@ export const useCorrelation = () => {
     searchTimezones: async (q) => {
       if (!q) return [];
       try {
-        const response = await fetch(`${import.meta.env.VITE_GEO_DATA_API}/api/geo/timezone-map`);
+        const response = await fetch(`${import.meta.env.VITE_GEO_DATA_API}/api/timezone-map`);
         const res = await response.json();
         if (res.status === 'success') {
           return res.data.filter(c => 

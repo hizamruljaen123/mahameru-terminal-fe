@@ -58,6 +58,12 @@ export interface KPIWeightConfig {
     corporateGovernance: number;
 }
 
+export interface InfrastructureProximity {
+    total: number;
+    nearest: Array<{ infra_type: string; name: string; distance: number }>;
+    grouped: Record<string, Array<{ name: string; distance_km: number }>>;
+}
+
 export interface StagePromptOptions {
     stage: number;
     symbols: string[];
@@ -69,6 +75,7 @@ export interface StagePromptOptions {
     peerBenchmarks?: PeerBenchmark[];
     currency?: string;
     exchange?: string;
+    infrastructure?: Record<string, InfrastructureProximity | null> | null;
 }
 
 export interface PeerBenchmark {
@@ -386,6 +393,53 @@ const KPI_WEIGHT_MATRIX: Record<SectorKey, KPIWeightConfig> = {
 };
 
 // ============================================================================
+// SECTOR DETECTION — maps yfinance sector strings to internal SectorKey
+// Enables KPI weight matrix to calibrate analysis per sector
+// ============================================================================
+
+/**
+ * Maps yfinance sector strings to internal SectorKey enum.
+ * Detects sector from the first symbol's fundamental data,
+ * with banking override for hardcoded BANKING_SYMBOLS.
+ */
+export function detectSectorFromData(
+    fullData: Record<string, unknown>,
+    symbols: string[]
+): SectorKey {
+    // Banking override: if any symbol is in BANKING_SYMBOLS list
+    if (hasBankingSymbol(symbols)) return 'banking';
+
+    const firstSymbol = symbols[0];
+    const symData = (fullData as any)?.[firstSymbol];
+    const sector: string | undefined = symData?.fundamental?.snapshot?.sector;
+
+    if (!sector) return 'default';
+
+    // Normalize yfinance sector values to our SectorKey
+    const sectorMap: Record<string, SectorKey> = {
+        'technology': 'technology',
+        'communication services': 'communication_services',
+        'telecommunications': 'communication_services',
+        'consumer cyclical': 'consumer_discretionary',
+        'consumer discretionary': 'consumer_discretionary',
+        'consumer defensive': 'consumer_staples',
+        'consumer staples': 'consumer_staples',
+        'energy': 'energy',
+        'financial services': 'financials',
+        'financial': 'financials',
+        'healthcare': 'healthcare',
+        'industrials': 'industrials',
+        'basic materials': 'materials',
+        'materials': 'materials',
+        'real estate': 'real_estate',
+        'utilities': 'utilities',
+    };
+
+    const normalized = sector.toLowerCase().trim();
+    return sectorMap[normalized] ?? 'default';
+}
+
+// ============================================================================
 // DATA RELEVANCE MAP — only relevant keys are sent per stage
 // This prevents token bloat and forces model focus
 // ============================================================================
@@ -701,6 +755,11 @@ function sliceData(
 // Prevents context window overflow at stage 6–7
 // ============================================================================
 
+/**
+ * Compresses prior stage analysis into concise verdict-only context.
+ * Uses multi-strategy extraction: (1) verdict section heading, (2) markdown tables, (3) last paragraphs.
+ * Limits each stage to ~400 chars for token efficiency.
+ */
 function compressPreviousContext(
     generatedStages: Record<number, string>,
     currentStage: number,
@@ -709,32 +768,60 @@ function compressPreviousContext(
     const isID = language === 'id';
     const verdictLabel = isID ? 'PUTUSAN' : 'VERDICT';
     const contextLabel = isID ? 'RINGKASAN ANALISIS SEBELUMNYA' : 'PRIOR STAGE ANALYSIS SUMMARY';
+    const MAX_CHARS_PER_STAGE = 400;
 
     const entries = Object.entries(generatedStages)
         .filter(([s]) => Number(s) < currentStage)
         .map(([s, text]) => {
-            // Extract verdict section — look for verdict/putusan heading or last 600 chars
-            const verdictRegex = /#{2,4}\s.*(verdict|putusan|final|akhir|kesimpulan|recommendation|rekomendasi)[^\n]*\n([\s\S]{50,700})/gi;
-            const matches = [...text.matchAll(verdictRegex)];
-            const lastMatch = matches[matches.length - 1];
-            const extracted = lastMatch
-                ? lastMatch[0].slice(0, 700)
-                : text.slice(-600);
+            if (!text) return '';
 
-            // Also extract any tables that appear within the verdict section (for scorecard)
-            const tableRegex = /(\|.+\|\n)+/g;
-            const tables = [...text.matchAll(tableRegex)];
-            const lastTable = tables[tables.length - 1];
-            const tableSnippet = lastTable && lastTable[0].length < 1200
-                ? `\n[Key Table from Stage ${s}]:\n${lastTable[0]}`
-                : '';
+            // Strategy 1: Find VERDICT/CONCLUSION headings (markdown ## or ###)
+            let extracted = '';
+            const headingPatterns = [
+                // English verdict headings
+                /##\s*(?:Verdict|Conclusion|Final\s*(?:Thoughts?|Analysis|Recommendation)|Investment\s*(?:Decision|Thesis|Recommendation)|Key\s*(?:Findings|Insights)|Summary\s*(?:&|and)\s*Recommendation)[^]*?(?=##|\n#|$)/gi,
+                // Indonesian verdict headings
+                /##\s*(?:Putusan|Kesimpulan|Akhir|Keputusan\s*Investasi|Rekomendasi|Ringkasan\s*(?:&|dan)\s*Rekomendasi|Temuan\s*Utama)[^]*?(?=##|\n#|$)/gi,
+                // H3 verdict headings
+                /###\s*(?:Verdict|Conclusion|Putusan|Kesimpulan|Final|Akhir|Keputusan|Rekomendasi)[^]*?(?=###|##|\n#|$)/gi,
+            ];
 
-            return `[Stage ${s} ${verdictLabel}]\n${extracted.trim()}${tableSnippet}`;
+            for (const pattern of headingPatterns) {
+                const match = text.match(pattern);
+                if (match) {
+                    extracted = match[0].trim();
+                    break;
+                }
+            }
+
+            // Strategy 2: If no verdict heading, extract key tables (for scorecard Stage 4)
+            if (!extracted && Number(s) === 4) {
+                const tableRegex = /(\|.+\|\n)+/g;
+                const tables = [...text.matchAll(tableRegex)];
+                if (tables.length > 0) {
+                    // Take the last complete table (scorecard summary)
+                    extracted = tables[tables.length - 1][0].trim();
+                }
+            }
+
+            // Strategy 3: Fall back to last 2 paragraphs
+            if (!extracted) {
+                const paragraphs = text.split('\n\n').filter(p => p.trim().length > 20);
+                extracted = paragraphs.slice(-2).join('\n\n');
+            }
+
+            // Truncate to limit
+            if (extracted.length > MAX_CHARS_PER_STAGE) {
+                extracted = extracted.slice(0, MAX_CHARS_PER_STAGE) + '...[truncated]';
+            }
+
+            return extracted ? `[Stage ${s} ${verdictLabel}]\n${extracted}` : '';
         });
 
-    if (entries.length === 0) return '';
+    const validEntries = entries.filter(Boolean);
+    if (validEntries.length === 0) return '';
 
-    return `${contextLabel} (use for cross-referencing and continuity — do not repeat, build upon):\n\n${entries.join('\n\n---\n\n')}\n`;
+    return `${contextLabel} (use for cross-referencing — build upon, do not repeat):\n\n${validEntries.join('\n\n---\n\n')}\n`;
 }
 
 // ============================================================================
@@ -1427,6 +1514,62 @@ ${disclaimerLine}`;
     return basePrompt;
 }
 
+// ============================================================================
+// INFRASTRUCTURE PROXIMITY BLOCK — injects nearby infrastructure context
+// ============================================================================
+
+function buildInfrastructureContextBlock(
+    infrastructure: Record<string, InfrastructureProximity | null> | null | undefined,
+    language: Language
+): string {
+    if (!infrastructure) return '';
+    const isID = language === 'id';
+    const entries = Object.entries(infrastructure).filter(([_, v]) => v != null) as [string, InfrastructureProximity][];
+    if (entries.length === 0) return '';
+
+    const lines: string[] = [];
+    lines.push(isID
+        ? '\n--- KONTEKS INFRASTRUKTUR DEKAT PERUSAHAAN ---'
+        : '\n--- NEARBY INFRASTRUCTURE CONTEXT ---');
+
+    for (const [symbol, data] of entries) {
+        if (!data || data.total === 0) continue;
+        lines.push(isID
+            ? `\n${symbol}: Terdeteksi ${data.total} aset infrastruktur dalam radius 100km.`
+            : `\n${symbol}: ${data.total} infrastructure assets detected within 100km radius.`);
+
+        // Top 3 overall nearest
+        if (data.nearest && data.nearest.length > 0) {
+            const nearestList = data.nearest.slice(0, 3).map(f =>
+                `${f.name} (${f.infra_type}, ${Math.round(f.distance)}km)`
+            ).join('; ');
+            lines.push(isID
+                ? `Terdekat: ${nearestList}`
+                : `Nearest: ${nearestList}`);
+        }
+
+        // Per-type breakdown
+        const typeLines: string[] = [];
+        for (const [type, facilities] of Object.entries(data.grouped)) {
+            if (facilities.length > 0) {
+                const names = facilities.map(f => `${f.name} (${f.distance_km}km)`).join(', ');
+                const typeLabel = type.replace(/_/g, ' ');
+                typeLines.push(`  ${typeLabel}: ${names}`);
+            }
+        }
+        if (typeLines.length > 0) {
+            lines.push(isID ? '\nRincian per jenis:' : '\nBreakdown by type:');
+            lines.push(...typeLines);
+        }
+    }
+
+    lines.push(isID
+        ? '\n--- GUNALAH DATA INFRASTRUKTUR INI sebagai konteks tambahan ---'
+        : '\n--- USE THIS INFRASTRUCTURE DATA as additional context ---');
+
+    return lines.join('\n');
+}
+
 /**
  * Builds the full user-turn prompt for a given analysis stage.
  * Includes data slicing, context compression, peer benchmarks, and analyst notes.
@@ -1443,6 +1586,7 @@ export function buildStagePrompt(options: StagePromptOptions): string {
         peerBenchmarks,
         currency = 'USD',
         exchange = '',
+        infrastructure,
     } = options;
 
     const isID = language === 'id';
@@ -1504,10 +1648,15 @@ Exchange/Market: ${exchange || 'N/A'} · Currency: ${currency}
 Sector: ${sector.replace(/_/g, ' ')} · KPI Weights: Calibrated for this sector
 Stage ${stage}: ${stageTitle}`;
 
+    const infraBlock = [1, 2, 3].includes(stage)
+        ? buildInfrastructureContextBlock(infrastructure, language)
+        : '';
+
     const sections = [
         metaHeader,
         previousContext ? `\n${previousContext}` : '',
         dataAvailability,
+        infraBlock,
         peerBlock,
         analystNote,
         `\nTASK:\n${instruction}`,

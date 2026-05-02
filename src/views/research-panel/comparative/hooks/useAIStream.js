@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js';
-import { buildSystemPrompt, buildStagePrompt, hasBankingSymbol } from '../constants/enhancedPrompt';
+import { buildSystemPrompt, buildStagePrompt, hasBankingSymbol, detectSectorFromData } from '../constants/enhancedPrompt';
 
 const RESEARCH_API = import.meta.env.VITE_RESEARCH_API;
 const TOTAL_STAGES = 8;
@@ -49,6 +49,17 @@ export function useAIStream() {
 
     const generatedStages = {};
     const isBanking = hasBankingSymbol(symbols);
+    // Detect sector from yfinance data to calibrate KPI weights
+    const detectedSector = detectSectorFromData(fullData, symbols);
+
+    // Extract infrastructure proximity data per symbol
+    const infraData = {};
+    for (const sym of symbols) {
+      const symData = fullData[sym];
+      if (symData && symData.infrastructure) {
+        infraData[sym] = symData.infrastructure;
+      }
+    }
 
     for (let stage = 1; stage <= TOTAL_STAGES; stage++) {
       setCurrentStage(stage);
@@ -62,7 +73,9 @@ export function useAIStream() {
         symbols,
         fullData,
         generatedStages,
-        language
+        language,
+        sector: detectedSector,  // Pass detected sector for calibrated KPI weights
+        infrastructure: Object.keys(infraData).length > 0 ? infraData : null  // Pass infra proximity context
       });
 
       // For banking symbols, add chain prompting context to user prompt
@@ -90,7 +103,6 @@ export function useAIStream() {
             model,
             system_prompt: systemPrompt,
             user_prompt: enhancedUserPrompt,
-            full_data: fullData,
             generated_stages: generatedStages,
             caveman: caveman
           }),

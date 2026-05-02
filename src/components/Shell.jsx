@@ -217,6 +217,20 @@ export function Sidebar(props) {
               { id: 'geo-monitor', label: 'Geo Monitoring', icon: 'M12 2a10 10 0 1 0 10 10 10 10 0 0 0-10-10z M12 6v6l4 2' },
               { id: 'government-facility', label: 'Government Facility', icon: 'M3 21h18M3 7l9-4 9 4M4 7v14M20 7v14M9 21v-4a3 3 0 0 1 6 0v4' },
             ]
+          },
+          {
+            title: 'INSTITUTIONAL',
+            items: [
+              { id: 'bonds-macro', label: 'Bonds and Macro', icon: 'M3 10h18M5 6v14a2 2 0 002 2h10a2 2 0 002-2V6M8 10V6a4 4 0 118 0v4 M2 20L6 12 10 16 14 8 18 12 22 4' },
+              { id: 'volatility', label: 'Volatility', icon: 'M3 3v18h18 M13 6l-4 6h6l-4 6' },
+              { id: 'options', label: 'Options Flow', icon: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8' },
+
+              { id: 'capital-flows', label: 'Capital Flows', icon: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5' },
+              { id: 'corporate-intel', label: 'Corporate Intel', icon: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2 M12 7a4 4 0 100-8 4 4 0 000 8z' },
+              { id: 'regime', label: 'Regime Detection', icon: 'M5 3v4h4 M3 7l4-4 4 4 M5 21v-4h4 M3 17l4 4 4-4 M4 12h16 M13 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z' },
+              { id: 'esg', label: 'ESG Monitor', icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z' },
+              { id: 'supply-chain', label: 'Supply Chain', icon: 'M22 12h-4l-3 9L9 3l-3 9H2' },
+            ]
           }
         ]}>
           {(section) => (
@@ -302,9 +316,9 @@ export function Sidebar(props) {
                             { id: 'naval-fleet', label: 'Fleet Monitoring' },
                             { id: 'flight-intel', label: 'Flight Status' },
                             { id: 'geo-map', label: 'Trend Analysis' },
+                            { id: 'geo-trend', label: 'Geo Trends' },
                             { id: 'satellite-visual', label: 'Satellite Visuals' },
                             { id: 'weather', label: 'Weather & Environment' },
-                            { id: 'global-economy', label: 'Economic Data' },
                           ].map(mod => (
                             <button
                               onClick={() => props.setGeoModule(mod.id)}
@@ -344,6 +358,7 @@ export function Sidebar(props) {
                             { id: 'industrial-zone', label: 'Industrial Zones' },
                             { id: 'datacenter', label: 'Data Centers' },
                             { id: 'train-station', label: 'Railways' },
+                            { id: 'military', label: 'Military Bases' },
                             { id: 'oil-facility', label: 'Oil Facilities' },
                             { id: 'submarine-cable', label: 'Cables' },
                             { id: 'infra-cctv', label: 'Public Cameras' },
