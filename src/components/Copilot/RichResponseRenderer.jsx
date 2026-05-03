@@ -359,19 +359,7 @@ function CardBlock(props) {
 // ---------------------------------------------------------------------------
 export default function RichResponseRenderer(props) {
     const sortedComponents = createMemo(() => {
-        const comps = [...(props.components || [])];
-        if (comps.length === 0) return [];
-        
-        return comps.sort((a, b) => {
-            const getPriority = (c) => {
-                if (c.type === 'chart') return 0;
-                if (c.type === 'map') return 1;
-                if (c.type === 'card' || c.type === 'cards') return 2;
-                if (c.type === 'table') return 3;
-                return 5;
-            };
-            return getPriority(a) - getPriority(b);
-        });
+        return props.components || [];
     });
 
     return (
