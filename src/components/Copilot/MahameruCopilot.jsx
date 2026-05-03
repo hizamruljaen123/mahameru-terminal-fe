@@ -117,7 +117,7 @@ export default function MahameruCopilot(props) {
 
     // ---- Gateway health check ----
     onMount(async () => {
-        console.log("[Copilot] Checking gateway health at localhost:8500...");
+        console.log(`[Copilot] Checking gateway health at ${import.meta.env.VITE_COPILOT_BASE || 'default (localhost:8500)'}...`);
         const status = await checkHealth();
         console.log("[Copilot] Gateway Status:", status);
         setGatewayStatus(status);

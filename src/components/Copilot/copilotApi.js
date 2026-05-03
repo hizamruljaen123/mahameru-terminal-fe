@@ -6,7 +6,12 @@
  * ============================================================================
  */
 
-const COPILOT_BASE = import.meta.env.VITE_COPILOT_BASE || 'http://localhost:8500';
+const COPILOT_BASE = import.meta.env.VITE_COPILOT_BASE || 
+    (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+        ? 'https://api.asetpedia.online/copilot'
+        : 'http://localhost:8500');
+
+console.log("[Copilot API] Base URL:", COPILOT_BASE);
 const DEFAULT_TIMEOUT = 30000;
 
 /**
