@@ -283,10 +283,35 @@ function renderEnhancedMarkdown(container, text, hlReady, katexReady) {
 }
 
 // ---------------------------------------------------------------------------
+// Ticker Link — makes ticker symbols clickable to trigger research
+// ---------------------------------------------------------------------------
+function TickerLink(props) {
+    const isTicker = createMemo(() => {
+        const val = String(props.value || '');
+        // Match common ticker patterns: BBCA.JK, AAPL, BTC-USD
+        return /^[A-Z0-9]{2,10}(\.[A-Z]{2})?$/.test(val) || /^[A-Z]{2,5}-USD$/.test(val);
+    });
+
+    if (!isTicker() || !props.onResearchStart) {
+        return <span>{String(props.value)}</span>;
+    }
+
+    return (
+        <button
+            class="copilot-ticker-link"
+            onClick={() => props.onResearchStart(String(props.value), 'full')}
+            title={`Research ${props.value}`}
+        >
+            {String(props.value)}
+        </button>
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Table renderer
 // ---------------------------------------------------------------------------
 function TableBlock(props) {
-    const { headers, rows, title } = props;
+    const { headers, rows, title, onResearchStart } = props;
 
     return (
         <div class="copilot-table">
@@ -311,7 +336,10 @@ function TableBlock(props) {
                                     <For each={row}>
                                         {(cell, cellIdx) => (
                                             <td classList={{ 'copilot-table-first': cellIdx() === 0 }}>
-                                                {String(cell)}
+                                                <TickerLink 
+                                                    value={cell} 
+                                                    onResearchStart={onResearchStart} 
+                                                />
                                             </td>
                                         )}
                                     </For>
@@ -417,12 +445,16 @@ function RenderComponent(props) {
                     headers={component.headers || []}
                     rows={component.rows || []}
                     title={component.title}
+                    onResearchStart={props.onResearchStart}
                 />
             </Match>
 
             {/* Tabs container (categorized chart panels) */}
             <Match when={type === 'tabs'}>
-                <TabsContainer tabs={component.tabs || []} />
+                <TabsContainer 
+                    tabs={component.tabs || []} 
+                    onResearchStart={props.onResearchStart}
+                />
             </Match>
 
             {/* SSE Stream trigger */}
@@ -514,6 +546,7 @@ function TabsContainer(props) {
                                         headers={tab.headers || []}
                                         rows={tab.rows || []}
                                         title={tab.title}
+                                        onResearchStart={props.onResearchStart}
                                     />
                                 </Match>
                                 <Match when={tab.type === 'markdown'}>
@@ -521,7 +554,10 @@ function TabsContainer(props) {
                                 </Match>
                                 {/* Fallback: render nested tabs recursively */}
                                 <Match when={tab.type === 'tabs'}>
-                                    <TabsContainer tabs={tab.tabs || []} />
+                                    <TabsContainer 
+                                        tabs={tab.tabs || []} 
+                                        onResearchStart={props.onResearchStart}
+                                    />
                                 </Match>
                                 {/* Generic fallback — try rendering as chart if options exist */}
                                 <Match when={tab.type !== 'chart' && tab.type !== 'table' && tab.type !== 'markdown' && tab.type !== 'tabs'}>

@@ -1365,18 +1365,33 @@
     white-space: nowrap;
     outline: none;
     user-select: none;
-    font-family: inherit;
 }
 
 .copilot-tab-btn:hover {
-    color: rgba(255, 255, 255, 0.8);
+    color: var(--cp-text);
     background: rgba(255, 255, 255, 0.03);
 }
 
 .copilot-tab-btn.active {
-    color: var(--cp-accent, #06b6d4);
-    border-bottom-color: var(--cp-accent, #06b6d4);
-    background: rgba(6, 182, 212, 0.06);
+    color: var(--cp-accent);
+    border-bottom-color: var(--cp-accent);
+    background: rgba(34, 211, 238, 0.05);
+    text-shadow: 0 0 10px rgba(34, 211, 238, 0.3);
+}
+
+.copilot-tab-content {
+    padding: 12px;
+    min-height: 100px;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.copilot-tab-content > div {
+    animation: fadeIn 0.25s ease-out;
 }
 
 .copilot-tab-btn:focus-visible {
