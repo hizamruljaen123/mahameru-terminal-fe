@@ -1,0 +1,281 @@
+{
+    "crypto": [
+        {
+            "symbol": "BTC",
+            "name": "Bitcoin",
+            "price": 98750.42,
+            "change_24h": 2.35,
+            "market_cap": 1950000000000
+        },
+        {
+            "symbol": "ETH",
+            "name": "Ethereum",
+            "price": 3850.15,
+            "change_24h": 1.82,
+            "market_cap": 462000000000
+        },
+        {
+            "symbol": "SOL",
+            "name": "Solana",
+            "price": 198.65,
+            "change_24h": 4.12,
+            "market_cap": 92000000000
+        },
+        {
+            "symbol": "XRP",
+            "name": "Ripple",
+            "price": 2.45,
+            "change_24h": -0.85,
+            "market_cap": 140000000000
+        },
+        {
+            "symbol": "BNB",
+            "name": "BNB",
+            "price": 725.30,
+            "change_24h": 0.95,
+            "market_cap": 105000000000
+        },
+        {
+            "symbol": "DOGE",
+            "name": "Dogecoin",
+            "price": 0.32,
+            "change_24h": 5.20,
+            "market_cap": 47000000000
+        },
+        {
+            "symbol": "ADA",
+            "name": "Cardano",
+            "price": 0.85,
+            "change_24h": -1.20,
+            "market_cap": 30000000000
+        },
+        {
+            "symbol": "AVAX",
+            "name": "Avalanche",
+            "price": 38.50,
+            "change_24h": 3.45,
+            "market_cap": 15500000000
+        },
+        {
+            "symbol": "LINK",
+            "name": "Chainlink",
+            "price": 18.20,
+            "change_24h": 2.10,
+            "market_cap": 11200000000
+        },
+        {
+            "symbol": "DOT",
+            "name": "Polkadot",
+            "price": 6.75,
+            "change_24h": -0.45,
+            "market_cap": 10000000000
+        }
+    ],
+    "forex": [
+        {
+            "name": "EUR/USD",
+            "symbol": "EURUSD",
+            "price": 1.0845,
+            "change_pct": 0.12
+        },
+        {
+            "name": "USD/JPY",
+            "symbol": "USDJPY",
+            "price": 149.82,
+            "change_pct": -0.35
+        },
+        {
+            "name": "GBP/USD",
+            "symbol": "GBPUSD",
+            "price": 1.2740,
+            "change_pct": 0.08
+        },
+        {
+            "name": "USD/IDR",
+            "symbol": "USDIDR",
+            "price": 15890.00,
+            "change_pct": 0.05
+        },
+        {
+            "name": "AUD/USD",
+            "symbol": "AUDUSD",
+            "price": 0.6590,
+            "change_pct": -0.22
+        },
+        {
+            "name": "USD/CHF",
+            "symbol": "USDCHF",
+            "price": 0.9020,
+            "change_pct": 0.15
+        },
+        {
+            "name": "USD/CAD",
+            "symbol": "USDCAD",
+            "price": 1.3560,
+            "change_pct": 0.18
+        },
+        {
+            "name": "NZD/USD",
+            "symbol": "NZDUSD",
+            "price": 0.6120,
+            "change_pct": -0.10
+        }
+    ],
+    "macro": [
+        {
+            "source": "Bloomberg",
+            "title": "Fed Signals Potential Rate Cuts in Q3 Amid Cooling Inflation Data"
+        },
+        {
+            "source": "Reuters",
+            "title": "Indonesia Trade Surplus Widens to $3.2B in April on Strong Commodity Exports"
+        },
+        {
+            "source": "CNBC",
+            "title": "Tech Stocks Rally as AI Earnings Beat Expectations Across Major Cloud Providers"
+        },
+        {
+            "source": "Financial Times",
+            "title": "Oil Prices Stabilize Near $78 as OPEC+ Maintains Production Cuts"
+        },
+        {
+            "source": "Bloomberg",
+            "title": "Bank Indonesia Holds Key Rate at 6.25%, Citing Rupiah Stability"
+        }
+    ],
+    "sentiment": [
+        {
+            "category": "Global Equities",
+            "total": 1240,
+            "positive_pct": 58.5,
+            "neutral_pct": 22.0,
+            "negative_pct": 19.5,
+            "score": 12.4
+        },
+        {
+            "category": "Cryptocurrency",
+            "total": 890,
+            "positive_pct": 62.0,
+            "neutral_pct": 18.5,
+            "negative_pct": 19.5,
+            "score": 18.2
+        },
+        {
+            "category": "Fixed Income",
+            "total": 650,
+            "positive_pct": 35.0,
+            "neutral_pct": 40.0,
+            "negative_pct": 25.0,
+            "score": -5.0
+        },
+        {
+            "category": "Commodities",
+            "total": 420,
+            "positive_pct": 48.0,
+            "neutral_pct": 28.0,
+            "negative_pct": 24.0,
+            "score": 4.8
+        },
+        {
+            "category": "FX & Macro",
+            "total": 780,
+            "positive_pct": 42.0,
+            "neutral_pct": 32.0,
+            "negative_pct": 26.0,
+            "score": 1.2
+        },
+        {
+            "category": "Emerging Markets",
+            "total": 560,
+            "positive_pct": 52.0,
+            "neutral_pct": 25.0,
+            "negative_pct": 23.0,
+            "score": 8.5
+        }
+    ],
+    "ai": [
+        {
+            "symbol": "BTC",
+            "action": "ACCUMULATE",
+            "summary": "Strong on-chain flows and ETF inflows suggest continued bullish momentum..."
+        },
+        {
+            "symbol": "ETH",
+            "action": "HOLD",
+            "summary": "Consolidation phase post-Dencun upgrade with steady staking growth..."
+        },
+        {
+            "symbol": "SOL",
+            "action": "ACCUMULATE",
+            "summary": "Network activity at all-time highs, DeFi TVL expanding rapidly..."
+        }
+    ],
+    "regime": {
+        "regime": "RISK_ON",
+        "risk_score": 4.2,
+        "description": "Global equity markets showing resilience with broad-based participation. Credit spreads remain tight.",
+        "vix_confirm": 14.5,
+        "regime_label": "Growth-Led Expansion"
+    },
+    "sectorRotation": [
+        {
+            "sector": "Technology",
+            "perf_1m": 4.5,
+            "perf_3m": 12.8,
+            "perf_6m": 22.4
+        },
+        {
+            "sector": "Communication Services",
+            "perf_1m": 3.2,
+            "perf_3m": 9.5,
+            "perf_6m": 18.2
+        },
+        {
+            "sector": "Financials",
+            "perf_1m": 2.1,
+            "perf_3m": 7.8,
+            "perf_6m": 14.5
+        },
+        {
+            "sector": "Industrials",
+            "perf_1m": 1.5,
+            "perf_3m": 6.2,
+            "perf_6m": 11.8
+        },
+        {
+            "sector": "Consumer Discretionary",
+            "perf_1m": 0.8,
+            "perf_3m": 5.5,
+            "perf_6m": 10.2
+        },
+        {
+            "sector": "Materials",
+            "perf_1m": -0.5,
+            "perf_3m": 3.2,
+            "perf_6m": 8.5
+        },
+        {
+            "sector": "Health Care",
+            "perf_1m": -1.2,
+            "perf_3m": 2.1,
+            "perf_6m": 5.8
+        },
+        {
+            "sector": "Utilities",
+            "perf_1m": -2.0,
+            "perf_3m": -1.5,
+            "perf_6m": 2.4
+        }
+    ],
+    "supplyChain": {
+        "regime": "NORMAL",
+        "index": 42.5,
+        "categories": {
+            "Shipping": 38,
+            "Semiconductors": 55,
+            "Energy": 35,
+            "Agriculture": 40,
+            "Metals": 45
+        }
+    }
+}

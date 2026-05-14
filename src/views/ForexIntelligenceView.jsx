@@ -558,7 +558,7 @@ export default function ForexIntelligenceView(props) {
 
               {/* Institutional Analytics Integrations */}
               <div class="grid grid-cols-12 gap-6">
-                <div class="col-span-12 h-[350px]">
+                <div class="col-span-12 h-[300px]">
                   <PolicyDivergenceTracker />
                 </div>
               </div>

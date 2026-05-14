@@ -1,7 +1,9 @@
-import { createSignal, createEffect, For, Show, onMount, onCleanup } from 'solid-js';
+// CryptoQuantPanel - REDESIGNED v2 - Full quantitative intelligence
+import { createSignal, createEffect, For, Show, onMount, onCleanup, createMemo } from 'solid-js';
 import * as echarts from 'echarts';
 
 const fmt = (v, d = 2) => (v == null || isNaN(v)) ? 'N/A' : Number(v).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
+const fmtPct = (v) => (v == null || isNaN(v)) ? 'N/A' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`;
 
 function SH({ title }) {
   return (
@@ -10,6 +12,140 @@ function SH({ title }) {
       <span class="text-[9px] font-black tracking-[0.3em] text-text_primary uppercase font-mono">{title}</span>
     </div>
   );
+}
+
+// ============================================
+// NEW: VAR/CVaR DASHBOARD
+// ============================================
+function VaRDashboard({ data }) {
+  let ref, chart;
+  
+  onMount(() => {
+    if (!ref || !data) return;
+    chart = echarts.init(ref);
+    
+    const var95 = data?.var_95 || 0;
+    const cvar95 = data?.cvar_95 || 0;
+    const var99 = data?.var_99 || var95 * 1.2;
+    
+    chart.setOption({
+      backgroundColor: 'transparent',
+      tooltip: { trigger: 'axis', backgroundColor: '#0a0a0a', borderColor: '#333', textStyle: { color: '#ccc', fontSize: 10 } },
+      grid: { top: 20, right: 30, bottom: 30, left: 50 },
+      xAxis: {
+        type: 'category',
+        data: ['VAR 95%', 'CVAR 95%', 'VAR 99%'],
+        axisLabel: { color: '#555', fontSize: 9 },
+        axisLine: { lineStyle: { color: '#333' } }
+      },
+      yAxis: {
+        type: 'value',
+        name: 'Loss %',
+        axisLabel: { color: '#555', fontSize: 8, formatter: v => fmtPct(v) },
+        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.03)' } }
+      },
+      series: [{
+        type: 'bar',
+        data: [
+          { value: var95, itemStyle: { color: '#ff9100' } },
+          { value: cvar95, itemStyle: { color: '#ff1744' } },
+          { value: var99, itemStyle: { color: '#e040fb' } }
+        ],
+        itemStyle: { borderRadius: [4, 4, 0, 0] }
+      }]
+    });
+    
+    const h = () => chart?.resize();
+    window.addEventListener('resize', h);
+    onCleanup(() => { window.removeEventListener('resize', h); chart?.dispose(); });
+  });
+  
+  return <div ref={ref} class="w-full h-full" />;
+}
+
+// ============================================
+// NEW: STRESS TESTING SCENARIOS
+// ============================================
+function StressTesting({ data }) {
+  if (!data?.scenarios?.length) return (
+    <div class="py-10 text-center text-[9px] text-text_secondary">NO STRESS SCENARIOS AVAILABLE</div>
+  );
+  
+  return (
+    <div class="max-h-[250px] overflow-y-auto win-scroll">
+      <table class="w-full text-[9px] font-mono">
+        <thead class="bg-bg_header/60 sticky top-0 z-10 border-b border-border_main">
+          <tr>
+            <th class="p-2 text-left text-text_accent">SCENARIO</th>
+            <th class="p-2 text-right text-red-400">LOSS</th>
+            <th class="p-2 text-right text-green-400">PROB</th>
+            <th class="p-2 text-right text-white">IMPACT</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-border_main/10">
+          <For each={data.scenarios.slice(0, 8)}>
+            {(s) => (
+              <tr class="hover:bg-white/5 transition-colors">
+                <td class="p-2 text-text_secondary">{s.name}</td>
+                <td class="p-2 text-right text-red-400 font-bold">{s.loss}%</td>
+                <td class="p-2 text-right text-green-400">{s.probability}%</td>
+                <td class={`p-2 text-right font-black ${s.impact === 'CRITICAL' ? 'text-red-400' : s.impact === 'HIGH' ? 'text-orange-400' : 'text-yellow-400'}`}>{s.impact}</td>
+              </tr>
+            )}
+          </For>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ============================================
+// NEW: TAIL RISK ANALYSIS
+// ============================================
+function TailRiskChart({ data }) {
+  let ref, chart;
+  
+  onMount(() => {
+    if (!ref || !data) return;
+    chart = echarts.init(ref);
+    
+    chart.setOption({
+      backgroundColor: 'transparent',
+      tooltip: { trigger: 'axis', backgroundColor: '#0a0a0a', borderColor: '#333', textStyle: { color: '#ccc', fontSize: 10 } },
+      grid: { top: 20, right: 30, bottom: 30, left: 50 },
+      xAxis: {
+        type: 'category',
+        data: ['7D', '30D', '90D', '180D'],
+        axisLabel: { color: '#555', fontSize: 9 },
+        axisLine: { lineStyle: { color: '#333' } }
+      },
+      yAxis: {
+        type: 'value',
+        name: 'Tail Risk Index',
+        axisLabel: { color: '#555', fontSize: 8 },
+        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.03)' } }
+      },
+      series: [{
+        type: 'line',
+        data: [
+          { value: data?.tail_risk_7d || 0, itemStyle: { color: '#ff9100' } },
+          { value: data?.tail_risk_30d || 0, itemStyle: { color: '#ff1744' } },
+          { value: data?.tail_risk_90d || 0, itemStyle: { color: '#e040fb' } },
+          { value: data?.tail_risk_180d || 0, itemStyle: { color: '#00e5ff' } }
+        ],
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 8,
+        lineStyle: { width: 2 }
+      }]
+    });
+    
+    const h = () => chart?.resize();
+    window.addEventListener('resize', h);
+    onCleanup(() => { window.removeEventListener('resize', h); chart?.dispose(); });
+  });
+  
+  return <div ref={ref} class="w-full h-full" />;
 }
 
 function CorrelationHeatmap({ labels, matrix }) {
@@ -153,6 +289,37 @@ export default function CryptoQuantPanel(props) {
           </div>
         </div>
 
+        {/* RISK METRICS + VAR/CVaR */}
+        <div class="grid grid-cols-12 gap-6">
+          <div class="col-span-12 lg:col-span-6 flex flex-col border-2 border-border_main bg-black/40 h-[350px]">
+            <SH title="VALUE AT RISK (VaR) DASHBOARD" />
+            <div class="flex-1 p-2 min-h-0">
+              <Show when={data()?.risk_metrics}>
+                <VaRDashboard data={data().risk_metrics} />
+              </Show>
+            </div>
+            <div class="px-4 py-2 border-t border-border_main bg-bg_header/20 flex items-center justify-between">
+              <span class="text-[8px] font-black text-text_secondary">CONFIDENCE LEVEL: 95%</span>
+              <span class="text-[8px] font-black text-text_secondary">TIME HORIZON: 1 DAY</span>
+            </div>
+          </div>
+
+          <div class="col-span-12 lg:col-span-6 flex flex-col border-2 border-border_main bg-black/40 h-[350px]">
+            <SH title="TAIL RISK ANALYSIS" />
+            <div class="flex-1 p-2 min-h-0">
+              <Show when={data()?.risk_metrics}>
+                <TailRiskChart data={data().risk_metrics} />
+              </Show>
+            </div>
+            <div class="px-4 py-2 border-t border-border_main bg-bg_header/20 flex items-center justify-between">
+              <span class="text-[8px] font-black text-text_secondary">CURRENT TAIL RISK: <span class="text-white font-mono">{data()?.risk_metrics?.tail_risk_30d ? fmtPct(data().risk_metrics.tail_risk_30d) : 'N/A'}</span></span>
+              <span class={`text-[8px] font-black ${data()?.risk_metrics?.tail_risk_30d > 50 ? 'text-red-400' : 'text-green-400'}`}>
+                {data()?.risk_metrics?.tail_risk_30d > 50 ? 'HIGH' : 'NORMAL'}
+              </span>
+            </div>
+          </div>
+        </div>
+
         {/* VOLATILITY SURFACE */}
         <div class="grid grid-cols-12 gap-6">
           <div class="col-span-12 lg:col-span-8 flex flex-col border-2 border-border_main bg-black/40 h-[350px]">
@@ -251,12 +418,24 @@ export default function CryptoQuantPanel(props) {
           </div>
         </div>
 
-        {/* VOL TERM STRUCTURE */}
-        <Show when={data()?.volatility?.term_structure}>
-          <div class="flex flex-col border-2 border-border_main bg-black/40">
+        {/* STRESS TESTING + VOL TERM STRUCTURE */}
+        <div class="grid grid-cols-12 gap-6">
+          <div class="col-span-12 lg:col-span-6 flex flex-col border-2 border-border_main bg-black/40 h-[350px]">
+            <SH title="STRESS TESTING SCENARIOS" />
+            <div class="flex-1 p-2 min-h-0">
+              <Show when={data()?.stress_testing}>
+                <StressTesting data={data().stress_testing} />
+              </Show>
+            </div>
+            <div class="px-4 py-2 border-t border-border_main bg-bg_header/20">
+              <span class="text-[8px] font-black text-text_secondary uppercase">SCENARIOS: CRASH, FLASH CRASH, LIQUIDATION, BLACK SWAN</span>
+            </div>
+          </div>
+
+          <div class="col-span-12 lg:col-span-6 flex flex-col border-2 border-border_main bg-black/40 h-[350px]">
             <SH title="VOLATILITY TERM STRUCTURE" />
             <div class="p-4 grid grid-cols-5 gap-3">
-              <For each={Object.entries(data().volatility.term_structure)}>
+              <For each={Object.entries(data()?.volatility?.term_structure || {})}>
                 {([period, val]) => (
                   <div class="bg-black/30 p-4 border border-border_main/20 text-center">
                     <span class="text-[8px] font-black text-text_secondary uppercase block mb-2">{period}</span>
@@ -266,7 +445,7 @@ export default function CryptoQuantPanel(props) {
               </For>
             </div>
           </div>
-        </Show>
+        </div>
       </Show>
     </div>
   );

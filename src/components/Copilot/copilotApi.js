@@ -6,13 +6,23 @@
  * ============================================================================
  */
 
-const COPILOT_BASE = import.meta.env.VITE_COPILOT_BASE || 
+const COPILOT_BASE = import.meta.env.VITE_COPILOT_BASE ||
     (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
         ? 'https://api.asetpedia.online/copilot'
         : 'http://localhost:8500');
 
 console.log("[Copilot API] Base URL:", COPILOT_BASE);
 const DEFAULT_TIMEOUT = 30000;
+const DEFAULT_RETRIES = 2;
+const DEFAULT_BACKOFF = 1000;
+
+function getAuthHeaders(extraHeaders = {}) {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    return {
+        ...extraHeaders,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+}
 
 /**
  * Send a chat message and receive a structured Rich Response.
@@ -24,35 +34,61 @@ const DEFAULT_TIMEOUT = 30000;
  * @returns {Promise<Object>} CopilotChatResponse
  */
 export async function sendChatMessage(messages, options = {}) {
-    const { stream = false, temperature = 0.3, signal, model } = options;
+    const { stream = false, temperature = 0.3, signal, model, use_tools = true, session_id, agent_id, save_history = true, retries = DEFAULT_RETRIES } = options;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT);
 
-    try {
-        const body = {
-            messages,
-            stream,
-            temperature,
-        };
-        if (model) body.model = model;
+    let lastError;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            const body = {
+                messages,
+                stream,
+                temperature,
+                use_tools,
+                session_id,
+                save_history,
+                metadata: { agent_id }
+            };
+            if (model) body.model = model;
 
-        const response = await fetch(`${COPILOT_BASE}/api/copilot/chat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-            signal: signal || controller.signal,
-        });
+            const response = await fetch(`${COPILOT_BASE}/api/copilot/chat`, {
+                method: 'POST',
+                headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify(body),
+                signal: signal || controller.signal,
+            });
 
-        if (!response.ok) {
-            const errText = await response.text().catch(() => 'Unknown error');
-            throw new Error(`Copilot API error (${response.status}): ${errText}`);
+            if (!response.ok) {
+                // Retry on 429 or 5xx
+                if (response.status === 429 || response.status >= 500) {
+                    const retryAfter = parseInt(response.headers.get('Retry-After') || '0');
+                    const delay = retryAfter > 0 ? retryAfter * 1000 : DEFAULT_BACKOFF * Math.pow(2, attempt);
+                    if (attempt < retries) {
+                        console.warn(`[Copilot] Retry ${attempt + 1}/${retries} after ${delay}ms (status ${response.status})`);
+                        await new Promise(r => setTimeout(r, delay));
+                        continue;
+                    }
+                }
+                const errText = await response.text().catch(() => 'Unknown error');
+                throw new Error(`Copilot API error (${response.status}): ${errText}`);
+            }
+
+            clearTimeout(timeoutId);
+            return await response.json();
+        } catch (err) {
+            lastError = err;
+            if (err.name === 'AbortError') break;
+            if (attempt < retries) {
+                const delay = DEFAULT_BACKOFF * Math.pow(2, attempt);
+                await new Promise(r => setTimeout(r, delay));
+            }
         }
-
-        return await response.json();
-    } finally {
-        clearTimeout(timeoutId);
     }
+
+    clearTimeout(timeoutId);
+    throw lastError;
 }
 
 /**
@@ -63,18 +99,22 @@ export async function sendChatMessage(messages, options = {}) {
  * @returns {Promise<Response>} Raw fetch Response for SSE consumption
  */
 export async function sendStreamingChat(messages, options = {}) {
-    const { temperature = 0.3, signal, model } = options;
+    const { temperature = 0.3, signal, model, use_tools = true, session_id, agent_id, save_history = true, metadata = {} } = options;
 
     const body = {
         messages,
         stream: true,
         temperature,
+        use_tools,
+        session_id,
+        save_history,
+        metadata: { agent_id, ...metadata }
     };
     if (model) body.model = model;
 
     const response = await fetch(`${COPILOT_BASE}/api/copilot/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(body),
         signal,
     });
@@ -84,6 +124,51 @@ export async function sendStreamingChat(messages, options = {}) {
     }
 
     return response;
+}
+
+// ---- HISTORY API ----
+
+export async function fetchHistory() {
+    const resp = await fetch(`${COPILOT_BASE}/api/copilot/history`, {
+        headers: getAuthHeaders()
+    });
+    if (!resp.ok) throw new Error('Failed to fetch chat history');
+    return await resp.json();
+}
+
+export async function fetchSessionMessages(sessionId) {
+    const resp = await fetch(`${COPILOT_BASE}/api/copilot/history/${sessionId}`, {
+        headers: getAuthHeaders()
+    });
+    if (!resp.ok) throw new Error('Failed to fetch session messages');
+    return await resp.json();
+}
+
+export async function fetchSessionDetails(sessionId) {
+    const resp = await fetch(`${COPILOT_BASE}/api/copilot/history/session/${sessionId}`, {
+        headers: getAuthHeaders()
+    });
+    if (!resp.ok) throw new Error('Failed to fetch session details');
+    return await resp.json();
+}
+
+export async function deleteSession(sessionId) {
+    const resp = await fetch(`${COPILOT_BASE}/api/copilot/history/${sessionId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+    });
+    if (!resp.ok) throw new Error('Failed to delete session');
+    return await resp.json();
+}
+
+export async function renameSession(sessionId, title) {
+    const resp = await fetch(`${COPILOT_BASE}/api/copilot/history/${sessionId}`, {
+        method: 'PUT',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ title })
+    });
+    if (!resp.ok) throw new Error('Failed to rename session');
+    return await resp.json();
 }
 
 /**
@@ -100,11 +185,12 @@ export async function executeSlashCommand(command, options = {}) {
     const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT);
 
     try {
+        const { session_id, signal: optSignal } = options;
         const response = await fetch(`${COPILOT_BASE}/api/copilot/slash`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ command }),
-            signal: signal || controller.signal,
+            headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ command, session_id }),
+            signal: optSignal || controller.signal,
         });
 
         if (!response.ok) {
@@ -118,23 +204,26 @@ export async function executeSlashCommand(command, options = {}) {
 }
 
 /**
- * Get the 7-stage research pipeline SSE stream URL.
- * @param {string} symbols - Comma-separated symbols
- * @param {string} [analysisType='full'] - Analysis type
- * @returns {string} SSE endpoint URL
- */
-export function getResearchStreamUrl(symbols, analysisType = 'full') {
-    const params = new URLSearchParams({ symbols, analysis_type: analysisType });
-    return `${COPILOT_BASE}/api/copilot/research/stream?${params}`;
-}
-
-/**
  * Get all registered tools and slash commands.
  * @returns {Promise<{tools: Array, slash_commands: Object, routes: Object}>}
  */
 export async function getAvailableTools() {
-    const response = await fetch(`${COPILOT_BASE}/api/copilot/tools`);
+    const response = await fetch(`${COPILOT_BASE}/api/copilot/tools`, {
+        headers: getAuthHeaders()
+    });
     if (!response.ok) throw new Error(`Failed to fetch tools (${response.status})`);
+    return await response.json();
+}
+
+/**
+ * Get all available AI agents from the registry.
+ * @returns {Promise<{agents: Array}>}
+ */
+export async function fetchAgents() {
+    const response = await fetch(`${COPILOT_BASE}/api/copilot/agents`, {
+        headers: getAuthHeaders()
+    });
+    if (!response.ok) throw new Error(`Failed to fetch agents (${response.status})`);
     return await response.json();
 }
 
@@ -144,7 +233,9 @@ export async function getAvailableTools() {
  */
 export async function checkHealth() {
     try {
-        const response = await fetch(`${COPILOT_BASE}/api/copilot/health`);
+        const response = await fetch(`${COPILOT_BASE}/api/copilot/health`, {
+            headers: getAuthHeaders()
+        });
         if (!response.ok) return { status: 'unhealthy', http_status: response.status };
         return await response.json();
     } catch (e) {
@@ -209,12 +300,38 @@ export async function parseSSEStream(response, onEvent, onError) {
     }
 }
 
+/**
+ * Execute code in the host sandbox.
+ * @param {string} language - python, javascript, bash
+ * @param {string} code - source code
+ * @param {number} [timeout=30]
+ * @returns {Promise<Object>} CodeExecutionResponse
+ */
+export async function executeCode(language, code, timeout = 30) {
+    const response = await fetch(`${COPILOT_BASE}/api/copilot/code/execute`, {
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ language, code, timeout }),
+    });
+
+    if (!response.ok) {
+        const errText = await response.text().catch(() => 'Unknown error');
+        throw new Error(`Code execution error (${response.status}): ${errText}`);
+    }
+
+    return await response.json();
+}
+
 export default {
     sendChatMessage,
     sendStreamingChat,
     executeSlashCommand,
-    getResearchStreamUrl,
     getAvailableTools,
     checkHealth,
     parseSSEStream,
+    fetchHistory,
+    fetchSessionMessages,
+    deleteSession,
+    renameSession,
+    executeCode
 };

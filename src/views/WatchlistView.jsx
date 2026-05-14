@@ -465,6 +465,46 @@ function AnalyticsPanel({ positions, liveData, usdIdrRate }) {
     finally { setFundLoading(prev => { const s = new Set(prev); s.delete(sym); return s; }); }
   };
 
+  const [optData, setOptData] = createSignal(null);
+  const [optLoading, setOptLoading] = createSignal(false);
+  const [optError, setOptError] = createSignal(null);
+
+  const runOptimization = async () => {
+    const pos = positions();
+    if (pos.length < 2) {
+      setOptError("At least 2 assets required for optimization");
+      return;
+    }
+    setOptLoading(true);
+    setOptError(null);
+    setOptData(null);
+    try {
+      const API = (typeof MARKET_API !== 'undefined' ? MARKET_API : import.meta.env.VITE_MARKET_API);
+      const res = await fetch(`${API}/api/market/optimize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbols: pos.map(p => p.symbol), window: '1y' })
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        setOptData(data);
+      } else {
+        setOptError(data.detail || data.message || "Optimization failed");
+      }
+    } catch (e) {
+      setOptError("Failed to connect to backend");
+    } finally {
+      setOptLoading(false);
+    }
+  };
+
+  // Auto-run if OPTIMIZE tab selected and not run yet
+  createEffect(() => {
+    if (activeCategory() === 'OPTIMIZE' && !optData() && !optLoading()) {
+      runOptimization();
+    }
+  });
+
   const m = () => analyticsData()[activeSymbol()] || null;
   const currentPos = () => positions().find(p => p.symbol === activeSymbol());
   const fmtNum = (v, d = 2) => v == null ? '—' : Number(v).toFixed(d);
@@ -736,6 +776,29 @@ function AnalyticsPanel({ positions, liveData, usdIdrRate }) {
     };
   };
 
+  const optWeightsOption = () => {
+    const data = optData();
+    if (!data || !data.weights) return null;
+    const items = Object.entries(data.weights)
+      .filter(([sym, w]) => w > 0.01) // ignore tiny weights
+      .map(([sym, w]) => ({
+        name: sym,
+        value: +(w * 100).toFixed(2),
+        itemStyle: { color: ASSET_TYPE_COLORS[positions().find(p => p.symbol === sym)?.assetType] || BLUE }
+      })).sort((a, b) => b.value - a.value);
+
+    return {
+      tooltip: { ...tooltipStyle, formatter: p => `${p.name}: ${p.value}%` },
+      series: [{
+        type: 'pie',
+        radius: ['40%', '70%'],
+        itemStyle: { borderRadius: 4, borderColor: '#0a0a14', borderWidth: 2 },
+        label: { color: 'rgba(255,255,255,0.7)', fontSize: 10, formatter: p => `${p.name}\n${p.value}%` },
+        data: items
+      }]
+    };
+  };
+
   // ── Compact Metrics ─────────────────────────────────────────────────────────
   const perfRows = () => {
     const data = m();
@@ -868,6 +931,7 @@ function AnalyticsPanel({ positions, liveData, usdIdrRate }) {
             { id: 'PERFORMANCE', label: '📈 PERF' },
             { id: 'RISK', label: '🛡️ RISK' },
             { id: 'COMPARE', label: '📊 COMPARE' },
+            { id: 'OPTIMIZE', label: '🎯 OPTIMIZE' },
             { id: 'FUNDAMENTAL', label: '🏦 FUNDAMENTAL' },
             { id: 'PRICE_INTEL', label: '🧠 PRICE INTEL' },
           ]}>
@@ -902,8 +966,9 @@ function AnalyticsPanel({ positions, liveData, usdIdrRate }) {
               {activeCategory() === 'PERFORMANCE' ? 'I. PERFORMANCE ANALYSIS' :
                 activeCategory() === 'RISK' ? 'II. RISK ANALYSIS' :
                   activeCategory() === 'COMPARE' ? 'III. PORTFOLIO COMPARISON' :
-                    activeCategory() === 'PRICE_INTEL' ? 'V. PRICE INTELLIGENCE' :
-                      'IV. FUNDAMENTAL ANALYSIS'} //
+                    activeCategory() === 'OPTIMIZE' ? 'IV. PORTFOLIO OPTIMIZATION' :
+                      activeCategory() === 'PRICE_INTEL' ? 'VI. PRICE INTELLIGENCE' :
+                        'V. FUNDAMENTAL ANALYSIS'} //
               {m() || activeCategory() === 'PRICE_INTEL' ? ` ${m()?.dataPoints || ''} data points` : ' LOADING...'}
             </span>
           </div>
@@ -1090,6 +1155,77 @@ function AnalyticsPanel({ positions, liveData, usdIdrRate }) {
                   </div>
                 </div>
               </Show>
+            </Show>
+
+            {/* ── OPTIMIZE TAB ── */}
+            <Show when={activeCategory() === 'OPTIMIZE'}>
+              <div class="px-3 pb-3">
+                <div class="flex items-center justify-between mt-2 mb-3">
+                  <div class="text-[9px] font-black text-text_secondary/40 tracking-widest uppercase">Efficient Frontier Optimization</div>
+                  <button 
+                    onClick={runOptimization} 
+                    disabled={optLoading()}
+                    class={`px-3 py-1 text-[9px] font-black tracking-widest border transition-all ${optLoading() ? 'opacity-50 cursor-not-allowed border-border_main text-text_secondary' : 'border-text_accent text-text_accent hover:bg-text_accent/10'}`}
+                  >
+                    {optLoading() ? 'OPTIMIZING...' : 'RUN OPTIMIZATION'}
+                  </button>
+                </div>
+
+                <Show when={optLoading()}>
+                  <div class="flex items-center justify-center py-10 gap-2 opacity-50">
+                    <div class="w-4 h-4 border-2 border-text_accent border-t-transparent rounded-full animate-spin"></div>
+                    <span class="text-[9px] tracking-widest">CALCULATING MAX SHARPE WEIGHTS...</span>
+                  </div>
+                </Show>
+
+                <Show when={optError() && !optLoading()}>
+                  <div class="p-3 bg-red-500/10 border border-red-500/30 text-[9px] text-red-400 font-black tracking-widest">
+                    ERROR: {optError()}
+                  </div>
+                </Show>
+
+                <Show when={optData() && !optLoading()}>
+                  <div class="grid grid-cols-3 gap-1.5 mb-3">
+                    <div class="border border-white/5 bg-black/20 p-3 flex flex-col items-center justify-center text-center">
+                      <div class="text-[9px] text-text_secondary/50 font-black tracking-widest mb-1">EXPECTED ANNUAL RETURN</div>
+                      <div class="text-[16px] font-black text-[#00e676]">{optData().metrics?.expected_annual_return_pct}%</div>
+                    </div>
+                    <div class="border border-white/5 bg-black/20 p-3 flex flex-col items-center justify-center text-center">
+                      <div class="text-[9px] text-text_secondary/50 font-black tracking-widest mb-1">ANNUAL VOLATILITY</div>
+                      <div class="text-[16px] font-black text-[#f59e0b]">{optData().metrics?.annual_volatility_pct}%</div>
+                    </div>
+                    <div class="border border-white/5 bg-black/20 p-3 flex flex-col items-center justify-center text-center">
+                      <div class="text-[9px] text-text_secondary/50 font-black tracking-widest mb-1">SHARPE RATIO</div>
+                      <div class="text-[16px] font-black text-[#60a5fa]">{optData().metrics?.sharpe_ratio}</div>
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-1.5">
+                    <ChartPanel title="Optimal Allocation" sub="Weights for Maximum Sharpe Ratio" option={optWeightsOption} height={260} />
+                    
+                    <div class="border border-white/5 bg-black/20 overflow-hidden flex flex-col">
+                      <div class="px-2 py-1 border-b border-white/5 flex items-center justify-between shrink-0 bg-white/[0.015]">
+                        <span class="text-[9px] font-black text-text_secondary/50 tracking-widest uppercase">Target Weights</span>
+                        <span class="text-[9px] text-text_secondary/30 italic normal-case">Optimal Portfolio</span>
+                      </div>
+                      <div class="p-2 overflow-auto h-[260px] win-scroll">
+                        <table class="w-full text-[9px]">
+                          <tbody>
+                            <For each={Object.entries(optData().weights).filter(([_, w]) => w > 0.001).sort((a,b) => b[1]-a[1])}>
+                              {([sym, w]) => (
+                                <tr class="border-b border-white/5 last:border-0 hover:bg-white/[0.02]">
+                                  <td class="py-1.5 px-1 font-black">{sym}</td>
+                                  <td class="py-1.5 px-1 text-right text-text_accent font-black">{(w * 100).toFixed(2)}%</td>
+                                </tr>
+                              )}
+                            </For>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </Show>
+              </div>
             </Show>
 
             {/* ── PRICE INTEL TAB ── */}

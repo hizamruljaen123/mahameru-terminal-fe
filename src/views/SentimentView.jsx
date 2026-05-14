@@ -1,123 +1,171 @@
-import { createSignal, createResource, Show, For, onMount, createEffect } from 'solid-js';
+import { createSignal, createResource, Show, For, onMount, createEffect, onCleanup } from 'solid-js';
 import * as echarts from 'echarts';
-
-
-const fetchGlobalSummary = async () => {
-    try {
-        const res = await fetch(`${import.meta.env.VITE_SENTIMENT_URL}/api/sentiment/summary-all`);
-        const data = await res.json();
-        return data;
-    } catch(e) {
-        console.error("error global summary: ", e);
-        return {status: "error", data: []};
-    }
-};
+import { fetchWithRetry } from '../utils/apiFetch';
+import { loadPreloadCache, savePreloadCache } from '../utils/preloadCache';
 
 export default function SentimentView() {
-
-    const [summary, { refetch }] = createResource(fetchGlobalSummary);
+    const [summary, setSummary] = createSignal(null);
+    const [isLoading, setIsLoading] = createSignal(true);
     const [keyword, setKeyword] = createSignal('');
     const [researchResults, setResearchResults] = createSignal(null);
     const [isResearching, setIsResearching] = createSignal(false);
-    const [activeTab, setActiveTab] = createSignal('OVERVIEW'); // OVERVIEW | RESEARCH | SENTIMENT TRENDS
+    const [activeTab, setActiveTab] = createSignal('OVERVIEW');
+    const [apiError, setApiError] = createSignal(null);
 
-
-
-    let gaugeChartRef;
     let pieChartRef;
     let barChartRef;
     let heatmapChartRef;
     let barChartResearchRef;
 
+    // Store chart instances for proper disposal
+    const chartInstances = new Map();
+
+    const disposeCharts = () => {
+        chartInstances.forEach(chart => chart.dispose());
+        chartInstances.clear();
+    };
 
     const initCharts = () => {
         if (summary() && summary().status === 'success') {
             const data = summary().data;
-            const totalPos = data.reduce((acc, row) => acc + row.POSITIVE, 0);
-            const totalNeg = data.reduce((acc, row) => acc + row.NEGATIVE, 0);
-            const totalNeu = data.reduce((acc, row) => acc + row.NEUTRAL, 0);
+            const totalPos = data.reduce((acc, row) => acc + (row.POSITIVE || Math.round((row.total * row.positive_pct / 100) || 0)), 0);
+            const totalNeg = data.reduce((acc, row) => acc + (row.NEGATIVE || Math.round((row.total * row.negative_pct / 100) || 0)), 0);
+            const totalNeu = data.reduce((acc, row) => acc + (row.NEUTRAL || Math.round((row.total * row.neutral_pct / 100) || 0)), 0);
             const totalArt = totalPos + totalNeg + totalNeu;
             const globalScore = totalArt > 0 ? ((totalPos - totalNeg) / totalArt) * 100 : 0;
 
-            // 1. GAUGE CHART (Mood)
-            if (gaugeChartRef) {
-                const chart = echarts.init(gaugeChartRef);
-                chart.setOption({
-                    backgroundColor: 'transparent',
-                    series: [{
-                        type: 'gauge',
-                        startAngle: 180,
-                        endAngle: 0,
-                        min: -100,
-                        max: 100,
-                        splitNumber: 10,
-                        axisLine: { lineStyle: { width: 6, color: [ [0.3, '#ef4444'], [0.7, '#64748b'], [1, '#10b981'] ] } },
-                        pointer: { icon: 'path://M12.8,0.7l12,40.1H0.7L12.8,0.7z', length: '12%', width: 20, offsetCenter: [0, '-60%'], itemStyle: { color: 'auto' } },
-                        axisTick: { show: false },
-                        splitLine: { show: false },
-                        axisLabel: { show: false },
-                        title: { offsetCenter: [0, '-20%'], fontSize: 10, color: '#64748b', fontWeight: 'bold' },
-                        detail: { fontSize: 24, offsetCenter: [0, '0%'], valueAnimation: true, formatter: '{value}', color: 'inherit', fontWeight: 'bold' },
-                        data: [{ value: globalScore.toFixed(1), name: 'AVERAGE SCORE' }]
-                    }]
-                });
-            }
+            // 1. SENTIMENT SLIDER (Custom logic handled in JSX)
+            // No ECharts for gauge anymore, we use a custom slider component
 
             // 2. PIE CHART (Distribution)
             if (pieChartRef) {
                 const chart = echarts.init(pieChartRef);
+                chartInstances.set('pie', chart);
                 chart.setOption({
-                    tooltip: { trigger: 'item' },
+                    backgroundColor: 'transparent',
+                    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
                     series: [{
-                        name: 'SENTIMENT DISTRIBUTION',
+                        name: 'Sentiment',
                         type: 'pie',
                         radius: ['50%', '80%'],
                         avoidLabelOverlap: false,
-                        itemStyle: { borderRadius: 4, borderColor: '#0a1628', borderWidth: 2 },
-                        label: { show: false },
-                        emphasis: { label: { show: true, fontSize: 10, fontWeight: 'bold', color: '#fff' } },
-                        labelLine: { show: false },
+                        itemStyle: { borderRadius: 8, borderColor: '#0f172a', borderWidth: 3 },
+                        label: { show: false, position: 'center' },
+                        emphasis: { 
+                            label: { 
+                                show: true, 
+                                fontSize: 14, 
+                                fontWeight: '900', 
+                                color: '#fff',
+                                formatter: '{b}\n{d}%'
+                            } 
+                        },
                         data: [
                             { value: totalPos, name: 'POSITIVE', itemStyle: { color: '#10b981' } },
-                            { value: totalNeu, name: 'NEUTRAL', itemStyle: { color: '#64748b' } },
-                            { value: totalNeg, name: 'NEGATIVE', itemStyle: { color: '#ef4444' } }
+                            { value: totalNeg, name: 'NEGATIVE', itemStyle: { color: '#ef4444' } },
+                            { value: totalNeu, name: 'NEUTRAL', itemStyle: { color: '#64748b' } }
                         ]
                     }]
                 });
             }
 
-            // 3. HORIZONTAL BAR (Category Scores)
-            const sortedData = [...data].sort((a,b) => b.score - a.score).slice(0, 10);
-            const barOption = {
-                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-                grid: { top: 10, left: 80, right: 30, bottom: 20 },
-                xAxis: { splitLine: { show: false }, axisLabel: { color: '#64748b', fontSize: 9 } },
-                yAxis: { 
-                    type: 'category', 
-                    data: sortedData.map(d => d.category), 
-                    axisLabel: { color: '#bcc6d4', fontSize: 9, fontWeight: 'bold' },
-                    axisLine: { show: false },
-                    tickLine: { show: false }
+            // 3. TREEMAP (Category Scores) - Replaces Bar Chart
+            const sortedData = [...data].sort((a, b) => b.score - a.score);
+            const treemapData = sortedData.map(d => ({
+                name: d.category,
+                value: [(d.POSITIVE + d.NEGATIVE + d.NEUTRAL) || 1, d.score], // [Area, ColorValue]
+                score: d.score.toFixed(1)
+            }));
+
+            const treemapOption = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    formatter: function (info) {
+                        const data = info.data;
+                        return [
+                            '<div class="p-2 font-mono text-[10px]">',
+                            '<b class="text-text_accent">' + info.name + '</b><br/>',
+                            'NET SCORE: ' + data.score + '<br/>',
+                            'VOLUME: ' + info.value[0] + ' ARTICLES',
+                            '</div>'
+                        ].join('');
+                    }
+                },
+                visualMap: {
+                    show: false,
+                    min: -60,
+                    max: 60,
+                    dimension: 1,
+                    inRange: {
+                        color: ['#ef4444', '#475569', '#10b981']
+                    }
                 },
                 series: [{
-                    name: 'NET_SCORE',
-                    type: 'bar',
-                    data: sortedData.map(d => ({
-                        value: d.score.toFixed(1),
-                        itemStyle: { color: d.score > 0 ? '#10b981' : d.score < 0 ? '#ef4444' : '#64748b' }
-                    })),
-                    label: { show: true, position: 'right', fontSize: 9, color: '#fff' }
+                    type: 'treemap',
+                    data: treemapData,
+                    roam: false,
+                    nodeClick: false,
+                    breadcrumb: { show: false },
+                    label: {
+                        show: true,
+                        formatter: function (params) {
+                            return params.name + '\n' + params.data.score;
+                        },
+                        fontSize: 9,
+                        fontWeight: 'bold',
+                        color: '#fff'
+                    },
+                    itemStyle: {
+                        borderColor: '#0f172a',
+                        borderWidth: 1,
+                        gapWidth: 1
+                    },
+                    levels: [
+                        { itemStyle: { borderColor: '#0f172a', borderWidth: 2, gapWidth: 2 } }
+                    ]
                 }]
             };
 
             if (barChartRef) {
                 const chart = echarts.init(barChartRef);
-                chart.setOption(barOption);
+                chartInstances.set('bar', chart);
+                chart.setOption(treemapOption);
             }
             if (barChartResearchRef) {
                 const chart = echarts.init(barChartResearchRef);
-                chart.setOption(barOption);
+                chartInstances.set('barResearch', chart);
+                chart.setOption(treemapOption);
             }
+        }
+    };
+
+    onMount(async () => {
+        // 1. Load from preload cache
+        const cached = await loadPreloadCache();
+        if (cached && cached.sentiment) {
+            console.log('[SentimentView] Preload cache applied');
+            setSummary({ status: 'success', data: cached.sentiment });
+            setIsLoading(false);
+        }
+
+        // 2. Fetch fresh
+        await fetchFreshSummary();
+    });
+
+    const fetchFreshSummary = async () => {
+        setIsLoading(true);
+        try {
+            const res = await fetchWithRetry(`${import.meta.env.VITE_SENTIMENT_URL}/api/sentiment/summary-all`);
+            if (res.status === 'success') {
+                setSummary(res);
+                // Sync to global preload cache
+                const currentCache = await loadPreloadCache() || {};
+                savePreloadCache({ ...currentCache, sentiment: res.data });
+            }
+        } catch (e) {
+            console.error("Fresh fetch failed:", e);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -125,9 +173,8 @@ export default function SentimentView() {
         if (researchResults() && heatmapChartRef) {
             const articles = researchResults().articles;
             const categories = [...new Set(articles.map(a => a.category))].slice(0, 8);
-            // Group by actual dates in the dataset for a realistic time-bucket
             const dates = [...new Set(articles.map(a => a.pubDate.split(' ')[0]))].sort().slice(-14);
-            
+
             const heatmapData = [];
             categories.forEach((cat, cIdx) => {
                 dates.forEach((d, dIdx) => {
@@ -136,40 +183,35 @@ export default function SentimentView() {
                     if (matched.length > 0) {
                         const pos = matched.filter(a => a.sentiment === 'POSITIVE').length;
                         const neg = matched.filter(a => a.sentiment === 'NEGATIVE').length;
-                        score = (pos - neg) / matched.length; // Range [-1, 1]
+                        score = (pos - neg) / matched.length;
                     }
                     if (matched.length > 0) {
                         heatmapData.push([dIdx, cIdx, score.toFixed(2)]);
                     } else {
-                        heatmapData.push([dIdx, cIdx, null]); // Exclude empty cells
+                        heatmapData.push([dIdx, cIdx, null]);
                     }
                 });
             });
 
             const chart = echarts.init(heatmapChartRef);
+            chartInstances.set('heatmap', chart);
             chart.setOption({
-                tooltip: { 
+                tooltip: {
                     position: 'top',
                     formatter: function (params) {
-                        if (params.data[2] === null) return `No Data`;
-                        return `<div style="font-size:9px"><b>${dates[params.data[0]]} | ${categories[params.data[1]]}</b><br/>Net Sentiment: <b>${params.data[2]}</b></div>`;
+                        return `${dates[params.value[0]]}<br/>${categories[params.value[1]]}: <b>${params.value[2]}</b>`;
                     }
                 },
-                grid: { height: '70%', top: '10%', left: '15%' },
-                xAxis: { type: 'category', data: dates, splitArea: { show: true }, axisLabel: { fontSize: 7, color: '#64748b' } },
-                yAxis: { type: 'category', data: categories, splitArea: { show: true }, axisLabel: { fontSize: 8, color: '#bcc6d4', fontWeight: 'bold', width: 90, overflow: 'truncate' } },
+                grid: { height: '70%', top: '10%' },
+                xAxis: { type: 'category', data: dates, splitArea: { show: true }, axisLabel: { color: '#64748b', fontSize: 9 } },
+                yAxis: { type: 'category', data: categories, splitArea: { show: true }, axisLabel: { color: '#bcc6d4', fontSize: 9 } },
                 visualMap: {
-                    min: -1,
-                    max: 1,
-                    calculable: true,
-                    orient: 'horizontal',
-                    left: 'center',
-                    bottom: '5%',
+                    min: -1, max: 1, calculable: true, orient: 'horizontal', left: 'center', bottom: '0%',
                     inRange: { color: ['#ef4444', '#64748b', '#10b981'] },
-                    show: false
+                    textStyle: { color: '#fff' }
                 },
                 series: [{
-                    name: 'SENTIMENT PULSE',
+                    name: 'Sentiment Score',
                     type: 'heatmap',
                     data: heatmapData,
                     label: { show: false },
@@ -179,40 +221,44 @@ export default function SentimentView() {
         }
     };
 
-
-
-    createEffect(() => initCharts());
+    createEffect(() => { initCharts(); });
     createEffect(() => { initHeatmap(); });
+
+    onCleanup(() => {
+        disposeCharts();
+    });
 
     const handleResearch = async (e) => {
         e.preventDefault();
         const query = keyword();
         if (!query) return;
-        
+
         setIsResearching(true);
         setResearchResults(null);
+        setApiError(null);
         setActiveTab('RESEARCH');
-        
+
         try {
-            // STEP 1: Fetch Basic Data (Fast)
-            const res = await fetch(`${import.meta.env.VITE_SENTIMENT_URL}/api/sentiment/research?keyword=${encodeURIComponent(query)}`);
-            const data = await res.json();
+            const data = await fetchWithRetry(
+                `${import.meta.env.VITE_SENTIMENT_URL}/api/sentiment/research?keyword=${encodeURIComponent(query)}`
+            );
             setResearchResults(data.data);
-            setIsResearching(false);
         } catch (e) {
             console.error(e);
+            setApiError("Failed to fetch research data. Please try again.");
+        } finally {
             setIsResearching(false);
         }
     };
 
     return (
         <div class="h-full w-full bg-bg_main text-text_primary overflow-hidden flex flex-col font-mono text-[11px] uppercase tracking-tighter">
-            
+
             {/* STAGGERED HEADER */}
             <div class="flex-shrink-0 p-6 border-b border-border_main bg-bg_header flex items-center justify-between z-20 shadow-xl">
                 <div class="flex items-center gap-6">
                     <div class="p-3 bg-text_accent/10 border border-text_accent shadow-[0_0_15px_rgba(0,255,65,0.2)]">
-                         <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-text_accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-text_accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>
                     </div>
                     <div>
                         <h1 class="text-xl font-black text-text_primary tracking-[0.2em]">SENTIMENT ANALYSIS MONITOR // <span class="text-text_accent">ANALYTICS v4</span></h1>
@@ -225,253 +271,201 @@ export default function SentimentView() {
 
                 <div class="flex items-center gap-3">
                     <div class="flex bg-bg_main border border-border_main p-1 rounded-sm">
-                        <button 
+                        <button
                             onClick={() => setActiveTab('OVERVIEW')}
                             class={`px-4 py-1.5 text-[10px] font-black transition-all ${activeTab() === 'OVERVIEW' ? 'bg-text_accent text-bg_main' : 'text-text_secondary opacity-40 hover:opacity-100'}`}
                         >OVERVIEW</button>
-                        <button 
+                        <button
                             onClick={() => setActiveTab('RESEARCH')}
                             class={`px-4 py-1.5 text-[10px] font-black transition-all ${activeTab() === 'RESEARCH' ? 'bg-text_accent text-bg_main' : 'text-text_secondary opacity-40 hover:opacity-100'}`}
                         >DEEP ANALYSIS</button>
 
                     </div>
-                    <button 
-                        onClick={() => { refetch(); }}
-                        class="p-2.5 border border-text_accent text-text_accent hover:bg-text_accent hover:text-bg_main transition-all"
+                    <button
+                        onClick={fetchFreshSummary}
+                        class={`p-2.5 border border-text_accent text-text_accent hover:bg-text_accent hover:text-bg_main transition-all ${isLoading() ? 'animate-spin opacity-50' : ''}`}
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" /></svg>
                     </button>
                 </div>
             </div>
 
             <div class="flex-1 overflow-y-auto win-scroll p-6 space-y-8 pb-32">
-                
+
                 {/* OVERVIEW CONTENT */}
                 <Show when={activeTab() === 'OVERVIEW'}>
                     <div class="grid grid-cols-12 gap-6 animate-in slide-in-from-bottom-4 duration-500">
                         {/* LEFT: GLOBAL METRICS */}
                         <div class="col-span-12 xl:col-span-4 flex flex-col gap-6">
+                            {/* SENTIMENT SLIDER */}
                             <div class="bg-bg_header/30 border border-border_main p-4 flex flex-col gap-4 shadow-2xl relative overflow-hidden group">
                                 <div class="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="w-16 h-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.5 9.5h3v7h-3zm5-5h3v12h-3zm5 10h3v2h-3zm5-5h3v7h-3z"/></svg>
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="w-16 h-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.5 9.5h3v7h-3zm5-5h3v12h-3zm5 10h3v2h-3zm5-5h3v7h-3z" /></svg>
                                 </div>
-                                <span class="text-[10px] font-black text-text_accent tracking-widest">SENTIMENT GAUGE</span>
-                                <div ref={gaugeChartRef} class="h-[200px] w-full"></div>
-                                <div class="border-t border-border_main pt-4 flex justify-between">
-                                    <div class="flex flex-col">
-                                        <span class="text-[8px] text-text_secondary">STABILITY</span>
-                                        <span class="text-xs font-black text-text_accent">STABLE</span>
-                                    </div>
-                                    <div class="flex flex-col items-end">
-                                        <span class="text-[8px] text-text_secondary">VOLATILITY</span>
-                                        <span class="text-xs font-black text-red-400">0.02%</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="bg-bg_header/30 border border-border_main p-4 flex flex-col gap-4 shadow-2xl">
-                                <span class="text-[10px] font-black text-text_secondary tracking-widest">SENTIMENT DISTRIBUTION</span>
-                                <div ref={pieChartRef} class="h-[180px] w-full"></div>
-                            </div>
-                        </div>
-
-                        {/* MIDDLE: TOP CATEGORIES SCORE */}
-                        <div class="col-span-12 xl:col-span-8 flex flex-col gap-6">
-                            <div class="bg-bg_header/30 border border-border_main p-6 flex flex-col gap-4 shadow-2xl h-full">
-                                <div class="flex justify-between items-center mb-2">
-                                    <span class="text-[10px] font-black text-text_primary tracking-[.4em]">NET SENTIMENT BY CATEGORY</span>
-                                    <span class="text-[8px] text-text_accent opacity-50">LATEST SYNC: {new Date().toLocaleTimeString()}</span>
-                                </div>
-                                <div ref={barChartRef} class="flex-1 min-h-[350px]"></div>
-                            </div>
-                        </div>
-
-                        {/* BOTTOM: THE DETAILED CARDS (STAGGERED) */}
-                        <div class="col-span-12">
-                             <div class="flex items-center gap-4 mb-6">
-                                <div class="h-px flex-1 bg-border_main/30"></div>
-                                <h3 class="text-[10px] font-black tracking-[.8em] text-text_secondary opacity-40">REAL-TIME CATEGORY BREAKDOWN</h3>
-                                <div class="h-px flex-1 bg-border_main/30"></div>
-                             </div>
-                             
-                             <Show when={summary() && summary().status === 'success'}>
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-                                    <For each={summary().data}>
-                                        {(row, index) => (
-                                            <div 
-                                                class="bg-bg_header/20 border border-border_main group hover:border-text_accent/50 transition-all p-4 flex flex-col gap-2 relative overflow-hidden animate-in fade-in"
-                                                style={{ "animation-delay": `${index() * 50}ms` }}
-                                            >
-                                                <div class="flex justify-between items-start mb-2">
-                                                    <span class="text-[10px] font-black text-text_primary tracking-wider">{row.category}</span>
-                                                    <span class={`text-[12px] font-black ${row.score > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                                        {row.score > 0 ? '▲' : '▼'}{Math.abs(row.score).toFixed(0)}
-                                                    </span>
-                                                </div>
-                                                
-                                                <div class="flex items-center gap-[1px] h-1.5 bg-bg_main border border-border_main/20">
-                                                    <div class="h-full bg-green-500/80" style={{ width: `${(row.POSITIVE / row.total) * 100}%` }}></div>
-                                                    <div class="h-full bg-slate-500/80" style={{ width: `${(row.NEUTRAL / row.total) * 100}%` }}></div>
-                                                    <div class="h-full bg-red-500/80" style={{ width: `${(row.NEGATIVE / row.total) * 100}%` }}></div>
-                                                </div>
-
-                                                <div class="mt-2 grid grid-cols-2 gap-2 text-[8px] font-bold">
-                                                    <div class="flex flex-col">
-                                                        <span class="text-text_secondary opacity-40">VOLUME</span>
-                                                        <span class="text-text_primary">{row.total} PKT</span>
+                                <span class="text-[10px] font-black text-text_accent tracking-widest">SENTIMENT METER // SLIDER</span>
+                                
+                                <Show when={summary() && summary().status === 'success'} fallback={<div class="h-[120px] flex items-center justify-center text-text_secondary/20 font-black animate-pulse uppercase tracking-[0.5em]">SYNCING SENSORS...</div>}>
+                                    {(() => {
+                                        const data = summary().data;
+                                        const totalPos = data.reduce((acc, row) => acc + (row.POSITIVE || Math.round((row.total * row.positive_pct / 100) || 0)), 0);
+                                        const totalNeg = data.reduce((acc, row) => acc + (row.NEGATIVE || Math.round((row.total * row.negative_pct / 100) || 0)), 0);
+                                        const totalNeu = data.reduce((acc, row) => acc + (row.NEUTRAL || Math.round((row.total * row.neutral_pct / 100) || 0)), 0);
+                                        const totalArt = totalPos + totalNeg + totalNeu;
+                                        const score = totalArt > 0 ? ((totalPos - totalNeg) / totalArt) * 100 : 0;
+                                        const percentage = ((score + 100) / 200) * 100;
+                                        
+                                        return (
+                                            <div class="py-10 px-2">
+                                                <div class="relative h-2 bg-bg_main border border-border_main rounded-full overflow-visible">
+                                                    {/* Gradient Background */}
+                                                    <div class="absolute inset-0 flex rounded-full overflow-hidden opacity-30">
+                                                        <div class="flex-1 bg-red-500"></div>
+                                                        <div class="flex-1 bg-slate-500"></div>
+                                                        <div class="flex-1 bg-green-500"></div>
                                                     </div>
-                                                    <div class="flex flex-col items-end">
-                                                        <span class="text-text_secondary opacity-40">DOMINANCE</span>
-                                                        <span class={row.sentiment_status === 'positive' ? 'text-green-500' : 'text-red-500'}>{row.sentiment_status.toUpperCase()}</span>
+                                                    
+                                                    {/* Pointer */}
+                                                    <div 
+                                                        class="absolute -top-3 h-8 w-1 bg-text_accent shadow-[0_0_15px_#00ff41] z-10 transition-all duration-1000 ease-out"
+                                                        style={{ left: `${percentage}%`, transform: 'translateX(-50%)' }}
+                                                    >
+                                                        <div class="absolute -top-6 left-1/2 -translate-x-1/2 text-text_accent font-black text-[16px] whitespace-nowrap">
+                                                            {score.toFixed(1)}
+                                                        </div>
+                                                        <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[6px] border-t-text_accent"></div>
                                                     </div>
+                                                </div>
+                                                <div class="flex justify-between mt-4 text-[7px] text-text_secondary font-black tracking-[0.2em]">
+                                                    <span class="text-red-500">EXTREME FEAR</span>
+                                                    <span>NEUTRAL</span>
+                                                    <span class="text-green-500">EXTREME GREED</span>
                                                 </div>
                                             </div>
-                                        )}
-                                    </For>
+                                        );
+                                    })()}
+                                </Show>
+                            </div>
+
+                            {/* DISTRIBUTION WITH TABLE */}
+                            <div class="bg-bg_header/30 border border-border_main p-4 flex flex-col gap-4 shadow-2xl">
+                                <span class="text-[10px] font-black text-text_accent tracking-widest">DISTRIBUTION ANALYSIS</span>
+                                <div class="flex flex-col gap-4">
+                                    <div ref={pieChartRef} class="h-[180px] w-full"></div>
+                                    
+                                    <Show when={summary() && summary().status === 'success'}>
+                                        {(() => {
+                                            const data = summary().data;
+                                            const totalPos = data.reduce((acc, row) => acc + (row.POSITIVE || Math.round((row.total * row.positive_pct / 100) || 0)), 0);
+                                            const totalNeg = data.reduce((acc, row) => acc + (row.NEGATIVE || Math.round((row.total * row.negative_pct / 100) || 0)), 0);
+                                            const totalNeu = data.reduce((acc, row) => acc + (row.NEUTRAL || Math.round((row.total * row.neutral_pct / 100) || 0)), 0);
+                                            const totalArt = totalPos + totalNeg + totalNeu;
+                                            
+                                            const stats = [
+                                                { label: 'POSITIVE', count: totalPos, color: 'text-green-400', bg: 'bg-green-500/10' },
+                                                { label: 'NEGATIVE', count: totalNeg, color: 'text-red-400', bg: 'bg-red-500/10' },
+                                                { label: 'NEUTRAL', count: totalNeu, color: 'text-slate-400', bg: 'bg-slate-500/10' }
+                                            ];
+
+                                            return (
+                                                <div class="border-t border-border_main pt-4 space-y-1">
+                                                    <div class="grid grid-cols-3 text-[8px] font-black text-text_secondary mb-2 opacity-50 px-2">
+                                                        <span>SENTIMENT</span>
+                                                        <span class="text-right">COUNT</span>
+                                                        <span class="text-right">SHARE %</span>
+                                                    </div>
+                                                    <For each={stats}>
+                                                        {(s) => (
+                                                            <div class={`grid grid-cols-3 p-2 border border-transparent hover:border-border_main transition-colors ${s.bg}`}>
+                                                                <span class={`font-black ${s.color}`}>{s.label}</span>
+                                                                <span class="text-right font-mono">{s.count}</span>
+                                                                <span class="text-right font-mono text-text_accent">
+                                                                    {totalArt > 0 ? ((s.count / totalArt) * 100).toFixed(1) : '0.0'}%
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </For>
+                                                    <div class="grid grid-cols-3 p-2 bg-text_accent/5 border-t border-text_accent/20 mt-2">
+                                                        <span class="font-black text-text_primary">TOTAL</span>
+                                                        <span class="text-right font-mono">{totalArt}</span>
+                                                        <span class="text-right font-mono">100%</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+                                    </Show>
                                 </div>
-                             </Show>
+                            </div>
+                        </div>
+
+                        {/* RIGHT: CATEGORY BREAKDOWN */}
+                        <div class="col-span-12 xl:col-span-8 flex flex-col gap-6">
+                            <div class="bg-bg_header/30 border border-border_main p-4 shadow-2xl h-full">
+                                <span class="text-[10px] font-black text-text_accent tracking-widest">CATEGORY NET SCORE</span>
+                                <div ref={barChartRef} class="h-[450px] w-full"></div>
+                            </div>
                         </div>
                     </div>
                 </Show>
-
 
                 {/* RESEARCH CONTENT */}
                 <Show when={activeTab() === 'RESEARCH'}>
-                    <div class="flex flex-col gap-8 animate-in zoom-in-95 duration-500">
-                        {/* SEARCH CONSOLE */}
-                        <div class="bg-bg_header/40 border-2 border-text_accent/30 p-8 shadow-2xl relative overflow-hidden group rounded-sm">
-                            <div class="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="w-32 h-32 text-text_accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-                            </div>
-                            
-                            <div class="relative z-10 flex flex-col gap-6">
-                                <div class="flex items-center gap-3">
-                                    <div class="p-2 bg-text_accent/20 border border-text_accent">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-text_accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                                    </div>
-                                    <div>
-                                        <h2 class="text-xs font-black text-text_primary tracking-widest uppercase">TOPIC RESEARCH CONSOLE</h2>
-                                        <p class="text-[9px] text-text_secondary mt-1 tracking-widest opacity-60">CORRELATED TOPIC DETECTION // ANALYSIS SCAN</p>
-                                    </div>
-                                </div>
+                    <div class="flex flex-col gap-6 animate-in slide-in-from-bottom-4 duration-500">
 
-                                <form onSubmit={handleResearch} class="flex gap-4">
-                                    <input 
-                                        type="text" 
-                                        placeholder="ENTER TOPIC TO ANALYZE..."
-                                        value={keyword()}
-                                        onInput={(e) => setKeyword(e.target.value)}
-                                        class="flex-1 bg-bg_main border border-border_main px-6 py-4 text-xs font-bold focus:border-text_accent focus:outline-none focus:ring-4 focus:ring-text_accent/10 transition-all uppercase tracking-widest placeholder:opacity-30"
-                                    />
-                                    <button 
-                                        type="submit" 
-                                        disabled={isResearching()}
-                                        class={`px-12 py-4 bg-text_accent text-bg_main font-black tracking-widest hover:brightness-125 hover:shadow-[0_0_20px_rgba(0,255,65,0.4)] transition-all flex items-center gap-3 ${isResearching() ? 'opacity-50' : ''}`}
-                                    >
-                                        {isResearching() ? 'ANALYZING...' : 'RUN SEARCH'}
-                                        <svg xmlns="http://www.w3.org/2000/svg" class={`w-4 h-4 ${isResearching() ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
+                        {/* SEARCH BAR */}
+                        <form onSubmit={handleResearch} class="flex gap-2">
+                            <input
+                                type="text"
+                                value={keyword()}
+                                onInput={(e) => setKeyword(e.target.value)}
+                                placeholder="ENTER KEYWORD (e.g., 'FED', 'OIL', 'BI')..."
+                                class="flex-1 bg-bg_main border border-border_main p-3 text-text_primary placeholder-text_secondary focus:border-text_accent focus:outline-none transition-colors"
+                            />
+                            <button
+                                type="submit"
+                                disabled={isResearching()}
+                                class="px-6 py-3 bg-text_accent text-bg_main font-black tracking-widest hover:bg-text_accent/80 transition-colors disabled:opacity-50"
+                            >
+                                {isResearching() ? 'SCANNING...' : 'ANALYZE'}
+                            </button>
+                        </form>
 
-                        {/* RESEARCH LOADING PLACEHOLDER */}
-                        <Show when={isResearching()}>
-                            <div class="h-64 flex flex-col items-center justify-center border border-border_main py-10 opacity-50 animate-pulse">
-                                <div class="w-12 h-12 rounded-full border-4 border-t-text_accent animate-spin mb-4"></div>
-                                <div class="text-[12px] tracking-[0.5em] font-black">SEARCHING DATA...</div>
+                        <Show when={apiError()}>
+                            <div class="bg-red-500/10 border border-red-500 p-4 text-red-400">
+                                {apiError()}
                             </div>
                         </Show>
 
-                        {/* RESEARCH RESULTS */}
                         <Show when={researchResults()}>
-                            <div class="grid grid-cols-12 gap-6 animate-in fade-in slide-in-from-top-4 duration-700">
-                                
-                                {/* HEATMAP OVERVIEW */}
-                                <div class="col-span-12 xl:col-span-8 bg-bg_header/20 border border-border_main p-6 flex flex-col gap-4 shadow-xl h-[400px]">
-                                    <div class="flex justify-between items-center mb-2">
-                                        <span class="text-[10px] font-black text-text_accent tracking-widest">SENTIMENT HEATMAP // {keyword()}</span>
-                                        <span class="text-[8px] opacity-40 uppercase">SYNC v3</span>
-                                    </div>
-                                    <div ref={heatmapChartRef} class="flex-1 w-full"></div>
+                            <div class="grid grid-cols-12 gap-6">
+                                <div class="col-span-12 xl:col-span-8 bg-bg_header/30 border border-border_main p-4 shadow-2xl">
+                                    <span class="text-[10px] font-black text-text_accent tracking-widest">SENTIMENT HEATMAP // {keyword().toUpperCase()}</span>
+                                    <div ref={heatmapChartRef} class="h-[400px] w-full"></div>
                                 </div>
-
-                                {/* QUICK STAT                                 <div class="col-span-12 xl:col-span-4 flex flex-col gap-4">
-                                    <div class="flex-1 bg-bg_main border border-border_main p-6 flex flex-col items-center justify-center relative group overflow-hidden">
-                                        <div class="absolute inset-0 bg-green-500/5 group-hover:bg-green-500/10 transition-colors"></div>
-                                        <span class="text-[12px] font-black text-green-500 mb-2 tracking-widest">POSITIVE ARTICLES</span>
-                                        <span class="text-5xl font-black text-text_primary">{researchResults().sentiment_dist.POSITIVE}</span>
-                                        <span class="mt-4 text-[8px] opacity-30">TRUST LEVEL: HIGH</span>
+                                <div class="col-span-12 xl:col-span-4 flex flex-col gap-4">
+                                    <div class="bg-bg_header/30 border border-border_main p-4 shadow-2xl">
+                                        <span class="text-[10px] font-black text-text_accent tracking-widest">TOP ARTICLES</span>
+                                        <div class="mt-2 space-y-2 max-h-[400px] overflow-y-auto win-scroll">
+                                            <For each={researchResults().articles?.slice(0, 10) || []}>
+                                                {(article) => (
+                                                    <a href={article.link} target="_blank" class="block p-2 border border-border_main hover:border-text_accent transition-colors group">
+                                                        <div class="flex items-center gap-2 mb-1">
+                                                            <span class={`text-[8px] px-1.5 py-0.5 font-black ${article.sentiment === 'POSITIVE' ? 'bg-green-500/20 text-green-400' : article.sentiment === 'NEGATIVE' ? 'bg-red-500/20 text-red-400' : 'bg-slate-500/20 text-slate-400'}`}>
+                                                                {article.sentiment}
+                                                            </span>
+                                                            <span class="text-[8px] text-text_secondary">{article.category}</span>
+                                                        </div>
+                                                        <p class="text-[10px] text-text_primary group-hover:text-text_accent transition-colors line-clamp-2">{article.title}</p>
+                                                        <p class="text-[8px] text-text_secondary mt-1">{article.pubDate}</p>
+                                                    </a>
+                                                )}
+                                            </For>
+                                        </div>
                                     </div>
-                                    <div class="flex-1 bg-bg_main border border-border_main p-6 flex flex-col items-center justify-center relative group overflow-hidden">
-                                        <div class="absolute inset-0 bg-red-500/5 group-hover:bg-red-500/10 transition-colors"></div>
-                                        <span class="text-[12px] font-black text-red-500 mb-2 tracking-widest">NEGATIVE ARTICLES</span>
-                                        <span class="text-5xl font-black text-text_primary">{researchResults().sentiment_dist.NEGATIVE}</span>
-                                        <span class="mt-4 text-[8px] opacity-30">ALERT LEVEL: MODERATE</span>
-                                    </div>
-                                </div></div>
-
-
-
-                                {/* CATEGORY BAR CHART IN RESEARCH */}
-                                <div class="col-span-12 xl:col-span-4 bg-bg_header/20 border border-border_main p-4 h-[300px]">
-                                    <div class="flex justify-between items-center mb-2">
-                                        <span class="text-[10px] font-black text-text_primary tracking-widest">GLOBAL CATEGORY</span>
-                                    </div>
-                                    <div ref={barChartResearchRef} class="w-full h-full"></div>
                                 </div>
-
-                                {/* RECENT DOCS GRID */}
-                                <div class="col-span-12">
-                                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        <For each={researchResults().articles.slice(0, 50)}>
-                                            {(art) => (
-                                                <div 
-                                                    onClick={() => window.open(art.link, '_blank')}
-                                                    class="p-4 bg-bg_header/10 border-l-2 hover:bg-bg_header/30 hover:translate-x-1 cursor-pointer transition-all flex flex-col gap-2 group"
-                                                    style={{ "border-color": art.sentiment === 'POSITIVE' ? '#10b981' : art.sentiment === 'NEGATIVE' ? '#ef4444' : '#64748b' }}
-                                                >
-                                                    <div class="flex justify-between items-center opacity-40 group-hover:opacity-100 transition-opacity">
-                                                        <span class="text-[7px] font-black tracking-widest">{art.category}</span>
-                                                        <span class="text-[7px]">{new Date(art.pubDate).toLocaleString()}</span>
-                                                    </div>
-                                                    <h4 class="text-[10px] font-bold leading-relaxed line-clamp-2 uppercase group-hover:text-text_accent">
-                                                        {art.title}
-                                                    </h4>
-                                                    <div class="mt-2 flex items-center justify-between">
-                                                        <span class={`text-[8px] font-black px-2 py-0.5 ${art.sentiment === 'POSITIVE' ? 'bg-green-500/20 text-green-500' : art.sentiment === 'NEGATIVE' ? 'bg-red-500/20 text-red-500' : 'bg-slate-500/20 text-slate-400'}`}>
-                                                            {art.sentiment}
-                                                        </span>
-                                                        <span class="text-[8px] opacity-20">REF_ID: #{art.id}</span>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </For>
-                                     </div>
-                                </div>
-
                             </div>
                         </Show>
-
-                         <Show when={!researchResults() && !isResearching()}>
-                                     <div class="h-64 flex flex-col items-center justify-center border border-border_main/30 border-dashed opacity-20 gap-4">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="w-16 h-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-                                        <span class="text-sm font-black tracking-[1em]">AWAITING INPUT</span>
-                                     </div>
-                                 </Show>
                     </div>
                 </Show>
-            </div>
-
-            {/* FOOTER STATUS */}
-            <div class="flex-shrink-0 h-10 px-6 bg-bg_header border-t border-border_main flex items-center justify-between shadow-2xl z-40 relative">
-                <div class="flex gap-10 text-[8px] font-bold text-text_secondary tracking-[0.4em]">
-                    <span class="flex items-center gap-2"><div class="w-1 h-1 bg-green-500 rounded-full"></div> NEURAL_ENGINE: v2.4</span>
-                    <span class="flex items-center gap-2"><div class="w-1 h-1 bg-text_accent rounded-full"></div> ANALYTICS: ACTIVE</span>
-                </div>
-                <div class="text-[9px] font-black text-text_primary tracking-[0.3em] opacity-40 italic">
-                    ENQY TERMINAL // SENTIMENT ANALYTICS
-                </div>
             </div>
         </div>
     );

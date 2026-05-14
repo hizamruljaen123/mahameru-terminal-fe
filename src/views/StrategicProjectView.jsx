@@ -37,20 +37,23 @@ export default function StrategicProjectView(props) {
     const fetchAllAssets = async () => {
         setIsLoading(true);
         try {
+            // Pagination: use high limit to fetch all assets (refineries, LNG, offshore, terminals)
+            const limit = 2000;
+            const offset = 0;
             const [refs, lng, off, terms] = await Promise.all([
-                fetch(`${import.meta.env.VITE_OIL_REFINERY_API}/api/refineries`).then(r => r.json()),
-                fetch(`${import.meta.env.VITE_OIL_REFINERY_API}/api/lng-facilities?limit=500`).then(r => r.json()),
-                fetch(`${import.meta.env.VITE_OIL_REFINERY_API}/api/offshore-platforms?limit=500`).then(r => r.json()),
-                fetch(`${import.meta.env.VITE_OIL_REFINERY_API}/api/petroleum-terminals?limit=500`).then(r => r.json())
+                fetch(`${import.meta.env.VITE_OIL_REFINERY_API}/api/refineries?limit=${limit}&offset=${offset}`).then(r => r.json()),
+                fetch(`${import.meta.env.VITE_OIL_REFINERY_API}/api/lng-facilities?limit=${limit}`).then(r => r.json()),
+                fetch(`${import.meta.env.VITE_OIL_REFINERY_API}/api/offshore-platforms?limit=${limit}`).then(r => r.json()),
+                fetch(`${import.meta.env.VITE_OIL_REFINERY_API}/api/petroleum-terminals?limit=${limit}`).then(r => r.json())
             ]);
 
             const normalized = [
-                ...(refs.data || []).map(r => ({ ...r, category: 'REFINERY', name: r.nama_kilang, country: r.negara, capacity: r.kapasitas_bbl_per_hari || 0 })),
-                ...(lng.data || []).map(l => ({ ...l, category: 'LNG', name: l.fac_name, country: l.country, capacity: l.liq_capacity_bpd || 0 })),
-                ...(off.data || []).map(o => ({ ...o, category: 'OFFSHORE', name: o.fac_name, country: o.country, capacity: 0 })),
-                ...(terms.data || []).map(t => ({ ...t, category: 'TERMINAL', name: t.fac_name, country: t.country, capacity: t.liq_capacity_bpd || 0 }))
+                ...(refs.data || refs.results || []).map(r => ({ ...r, category: 'REFINERY', name: r.nama_kilang, country: r.negara, capacity: r.kapasitas_bbl_per_hari || 0 })),
+                ...(lng.data || lng.results || []).map(l => ({ ...l, category: 'LNG', name: l.fac_name, country: l.country, capacity: l.liq_capacity_bpd || 0 })),
+                ...(off.data || off.results || []).map(o => ({ ...o, category: 'OFFSHORE', name: o.fac_name, country: o.country, capacity: 0 })),
+                ...(terms.data || terms.results || []).map(t => ({ ...t, category: 'TERMINAL', name: t.fac_name, country: t.country, capacity: t.liq_capacity_bpd || 0 }))
             ];
-            
+
             setAssets(normalized);
         } catch (e) { console.error("Data acquisition failed", e); }
         finally { setIsLoading(false); }

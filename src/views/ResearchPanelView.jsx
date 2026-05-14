@@ -2,6 +2,12 @@ import { createSignal, onMount, onCleanup, For, Show, createEffect } from 'solid
 import * as echarts from 'echarts';
 import ComparativeView from './research-panel/comparative/ComparativeView';
 import { optimizeAIData } from '../utils/aiDataOptimizer';
+import { AVAILABLE_MODELS } from '../lib/models/modelRegistry';
+import ModelSelector from '../components/shared/ModelSelector';
+import LanguageSelector from '../components/shared/LanguageSelector';
+
+
+
 
 // We'll dynamically load Marked.js for markdown parsing
 const loadMarked = () => {
@@ -114,18 +120,8 @@ export default function ResearchPanelView() {
         1: '', 2: '', 3: '', 4: '', 5: ''
     });
 
-    const [availableModels, setAvailableModels] = createSignal([
-        { "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash", "provider": "DeepSeek" },
-        { "id": "deepseek-v4-pro", "name": "DeepSeek V4 Pro", "provider": "DeepSeek" },
-        { "id": "deepseek-chat", "name": "DeepSeek Chat", "provider": "DeepSeek" },
-        { "id": "deepseek-reasoner", "name": "DeepSeek Reasoner (R1)", "provider": "DeepSeek" },
-        { "id": "deepseek-r1", "name": "DeepSeek R1", "provider": "DeepSeek" },
-        { "id": "gpt-5.5", "name": "GPT 5.5", "provider": "OpenAI" },
-        { "id": "gpt-5.4-mini", "name": "GPT 5.4-Mini", "provider": "OpenAI" },
-        { "id": "kimi-k2.5", "name": "Kimi k2.5", "provider": "Moonshot AI" },
-        { "id": "minimax-m2.7", "name": "Minimax m2.7", "provider": "Minimax" },
-        { "id": "gemini-flash-latest", "name": "Gemini 3 Flash", "provider": "Google" },
-    ]);
+    const [availableModels, setAvailableModels] = createSignal(AVAILABLE_MODELS);
+
 
     let myChart;
     let rsiChart;
@@ -603,34 +599,11 @@ export default function ResearchPanelView() {
 
     return (
         <div class="flex-1 flex flex-col bg-bg_main overflow-hidden text-text_primary text-[10px] relative">
-
-            {/* Header + Mode Tabs */}
-            <div class="px-6 py-3 bg-bg_sidebar border-b border-border_main flex justify-between items-center shrink-0">
-                <div class="flex items-center gap-4">
-                    <h2 class="text-[13px] font-black text-text_accent tracking-widest uppercase">Intelligence Terminal</h2>
-                </div>
-                <div class="flex items-center gap-1 bg-black/40 p-1 rounded border border-white/5">
-                    <button
-                        onClick={() => setMode('single')}
-                        class={`px-4 py-1.5 text-[9px] font-black tracking-widest rounded-sm transition-all ${mode() === 'single' ? 'bg-text_accent text-bg_main' : 'text-white/30 hover:text-white'
-                            }`}
-                    >
-                        Single Analysis
-                    </button>
-                    <button
-                        onClick={() => setMode('comparative')}
-                        class={`px-4 py-1.5 text-[9px] font-black tracking-widest rounded-sm transition-all ${mode() === 'comparative' ? 'bg-text_accent text-bg_main' : 'text-white/30 hover:text-white'
-                            }`}
-                    >
-                        ⊕ Comparative
-                    </button>
-                </div>
-            </div>
-
             {/* Route to views */}
             <Show when={mode() === 'comparative'}>
-                <ComparativeView />
+                <ComparativeView mode={mode} setMode={setMode} />
             </Show>
+
 
             <Show when={mode() === 'single'}>
                 {/* Progress Bar */}
@@ -641,235 +614,309 @@ export default function ResearchPanelView() {
                 </Show>
 
                 <div class="flex-1 flex overflow-hidden">
-                    {/* Left Sidebar: Context & Data Modules */}
-                    <div class="w-[300px] border-r border-border_main flex flex-col bg-bg_sidebar overflow-y-auto win-scroll p-4 gap-4 shrink-0">
+                    <div class="w-[320px] border-r border-border_main flex flex-col bg-[#05070a] overflow-y-visible shrink-0 relative">
+                        {/* Sidebar Header */}
+                        <div class="p-6 pb-2">
+                            <h2 class="text-[10px] font-black text-text_accent tracking-[0.5em] uppercase opacity-80 mb-6">
+                                Research Terminal
+                            </h2>
 
-                        <div class="glass-panel p-3 flex flex-col gap-3">
-                            <h3 class="text-[8px] font-black text-text_accent/50 tracking-[0.4em] border-b border-border_main pb-1">
-                                Asset Context
-                            </h3>
-                            <form onSubmit={handleSearch} class="flex flex-col gap-3">
-                                <div class="relative">
-                                    <label class="text-[8px] text-text_secondary font-black block mb-1">Enter Ticker</label>
-                                    <input
-                                        type="text"
-                                        class="w-full bg-black border border-border_main px-3 py-2 text-[11px] font-mono text-white outline-none focus:border-text_accent uppercase"
-                                        placeholder="e.g., BBCA.JK, AAPL"
-                                        value={symbol()}
-                                        onInput={(e) => setSymbol(e.target.value.toUpperCase())}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                                e.preventDefault();
-                                                fetchSuggestions(symbol());
-                                            }
-                                        }}
-                                        disabled={loading()}
-                                    />
-                                    <Show when={recommendations().length > 0}>
-                                        <div class="absolute z-50 bg-bg_sidebar border border-border_main w-full max-h-48 overflow-y-auto mt-1 flex flex-col shadow-2xl win-scroll">
-                                            <div class="bg-white/5 px-3 py-1 text-[7px] font-black text-white/30 uppercase tracking-[0.2em]">Select Match</div>
-                                            <For each={recommendations()}>
-                                                {(rec) => (
-                                                    <button
-                                                        type="button"
-                                                        class="text-left px-3 py-2 text-[9px] hover:bg-text_accent hover:text-bg_main font-mono border-b border-border_main/30 text-white transition-colors flex flex-col gap-0.5"
-                                                        onClick={() => {
-                                                            setSymbol(rec.symbol);
-                                                            setRecommendations([]);
-                                                        }}
-                                                    >
-                                                        <div class="flex items-center justify-between">
-                                                            <span class="font-black text-text_accent uppercase">{rec.symbol}</span>
-                                                            <span class="text-[7px] opacity-40 italic">{rec.typeDisp || rec.quoteType || rec.type || 'Equity'}</span>
-                                                        </div>
-                                                        <div class="text-[10px] font-bold text-white/90 truncate uppercase tracking-tight">
-                                                            {rec.shortname || rec.longname || rec.name || 'Unknown Company'}
-                                                        </div>
-                                                    </button>
-                                                )}
-                                            </For>
-                                        </div>
-                                    </Show>
-                                </div>
-                                {/* AI Settings - Compact */}
-                                <div class="glass-panel p-2 flex flex-col gap-2">
-                                    <div class="grid grid-cols-2 gap-2">
-                                        <div class="flex flex-col gap-1">
-                                            <label class="text-[7px] font-black text-text_accent/50 uppercase tracking-widest">Engine</label>
-                                            <select
-                                                class="bg-black border border-border_main px-2 py-1 text-[9px] font-mono text-white outline-none focus:border-text_accent"
-                                                value={model()}
-                                                onChange={(e) => setModel(e.target.value)}
-                                                disabled={loading()}
-                                            >
-                                                <For each={availableModels()}>
-                                                    {(m) => <option value={m.id}>{m.name || m.id}</option>}
-                                                </For>
-                                            </select>
-                                        </div>
-                                        <div class="flex flex-col gap-1">
-                                            <label class="text-[7px] font-black text-text_accent/50 uppercase tracking-widest">Language</label>
-                                            <select
-                                                class="bg-black border border-border_main px-2 py-1 text-[9px] font-mono text-white outline-none focus:border-text_accent"
-                                                value={language()}
-                                                onChange={(e) => setLanguage(e.target.value)}
-                                                disabled={loading()}
-                                            >
-                                                <option value="en">EN</option>
-                                                <option value="id">ID</option>
-                                            </select>
-                                        </div>
-                                    </div>
-
-                                    <div class="flex items-center justify-between bg-white/5 p-1.5 border border-white/5 rounded-sm">
-                                        <div class="flex flex-col">
-                                            <span class="text-[8px] font-black text-text_accent leading-none uppercase">Token Saver</span>
-                                            <span class="text-[6px] text-white/20 uppercase">Save ~65% Tokens</span>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setCaveman(!caveman())}
-                                            class={`w-7 h-3.5 rounded-full transition-all relative ${caveman() ? 'bg-text_accent' : 'bg-white/10'}`}
-                                        >
-                                            <div class={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-all ${caveman() ? 'left-4' : 'left-0.5'}`}></div>
-                                        </button>
-                                    </div>
-                                </div>
-                                {/* Institutional Command Hub */}
-                                <div class="glass-panel p-3 flex flex-col gap-3">
-                                    <h3 class="text-[8px] font-black text-text_accent/50 tracking-[0.4em] border-b border-border_main pb-2 uppercase">
-                                        Command Hub
-                                    </h3>
-                                    <div class="grid grid-cols-3 gap-2">
-                                        <button
-                                            type="submit"
-                                            disabled={loading() || !symbol()}
-                                            class={`flex flex-col items-center justify-center gap-1.5 p-2 rounded border transition-all ${loading() ? 'bg-text_accent/20 border-text_accent animate-pulse' : 'bg-white/5 border-white/10 hover:border-text_accent/50 hover:bg-white/10'} disabled:opacity-30 group`}
-                                            title="Start Analysis"
-                                        >
-                                            <svg class={`w-4 h-4 ${loading() ? 'text-text_accent animate-spin' : 'text-white/60 group-hover:text-text_accent'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                                            </svg>
-                                            <span class="text-[7px] font-black uppercase tracking-tighter text-white/40 group-hover:text-white">Analyze</span>
-                                        </button>
-
-
-                                        <button
-                                            type="button"
-                                            disabled={loading() || !reports()[5]}
-                                            onClick={handleExportMD}
-                                            class="flex flex-col items-center justify-center gap-1.5 p-2 rounded border bg-white/5 border-white/10 hover:border-emerald-400/50 hover:bg-emerald-400/10 transition-all disabled:opacity-30 group"
-                                            title="Export Markdown"
-                                        >
-                                            <svg class="w-4 h-4 text-white/60 group-hover:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                            </svg>
-                                            <span class="text-[7px] font-black uppercase tracking-tighter text-white/40 group-hover:text-white">MD</span>
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            onClick={() => { setSymbol(''); setFullData(null); setReports({}); }}
-                                            disabled={loading()}
-                                            class="flex flex-col items-center justify-center gap-1.5 p-2 rounded border bg-white/5 border-white/10 hover:border-blue-400/50 hover:bg-blue-400/10 transition-all disabled:opacity-30 group"
-                                            title="New Research"
-                                        >
-                                            <svg class="w-4 h-4 text-white/60 group-hover:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                            <span class="text-[7px] font-black uppercase tracking-tighter text-white/40 group-hover:text-white">New</span>
-                                        </button>
-                                        
-                                        <button
-                                            type="button"
-                                            onClick={() => setActiveView('history')}
-                                            class="flex flex-col items-center justify-center gap-1.5 p-2 rounded border bg-white/5 border-white/10 hover:border-amber-400/50 hover:bg-amber-400/10 transition-all group"
-                                            title="History"
-                                        >
-                                            <svg class="w-4 h-4 text-white/60 group-hover:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                            <span class="text-[7px] font-black uppercase tracking-tighter text-white/40 group-hover:text-white">History</span>
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            disabled={loading() || !reports()[1]}
-                                            onClick={handleExportZIP}
-                                            class="flex flex-col items-center justify-center gap-1.5 p-2 rounded border bg-white/5 border-white/10 hover:border-amber-400/50 hover:bg-amber-400/10 transition-all disabled:opacity-30 group"
-                                            title="Export ZIP"
-                                        >
-                                            <svg class="w-4 h-4 text-white/60 group-hover:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                                            </svg>
-                                            <span class="text-[7px] font-black uppercase tracking-tighter text-white/40 group-hover:text-white">ZIP</span>
-                                        </button>
-
-                                        <div class="relative group">
-                                            <input
-                                                type="file"
-                                                accept=".zip"
-                                                onChange={handleLoadZIP}
-                                                disabled={loading()}
-                                                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed"
-                                            />
-                                            <div class="flex flex-col items-center justify-center gap-1.5 p-2 rounded border bg-white/5 border-white/10 group-hover:border-emerald-400/50 group-hover:bg-emerald-400/10 transition-all opacity-100 group-disabled:opacity-30 h-full">
-                                                <svg class="w-4 h-4 text-white/60 group-hover:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                                                </svg>
-                                                <span class="text-[7px] font-black uppercase tracking-tighter text-white/40 group-hover:text-white">Load</span>
-                                            </div>
-                                        </div>
-
-                                        <button
-                                            type="button"
-                                            onClick={() => window.print()}
-                                            class="flex flex-col items-center justify-center gap-1.5 p-2 rounded border bg-white/5 border-white/10 hover:border-sky-400/50 hover:bg-sky-400/10 transition-all group"
-                                            title="Print Report"
-                                        >
-                                            <svg class="w-4 h-4 text-white/60 group-hover:text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                                            </svg>
-                                            <span class="text-[7px] font-black uppercase tracking-tighter text-white/40 group-hover:text-white">Print</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </form>
+                            {/* Analysis Mode Switcher */}
+                            <div class="flex items-center gap-1 bg-white/[0.03] p-1 rounded-xl border border-white/5 mb-2">
+                                <button
+                                    onClick={() => setMode('single')}
+                                    class={`flex-1 px-3 py-2 text-[8px] font-black tracking-widest rounded-lg transition-all ${mode() === 'single' ? 'bg-text_accent text-bg_main shadow-[0_0_15px_rgba(34,211,238,0.2)]' : 'text-white/30 hover:text-white hover:bg-white/5'}`}
+                                >
+                                    SINGLE
+                                </button>
+                                <button
+                                    onClick={() => setMode('comparative')}
+                                    class={`flex-1 px-3 py-2 text-[8px] font-black tracking-widest rounded-lg transition-all ${mode() === 'comparative' ? 'bg-text_accent text-bg_main shadow-[0_0_15px_rgba(34,211,238,0.2)]' : 'text-white/30 hover:text-white hover:bg-white/5'}`}
+                                >
+                                    COMPARE
+                                </button>
+                            </div>
                         </div>
 
-                        <Show when={reports()[1] || fullData()}>
-                            <div class="glass-panel p-3">
-                                <h3 class="text-[9px] font-black text-text_accent tracking-widest border-b border-border_main pb-1 mb-2">Report Bookmarks</h3>
-                                <div class="flex flex-col gap-1.5 text-[10px] font-bold text-text_secondary">
-                                    <a href="#ai-stage-1" class="hover:text-text_accent transition-colors flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-text_accent"></span> 1. Business Overview</a>
-                                    <a href="#ai-stage-2" class="hover:text-text_accent transition-colors flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-text_accent"></span> 2. Fundamentals Deep-Dive</a>
-                                    <a href="#ai-stage-3" class="hover:text-text_accent transition-colors flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-text_accent"></span> 3. Technical Setup</a>
-                                    <a href="#ai-stage-4" class="hover:text-text_accent transition-colors flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-text_accent"></span> 4. Catalyst Highlights</a>
-                                    <a href="#ai-stage-5" class="hover:text-text_accent transition-colors flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-text_accent"></span> 5. Final Recommendations</a>
-                                </div>
-                            </div>
-                        </Show>
 
-                        <div class="glass-panel p-3 flex flex-col gap-2">
-                            <h3 class="text-[8px] font-black text-text_accent/50 tracking-[0.4em] border-b border-border_main pb-1 flex justify-between items-center">
-                                Quick History
-                                <button onClick={() => setActiveView('history')} class="text-text_accent hover:underline text-[7px] uppercase tracking-widest">View All</button>
-                            </h3>
-                            <div class="flex flex-col gap-1.5">
-                                <For each={history().slice(0, 3)}>
-                                    {(item) => (
-                                        <div class="bg-black/40 border border-white/5 p-2 rounded flex flex-col gap-1 cursor-pointer hover:border-text_accent/30 transition-all" onClick={() => loadHistoryItem(item)}>
-                                            <div class="flex items-center justify-between">
-                                                <span class="text-[8px] font-black text-white/80">{item.symbol}</span>
-                                                <span class="text-[6px] text-white/20">{new Date(item.timestamp).toLocaleDateString()}</span>
-                                            </div>
+                        <div class="flex-1 overflow-y-auto win-scroll px-6 flex flex-col gap-8 pb-10">
+                            {/* SECTION 1: ASSET DISCOVERY */}
+                            <section class="flex flex-col gap-4">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[8px] font-black text-white/30 uppercase tracking-[0.2em]">Asset Discovery</span>
+                                    <div class="h-px flex-1 bg-white/5 ml-4"></div>
+                                </div>
+                                
+                                <form onSubmit={handleSearch} class="flex flex-col gap-3">
+                                    <div class="relative group">
+                                        <div class="absolute inset-y-0 left-3 flex items-center pointer-events-none text-white/20 group-focus-within:text-text_accent transition-colors">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+                                            </svg>
                                         </div>
-                                    )}
-                                </For>
-                                <Show when={history().length === 0}>
-                                    <div class="text-[7px] text-white/10 uppercase italic p-2">No history recorded</div>
-                                </Show>
+                                        <input
+                                            type="text"
+                                            class="w-full bg-white/[0.03] border border-white/10 rounded-lg pl-10 pr-4 py-3 text-[12px] font-bold text-white placeholder:text-white/10 outline-none focus:border-text_accent/50 focus:bg-white/[0.05] transition-all uppercase tracking-wider"
+                                            placeholder="ENTER TICKER..."
+                                            value={symbol()}
+                                            onInput={(e) => setSymbol(e.target.value.toUpperCase())}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    fetchSuggestions(symbol());
+                                                }
+                                            }}
+                                            disabled={loading()}
+                                        />
+                                        
+                                        <Show when={recommendations().length > 0}>
+                                            <div class="absolute z-50 left-0 right-0 top-full mt-2 bg-[#0d1117] border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                                                <div class="px-4 py-2 bg-white/5 border-b border-white/5 flex items-center justify-between">
+                                                    <span class="text-[7px] font-black text-white/40 uppercase tracking-widest">Matched Assets</span>
+                                                    <button onClick={() => setRecommendations([])} class="text-white/20 hover:text-white">
+                                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                                            <path d="M18 6L6 18M6 6l12 12"/>
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                                <div class="max-h-60 overflow-y-auto win-scroll">
+                                                    <For each={recommendations()}>
+                                                        {(rec) => (
+                                                            <button
+                                                                type="button"
+                                                                class="w-full text-left px-4 py-3 hover:bg-text_accent group transition-all border-b border-white/[0.03] last:border-0"
+                                                                onClick={() => {
+                                                                    setSymbol(rec.symbol);
+                                                                    setRecommendations([]);
+                                                                }}
+                                                            >
+                                                                <div class="flex items-center justify-between mb-0.5">
+                                                                    <span class="text-[11px] font-black text-text_accent group-hover:text-bg_main uppercase tracking-wider">{rec.symbol}</span>
+                                                                    <span class="text-[7px] font-bold text-white/20 group-hover:text-bg_main/50 uppercase tracking-tighter bg-white/5 group-hover:bg-bg_main/10 px-1.5 py-0.5 rounded-sm">
+                                                                        {rec.typeDisp || rec.quoteType || 'Equity'}
+                                                                    </span>
+                                                                </div>
+                                                                <div class="text-[10px] font-bold text-white/60 group-hover:text-bg_main/80 truncate uppercase tracking-tight">
+                                                                    {rec.shortname || rec.longname || rec.name || 'Unknown Entity'}
+                                                                </div>
+                                                            </button>
+                                                        )}
+                                                    </For>
+                                                </div>
+                                            </div>
+                                        </Show>
+                                    </div>
+                                </form>
+                            </section>
+
+                            {/* SECTION 2: AI ORCHESTRATION */}
+                            <section class="flex flex-col gap-5 p-5 rounded-2xl bg-white/[0.02] border border-white/5 relative group/settings">
+
+                                <div class="absolute top-0 right-0 p-3 opacity-10 group-hover/settings:opacity-30 transition-opacity">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                        <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41M12 7a5 5 0 100 10 5 5 0 000-10z"/>
+                                    </svg>
+                                </div>
+
+                                <div class="flex flex-col gap-1.5">
+                                    <label class="text-[8px] font-black text-text_accent tracking-[0.2em] uppercase">Intelligence Engine</label>
+                                    <ModelSelector
+                                        selectedModelId={model()}
+                                        availableModels={availableModels()}
+                                        onSelect={(m) => setModel(m.id)}
+                                    />
+                                </div>
+
+                                <div class="flex flex-col gap-1.5">
+                                    <label class="text-[8px] font-black text-white/30 tracking-[0.2em] uppercase">Output Language</label>
+                                    <LanguageSelector
+                                        selectedLanguage={language()}
+                                        onSelect={(lang) => setLanguage(lang)}
+                                        disabled={loading()}
+                                    />
+                                </div>
+
+
+                                <div class="flex items-center justify-between pt-2 border-t border-white/5 mt-1">
+                                    <div class="flex flex-col">
+                                        <span class="text-[9px] font-black text-white/80 uppercase leading-none mb-0.5">Token Optimizer</span>
+                                        <span class="text-[7px] text-text_accent font-bold uppercase tracking-widest">Active Reduction</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCaveman(!caveman())}
+                                        class={`w-9 h-5 rounded-full transition-all relative ${caveman() ? 'bg-text_accent' : 'bg-white/10'}`}
+                                    >
+                                        <div class={`absolute top-1 w-3 h-3 rounded-full bg-white shadow-sm transition-all ${caveman() ? 'left-5' : 'left-1'}`}></div>
+                                    </button>
+                                </div>
+                            </section>
+
+                            {/* SECTION 3: COMMAND HUB */}
+                            <section class="flex flex-col gap-4">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[8px] font-black text-white/30 uppercase tracking-[0.2em]">Command Hub</span>
+                                    <div class="h-px flex-1 bg-white/5 ml-4"></div>
+                                </div>
+
+                                <div class="grid grid-cols-3 gap-3">
+                                    <button
+                                        onClick={() => handleSearch({ preventDefault: () => {} })}
+                                        disabled={loading() || !symbol()}
+                                        class={`group flex flex-col items-center justify-center gap-2 p-3 rounded-xl border transition-all ${loading() ? 'bg-text_accent/10 border-text_accent animate-pulse' : 'bg-white/[0.03] border-white/10 hover:border-text_accent hover:bg-text_accent/5'} disabled:opacity-20`}
+                                    >
+                                        <div class={`p-2 rounded-lg transition-colors ${loading() ? 'bg-text_accent/20 text-text_accent' : 'bg-white/5 text-white/40 group-hover:text-text_accent group-hover:bg-text_accent/10'}`}>
+                                            <svg class={`w-5 h-5 ${loading() ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                            </svg>
+                                        </div>
+                                        <span class="text-[8px] font-black uppercase tracking-widest text-white/40 group-hover:text-white">Analyze</span>
+                                    </button>
+
+                                    <button
+                                        onClick={() => { setSymbol(''); setFullData(null); setReports({}); }}
+                                        disabled={loading()}
+                                        class="group flex flex-col items-center justify-center gap-2 p-3 rounded-xl border bg-white/[0.03] border-white/10 hover:border-blue-400 hover:bg-blue-400/5 transition-all disabled:opacity-20"
+                                    >
+                                        <div class="p-2 rounded-lg bg-white/5 text-white/40 group-hover:text-blue-400 group-hover:bg-blue-400/10 transition-colors">
+                                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                                            </svg>
+                                        </div>
+                                        <span class="text-[8px] font-black uppercase tracking-widest text-white/40 group-hover:text-white">New</span>
+                                    </button>
+
+                                    <button
+                                        onClick={() => setActiveView('history')}
+                                        class="group flex flex-col items-center justify-center gap-2 p-3 rounded-xl border bg-white/[0.03] border-white/10 hover:border-amber-400 hover:bg-amber-400/5 transition-all"
+                                    >
+                                        <div class="p-2 rounded-lg bg-white/5 text-white/40 group-hover:text-amber-400 group-hover:bg-amber-400/10 transition-colors">
+                                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                        </div>
+                                        <span class="text-[8px] font-black uppercase tracking-widest text-white/40 group-hover:text-white">History</span>
+                                    </button>
+
+                                    <button
+                                        onClick={handleExportMD}
+                                        disabled={loading() || !reports()[1]}
+                                        class="group flex flex-col items-center justify-center gap-2 p-3 rounded-xl border bg-white/[0.03] border-white/10 hover:border-emerald-400 hover:bg-emerald-400/5 transition-all disabled:opacity-20"
+                                    >
+                                        <div class="p-2 rounded-lg bg-white/5 text-white/40 group-hover:text-emerald-400 group-hover:bg-emerald-400/10 transition-colors">
+                                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                        </div>
+                                        <span class="text-[8px] font-black uppercase tracking-widest text-white/40 group-hover:text-white">MD</span>
+                                    </button>
+
+                                    <button
+                                        onClick={handleExportZIP}
+                                        disabled={loading() || !reports()[1]}
+                                        class="group flex flex-col items-center justify-center gap-2 p-3 rounded-xl border bg-white/[0.03] border-white/10 hover:border-purple-400 hover:bg-purple-400/5 transition-all disabled:opacity-20"
+                                    >
+                                        <div class="p-2 rounded-lg bg-white/5 text-white/40 group-hover:text-purple-400 group-hover:bg-purple-400/10 transition-colors">
+                                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                                            </svg>
+                                        </div>
+                                        <span class="text-[8px] font-black uppercase tracking-widest text-white/40 group-hover:text-white">ZIP</span>
+                                    </button>
+
+                                    <button
+                                        onClick={() => window.print()}
+                                        disabled={!reports()[1]}
+                                        class="group flex flex-col items-center justify-center gap-2 p-3 rounded-xl border bg-white/[0.03] border-white/10 hover:border-sky-400 hover:bg-sky-400/5 transition-all disabled:opacity-20"
+                                    >
+                                        <div class="p-2 rounded-lg bg-white/5 text-white/40 group-hover:text-sky-400 group-hover:bg-sky-400/10 transition-colors">
+                                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                            </svg>
+                                        </div>
+                                        <span class="text-[8px] font-black uppercase tracking-widest text-white/40 group-hover:text-white">Print</span>
+                                    </button>
+                                </div>
+                            </section>
+
+                            {/* SECTION 4: NAVIGATION & BOOKMARKS */}
+                            <Show when={reports()[1] || fullData()}>
+                                <section class="flex flex-col gap-4">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[8px] font-black text-white/30 uppercase tracking-[0.2em]">Navigasi Laporan</span>
+                                        <div class="h-px flex-1 bg-white/5 ml-4"></div>
+                                    </div>
+                                    
+                                    <div class="flex flex-col gap-1 p-1 bg-white/[0.02] border border-white/5 rounded-xl">
+                                        <For each={[
+                                            { id: 1, label: 'Bussiness Overview', icon: '🏢' },
+                                            { id: 2, label: 'Fundamentals Analysis', icon: '📉' },
+                                            { id: 3, label: 'Technical Setup', icon: '📊' },
+                                            { id: 4, label: 'Catalyst & Risk', icon: '⚡' },
+                                            { id: 5, label: 'Final Recommendations', icon: '🏆' }
+                                        ]}>
+                                            {(stage) => (
+                                                <a 
+                                                    href={`#ai-stage-${stage.id}`}
+                                                    class="group flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/[0.05] transition-all relative overflow-hidden"
+                                                >
+                                                    <div class="absolute left-0 top-0 bottom-0 w-1 bg-text_accent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                                    <span class="text-[12px] opacity-40 group-hover:opacity-100 transition-opacity">{stage.icon}</span>
+                                                    <div class="flex flex-col">
+                                                        <span class="text-[10px] font-black text-white/60 group-hover:text-white transition-colors uppercase tracking-tight leading-none mb-1">
+                                                            {stage.label}
+                                                        </span>
+                                                        <span class="text-[7px] font-bold text-white/10 group-hover:text-text_accent/40 uppercase tracking-widest">
+                                                            Section 0{stage.id}
+                                                        </span>
+                                                    </div>
+                                                    <Show when={reports()[stage.id]}>
+                                                        <div class="ml-auto text-text_accent">
+                                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4">
+                                                                <path d="M20 6L9 17l-5-5"/>
+                                                            </svg>
+                                                        </div>
+                                                    </Show>
+                                                </a>
+                                            )}
+                                        </For>
+                                    </div>
+                                </section>
+                            </Show>
+
+                            {/* SECTION 5: QUICK RECENT */}
+                            <section class="flex flex-col gap-4">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[8px] font-black text-white/30 uppercase tracking-[0.2em]">Recent Pulse</span>
+                                    <div class="h-px flex-1 bg-white/5 ml-4"></div>
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    <For each={history().slice(0, 5)}>
+                                        {(item) => (
+                                            <button 
+                                                onClick={() => loadHistoryItem(item)}
+                                                class="px-3 py-1.5 rounded-full bg-white/[0.03] border border-white/5 text-[9px] font-black text-white/40 hover:text-text_accent hover:border-text_accent/30 hover:bg-text_accent/5 transition-all uppercase tracking-wider"
+                                            >
+                                                {item.symbol}
+                                            </button>
+                                        )}
+                                    </For>
+                                    <Show when={history().length === 0}>
+                                        <span class="text-[9px] font-bold text-white/10 uppercase tracking-widest py-2">No Recent Activity</span>
+                                    </Show>
+                                </div>
+                            </section>
+                        </div>
+
+                        {/* Sidebar Footer Status */}
+                        <div class="p-4 bg-black/40 border-t border-white/5 flex items-center justify-between px-6">
+                            <div class="flex items-center gap-2">
+                                <div class={`w-1.5 h-1.5 rounded-full ${loading() ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`}></div>
+                                <span class="text-[8px] font-black text-white/30 uppercase tracking-widest">
+                                    {loading() ? 'Processing...' : 'Ready'}
+                                </span>
                             </div>
+                            <span class="text-[8px] font-black text-white/10 uppercase">v4.0.1-RC</span>
                         </div>
                     </div>
                     <div class="flex-1 flex flex-col overflow-hidden bg-[#090d15]">
@@ -892,13 +939,24 @@ export default function ResearchPanelView() {
                             </button>
                         </div>
 
-                        <div class="flex-1 overflow-y-auto win-scroll p-8">
+                        <div class="flex-1 overflow-y-auto win-scroll">
                             <style>{REPORT_STYLES}</style>
 
                             <Show when={activeView() === 'history'}>
-                                <div class="max-w-5xl mx-auto w-full flex flex-col gap-6 py-10">
-                                    <h2 class="text-2xl font-black text-white tracking-[0.3em] uppercase border-b border-white/5 pb-4 mb-4">Research Archive</h2>
+                                <div class="max-w-5xl mx-auto w-full flex flex-col gap-6 py-12 px-8">
+                                    <div class="flex items-center justify-between mb-8 border-b border-white/10 pb-6">
+                                        <div class="flex flex-col gap-1">
+                                            <h2 class="text-2xl font-black text-white tracking-widest uppercase">Archive</h2>
+                                            <p class="text-[10px] font-mono text-white/40 uppercase tracking-widest">Chronological timeline of your local analysis reports</p>
+                                        </div>
+                                        <div class="text-right">
+                                            <span class="text-[40px] font-black text-text_accent/20 leading-none">{history().length}</span>
+                                            <div class="text-[8px] font-black text-white/20 uppercase tracking-[0.3em]">Total_Reports</div>
+                                        </div>
+                                    </div>
+
                                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
                                         <For each={history()}>
                                             {(item) => (
                                                 <div class="glass-panel p-6 flex flex-col gap-4 hover:border-text_accent/50 transition-all cursor-pointer group" onClick={() => loadHistoryItem(item)}>
@@ -917,11 +975,14 @@ export default function ResearchPanelView() {
                                             )}
                                         </For>
                                         <Show when={history().length === 0}>
-                                            <div class="col-span-full py-20 flex flex-col items-center justify-center text-white/10 text-center gap-4">
-                                                <div class="w-16 h-16 border-2 border-dashed border-white/5 rounded-full flex items-center justify-center text-4xl">∅</div>
-                                                <div class="text-[10px] font-black uppercase tracking-[0.3em]">No saved research found in archive</div>
+                                            <div class="col-span-full py-20 flex flex-col items-center justify-center text-white/20 gap-4">
+                                                <div class="w-12 h-12 border border-current rounded-full flex items-center justify-center opacity-40">
+                                                    <span class="text-2xl">?</span>
+                                                </div>
+                                                <div class="text-[10px] font-black tracking-[0.4em] uppercase">No Archived Research</div>
                                             </div>
                                         </Show>
+
                                     </div>
                                 </div>
                             </Show>
@@ -1465,17 +1526,29 @@ export default function ResearchPanelView() {
                                 </Show>
 
                                 <Show when={!loading() && !fullData()}>
-                                    <div class="paper-report bg-white text-slate-400 shadow-2xl mx-auto max-w-6xl p-20 flex flex-col items-center justify-center">
-                                        <div class="w-20 h-20 border-2 border-dashed border-slate-200 rounded-full flex items-center justify-center mb-6">
-                                            <svg class="w-10 h-10 text-slate-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <div class="h-full flex flex-col items-center justify-center text-center p-10 gap-8 animate-in fade-in zoom-in-95 duration-700">
+                                        <div class="w-24 h-24 border border-white/5 rounded-full flex items-center justify-center relative">
+                                            <div class="absolute inset-0 border-t border-text_accent/20 rounded-full animate-spin-slow"></div>
+                                            <svg class="w-10 h-10 text-white/10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
                                                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                                                 <polyline points="14 2 14 8 20 8"></polyline>
                                             </svg>
                                         </div>
-                                        <h2 class="text-xl font-black text-slate-300 tracking-[0.3em] uppercase mb-2">Analysis Hub</h2>
-                                        <span class="text-[9px] font-black tracking-[0.2em] uppercase text-slate-400/50 max-w-xs text-center leading-relaxed">Enter a valid ticker symbol and select your AI engine to synthesize a professional research report</span>
+                                        <div class="flex flex-col gap-3">
+                                            <h2 class="text-[20px] font-black text-white tracking-[0.4em] uppercase opacity-80">Analysis Hub</h2>
+                                            <p class="text-[10px] font-medium text-white/20 max-w-sm uppercase tracking-[0.2em] leading-loose">
+                                                Enter an institutional ticker symbol in the discovery section to synthesize a professional intelligence report using the selected AI engine.
+                                            </p>
+                                        </div>
+                                        <div class="flex gap-8 text-[8px] font-black text-white/10 uppercase tracking-[0.3em]">
+                                            <span class="flex items-center gap-2"><span class="w-1 h-1 rounded-full bg-text_accent/30"></span> Fundamental</span>
+                                            <span class="flex items-center gap-2"><span class="w-1 h-1 rounded-full bg-text_accent/30"></span> Technical</span>
+                                            <span class="flex items-center gap-2"><span class="w-1 h-1 rounded-full bg-text_accent/30"></span> Sentiment</span>
+                                            <span class="flex items-center gap-2"><span class="w-1 h-1 rounded-full bg-text_accent/30"></span> ESG Risk</span>
+                                        </div>
                                     </div>
                                 </Show>
+
                             </Show> {/* end activeView === 'new' */}
                         </div>
                     </div>

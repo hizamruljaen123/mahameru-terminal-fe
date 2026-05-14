@@ -8,8 +8,6 @@ import { createSignal, createEffect, onMount, onCleanup } from 'solid-js';
  * ============================================================================
  */
 
-const ECHARTS_CDN = 'https://cdn.jsdelivr.net/npm/echarts@6/dist/echarts.min.js';
-
 /**
  * Props:
  *   options: Object - Full ECharts configuration object
@@ -18,110 +16,162 @@ const ECHARTS_CDN = 'https://cdn.jsdelivr.net/npm/echarts@6/dist/echarts.min.js'
  */
 export default function EChartsRenderer(props) {
     let containerRef;
+    let resizeObserver = null;
+    let fallbackResizeHandler = null;
+    let delayedResizeA = null;
+    let delayedResizeB = null;
+
     const [echartsLib, setEchartsLib] = createSignal(null);
     const [chartInstance, setChartInstance] = createSignal(null);
     const [loading, setLoading] = createSignal(true);
     const [error, setError] = createSignal(null);
 
-    // Load ECharts library dynamically from node_modules
+    function cleanupResizeBindings() {
+        if (resizeObserver) {
+            resizeObserver.disconnect();
+            resizeObserver = null;
+        }
+
+        if (fallbackResizeHandler) {
+            window.removeEventListener('resize', fallbackResizeHandler);
+            fallbackResizeHandler = null;
+        }
+
+        if (delayedResizeA) {
+            clearTimeout(delayedResizeA);
+            delayedResizeA = null;
+        }
+
+        if (delayedResizeB) {
+            clearTimeout(delayedResizeB);
+            delayedResizeB = null;
+        }
+    }
+
+    function cleanupChart() {
+        cleanupResizeBindings();
+        const instance = chartInstance();
+        if (instance) {
+            try {
+                instance.dispose();
+            } catch (err) {
+                console.warn('[ECharts] Dispose warning:', err);
+            }
+            setChartInstance(null);
+        }
+    }
+
     onMount(async () => {
         try {
             const echarts = await import('echarts');
-            setEchartsLib(() => echarts);
+            setEchartsLib(echarts);
             setLoading(false);
         } catch (e) {
-            setError('Failed to load ECharts: ' + e.message);
+            setError(`Failed to load ECharts: ${e.message}`);
             setLoading(false);
         }
     });
 
-    // Initialize chart when library loads and container is ready
     createEffect(() => {
         const ecModule = echartsLib();
         if (!ecModule || !containerRef) return;
 
+        cleanupChart();
+        setError(null);
+
         try {
-            // Handle both ES modules and CJS default exports
             const ec = ecModule.default || ecModule;
-            
             if (typeof ec.init !== 'function') {
-                throw new Error("echarts.init is not a function. Check import format.");
+                throw new Error('echarts.init is not a function. Check import format.');
             }
 
             const instance = ec.init(containerRef, props.theme || 'dark', {
                 renderer: 'canvas',
             });
-            setChartInstance(instance);
 
-            onCleanup(() => {
-                instance.dispose();
-            });
+            setChartInstance(instance);
         } catch (err) {
-            console.error("[ECharts] Init Error:", err);
-            setError("Chart Init Error: " + err.message);
+            console.error('[ECharts] Init Error:', err);
+            setError(`Chart Init Error: ${err.message}`);
         }
     });
 
-    // Update chart options whenever they change
     createEffect(() => {
         const instance = chartInstance();
         const opts = props.options;
         if (!instance || !opts) return;
 
+        cleanupResizeBindings();
+        setError(null);
+
         try {
-            instance.setOption(opts, { notMerge: true });
-            
-            // Handle element resize with ResizeObserver
+            instance.setOption(opts, { notMerge: true, lazyUpdate: false });
+
             if (window.ResizeObserver && containerRef) {
-                const resizeObserver = new ResizeObserver(() => {
-                    instance.resize();
+                resizeObserver = new ResizeObserver(() => {
+                    try {
+                        instance.resize();
+                    } catch (err) {
+                        console.warn('[ECharts] ResizeObserver resize warning:', err);
+                    }
                 });
                 resizeObserver.observe(containerRef);
-                onCleanup(() => resizeObserver.disconnect());
             } else {
-                // Fallback to window resize
-                const handleResize = () => instance.resize();
-                window.addEventListener('resize', handleResize);
-                onCleanup(() => window.removeEventListener('resize', handleResize));
+                fallbackResizeHandler = () => {
+                    try {
+                        instance.resize();
+                    } catch (err) {
+                        console.warn('[ECharts] Window resize warning:', err);
+                    }
+                };
+                window.addEventListener('resize', fallbackResizeHandler);
             }
+
+            delayedResizeA = setTimeout(() => {
+                try {
+                    instance.resize();
+                } catch (err) {
+                    console.warn('[ECharts] Delayed resize warning:', err);
+                }
+            }, 150);
+
+            delayedResizeB = setTimeout(() => {
+                try {
+                    instance.resize();
+                } catch (err) {
+                    console.warn('[ECharts] Secondary delayed resize warning:', err);
+                }
+            }, 500);
         } catch (err) {
-            console.error("[ECharts] Set Option Error:", err);
-            setError("Chart Render Error: " + err.message);
+            console.error('[ECharts] Set Option Error:', err);
+            setError(`Chart Render Error: ${err.message}`);
         }
     });
 
-    // Delay resize in case of CSS animation/transition
-    createEffect(() => {
-        const instance = chartInstance();
-        if (instance) {
-            setTimeout(() => instance.resize(), 150);
-            setTimeout(() => instance.resize(), 500); // secondary check
-        }
+    onCleanup(() => {
+        cleanupChart();
     });
 
     return (
         <div class="echarts-container relative w-full" style={props.style || { height: '400px', 'min-height': '300px' }}>
-            {/* Loading state */}
             {loading() && (
-                <div class="absolute inset-0 flex items-center justify-center bg-gray-900/60 rounded-lg z-10">
-                    <div class="text-gray-500 text-xs flex items-center gap-2">
-                        <span class="inline-block w-3 h-3 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
+                <div class="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-gray-900/60">
+                    <div class="flex items-center gap-2 text-xs text-gray-500">
+                        <span class="inline-block h-3 w-3 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
                         Loading chart...
                     </div>
                 </div>
             )}
 
-            {/* Error state */}
             {error() && (
-                <div class="absolute inset-0 flex items-center justify-center bg-gray-900/60 rounded-lg z-10">
-                    <span class="text-red-400 text-xs">{error()}</span>
+                <div class="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-gray-900/60">
+                    <span class="text-xs text-red-400">{error()}</span>
                 </div>
             )}
 
-            {/* Chart container */}
             <div
                 ref={containerRef}
-                class="w-full h-full min-h-[300px]"
+                class="h-full w-full min-h-[300px]"
                 style={{ visibility: loading() ? 'hidden' : 'visible' }}
             />
         </div>

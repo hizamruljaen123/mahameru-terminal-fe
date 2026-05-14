@@ -1,5 +1,6 @@
 import { createSignal, onMount, createEffect, For, Show, onCleanup as solidOnCleanup } from 'solid-js';
 import * as echarts from 'echarts';
+import { fetchWithRetry } from '../utils/apiFetch';
 import TechnicalAnalysisPanel from '../components/TechnicalAnalysisPanel';
 import EntityAdvancedView from '../components/EntityAdvancedView';
 import LiveMarketTerminal from '../components/LiveMarketTerminal';
@@ -8,12 +9,6 @@ import CryptoDerivativesPanel from '../components/crypto/CryptoDerivativesPanel'
 import CryptoQuantPanel from '../components/crypto/CryptoQuantPanel';
 import CryptoMacroPanel from '../components/crypto/CryptoMacroPanel';
 import CryptoAssetExplorer from '../components/crypto/CryptoAssetExplorer';
-import LiquidityHeatmap from '../components/institutional/LiquidityHeatmap';
-import VaRDashboard from '../components/institutional/VaRDashboard';
-import PolicyDivergenceTracker from '../components/institutional/PolicyDivergenceTracker';
-import RiskOverlayChart from '../components/institutional/RiskOverlayChart';
-import SupplyChainIntel from '../components/institutional/SupplyChainIntel';
-import InfraMacroProxy from '../components/institutional/InfraMacroProxy';
 
 // --- CONFIG & CONSTANTS ---
 const CRYPTO_API = import.meta.env.VITE_CRYPTO_API;
@@ -27,12 +22,12 @@ const signColor = (v) => v > 0 ? 'text-green-400' : v < 0 ? 'text-red-400' : 'te
 
 // --- COMPONENTS ---
 
-function StatBox({ label, value, sub, color }) {
+function StatBox(props) {
   return (
     <div class="bg-black/40 border border-border_main p-3 flex flex-col gap-1 hover:border-text_accent/40 transition-all group">
-      <span class="text-[8px] font-black text-text_secondary uppercase tracking-[0.2em] group-hover:text-text_accent/60 transition-colors">{label}</span>
-      <span class={`text-[14px] font-black font-mono ${color || 'text-text_primary'}`}>{value}</span>
-      {sub && <span class="text-[9px] text-text_secondary/50 font-mono italic">{sub}</span>}
+      <span class="text-[8px] font-black text-text_secondary uppercase tracking-[0.2em] group-hover:text-text_accent/60 transition-colors">{props.label}</span>
+      <span class={`text-[14px] font-black font-mono ${props.color || 'text-text_primary'}`}>{props.value}</span>
+      {props.sub && <span class="text-[9px] text-text_secondary/50 font-mono italic">{props.sub}</span>}
     </div>
   );
 }
@@ -69,14 +64,24 @@ function TradingViewHeatmap(props) {
   );
 }
 
-function SectionHeader({ title, icon, action }) {
+function SectionHeader(props) {
   return (
     <div class="px-4 py-2 border-b border-border_main bg-bg_header/40 flex items-center justify-between shrink-0">
       <div class="flex items-center gap-3">
         <div class="w-1.5 h-1.5 bg-text_accent animate-pulse shadow-[0_0_8px_var(--text-accent)]" />
-        <span class="text-[9px] font-black tracking-[0.3em] text-text_primary uppercase font-mono">{title}</span>
+        <span class="text-[9px] font-black tracking-[0.3em] text-text_primary uppercase font-mono">{props.title}</span>
+        {/* Category Badge */}
+        {props.category && (
+          <span class={`text-[7px] font-black px-1.5 py-0.5 rounded border ${
+            props.category === 'specific' 
+              ? 'bg-text_accent/10 border-text_accent/30 text-text_accent' 
+              : 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+          }`}>
+            {props.category === 'specific' ? 'SIDEBAR' : 'GENERAL'}
+          </span>
+        )}
       </div>
-      {action}
+      {props.action}
     </div>
   );
 }
@@ -256,23 +261,6 @@ export default function CryptoIntelligenceView(props) {
   const [searchTerm, setSearchTerm] = createSignal('');
   const [selectedRange, setSelectedRange] = createSignal('1M');
 
-  // --- LIQUIDATIONS ---
-  const [liquidations, setLiquidations] = createSignal([]);
-  const [liqLoading, setLiqLoading] = createSignal(false);
-
-  const fetchLiquidations = async () => {
-    setLiqLoading(true);
-    try {
-      const resp = await fetch(`${CRYPTO_STREAM_API}/api/stream/liquidations?limit=50&min_usd=10000`);
-      const json = await resp.json();
-      if (json.status === 'success') {
-        const data = Array.isArray(json.data) ? json.data : [];
-        setLiquidations(data);
-      }
-    } catch (e) { console.error("Liquidations fetch error:", e); }
-    setLiqLoading(false);
-  };
-
   const RANGES = ['1W', '1M', '3M', '6M', '1Y', '5Y', 'ALL'];
 
   const getFilteredHistory = () => {
@@ -286,7 +274,11 @@ export default function CryptoIntelligenceView(props) {
 
   const fetchStats = async () => {
     try {
-      const sRes = await fetch(`${CRYPTO_API}/api/crypto/stats/seasonality/${selectedSymbol()}`).then(r => r.json());
+      const sRes = await fetchWithRetry(
+        `${CRYPTO_API}/api/crypto/stats/seasonality/${selectedSymbol()}`,
+        {},
+        { retries: 2, backoffBase: 500 }
+      );
       if (sRes.status === 'success') {
         setStats({ seasonality: sRes.data });
         renderSeasonality();
@@ -424,10 +416,28 @@ export default function CryptoIntelligenceView(props) {
     // INTEGRATE LIVE STREAMING FOR SIDEBAR & HEADER
     // Track prices at last full fetch to calculate approximate change_24h from WS delta
     let priceSnapshot = {};
-    const wsUrl = import.meta.env.VITE_CRYPTO_STREAM_WS || 'wss://api.asetpedia.online/ws/crypto';
+    const wsUrl = import.meta.env.VITE_CRYPTO_STREAM_WS;
     let wsReconnectAttempt = 0;
     let wsReconnectTimer = null;
     let wsRef = null;
+
+    // SIDEBAR HIGH PERFORMANCE UPDATER
+    let sidebarUpdateQueue = {};
+    let sidebarThrottle = null;
+
+    const flushSidebarUpdates = () => {
+      setCoins(prev => prev.map(c => {
+        const update = sidebarUpdateQueue[c.symbol];
+        if (update) {
+          const snapPrice = priceSnapshot[c.symbol] || c.price_24h_ago || update.price;
+          const approxChange = ((update.price - snapPrice) / snapPrice) * 100;
+          return { ...c, price: update.price, change_24h: approxChange, sentiment: update.sentiment };
+        }
+        return c;
+      }));
+      sidebarUpdateQueue = {};
+      sidebarThrottle = null;
+    };
 
     const connectWs = () => {
       wsRef = new WebSocket(wsUrl);
@@ -440,18 +450,13 @@ export default function CryptoIntelligenceView(props) {
             const baseSymbol = symbol.replace('USDT', '').replace('-USD', '');
             const newPrice = msg.type === 'kline' ? msg.data.close : msg.data.p;
 
-            // 1. Update Sidebar List with approximate change_24h from price delta
-            setCoins(prev => prev.map(c => {
-              if (c.symbol === baseSymbol || c.symbol === symbol) {
-                const sentiment = msg.type === 'kline'
-                  ? (msg.data.close >= msg.data.open ? 'BULLISH' : 'BEARISH')
-                  : c.sentiment;
-                const snapPrice = priceSnapshot[c.symbol] || c.price_24h_ago || newPrice;
-                const approxChange = ((newPrice - snapPrice) / snapPrice) * 100;
-                return { ...c, price: newPrice, change_24h: approxChange, sentiment };
-              }
-              return c;
-            }));
+            // Queue update for high performance batching
+            sidebarUpdateQueue[baseSymbol] = { price: newPrice, sentiment: msg.type === 'kline' ? (msg.data.close >= msg.data.open ? 'BULLISH' : 'BEARISH') : 'BULLISH' };
+            sidebarUpdateQueue[symbol] = sidebarUpdateQueue[baseSymbol];
+
+            if (!sidebarThrottle) {
+              sidebarThrottle = setTimeout(flushSidebarUpdates, 100); // 10Hz Sidebar Refresh (Professional Standard)
+            }
 
             // 2. Update Header Detail (if active)
             if (selectedSymbol() === baseSymbol || selectedSymbol() === symbol) {
@@ -496,19 +501,22 @@ export default function CryptoIntelligenceView(props) {
   const displayCoins = () => coins();
 
   const TABS = [
-    { id: 'overview', label: '01 OVERVIEW' },
-    { id: 'technical', label: '02 TECHNICAL' },
-    { id: 'risk', label: '03 RISK' },
-    { id: 'onchain', label: '04 ON-CHAIN' },
-    { id: 'derivatives', label: '05 DERIVATIVES' },
-    { id: 'quant', label: '06 QUANT' },
-    { id: 'macro', label: '07 MACRO' },
-    { id: 'news', label: '08 NEWS' },
-    { id: 'advanced', label: '09 ADVANCED' },
-    { id: 'live', label: '10 LIVE' },
-    { id: 'explorer', label: '11 EXPLORER' },
-    { id: 'institutional', label: '12 INSTITUTIONAL' },
-    { id: 'liquidations', label: '13 LIQUIDATIONS' }
+    // === SPECIFIC ASSET ANALYSIS (Connected to Sidebar) ===
+    { id: 'overview', label: '01 OVERVIEW', category: 'specific' },
+    { id: 'technical', label: '02 TECHNICAL', category: 'specific' },
+    { id: 'risk', label: '03 RISK', category: 'specific' },
+    { id: 'onchain', label: '04 ON-CHAIN', category: 'specific' },
+    { id: 'derivatives', label: '05 DERIVATIVES', category: 'specific' },
+    { id: 'quant', label: '06 QUANT', category: 'specific' },
+    { id: 'news', label: '07 NEWS', category: 'specific' },
+    { id: 'advanced', label: '08 ADVANCED', category: 'specific' }
+  ];
+
+  // Sidebar navigation buttons (moved from main tabs)
+  const SIDEBAR_NAV = [
+    { id: 'live', label: '09 LIVE', icon: '⚡' },
+    { id: 'explorer', label: '10 EXPLORER', icon: '🔍' },
+    { id: 'macro', label: '11 MACRO', icon: '📊' }
   ];
 
   return (
@@ -516,6 +524,25 @@ export default function CryptoIntelligenceView(props) {
 
       {/* LEFT SIDEBAR: ASSET NAVIGATOR */}
       <aside class="w-64 border-r border-border_main bg-black/20 flex flex-col shrink-0">
+        {/* Sidebar Navigation Buttons */}
+        <div class="flex items-center gap-1 p-2 border-b border-border_main/20 bg-bg_header/20">
+          <For each={SIDEBAR_NAV}>
+            {(nav) => (
+              <button
+                onClick={() => setActiveTab(nav.id)}
+                class={`flex-1 flex flex-col items-center justify-center py-2 text-[7px] font-black transition-all rounded-sm ${
+                  activeTab() === nav.id 
+                    ? 'bg-text_accent/20 text-text_accent border border-text_accent/30' 
+                    : 'text-text_secondary hover:bg-white/5 hover:text-text_accent'
+                }`}
+              >
+                <span class="text-[10px] mb-0.5">{nav.icon}</span>
+                {nav.label}
+              </button>
+            )}
+          </For>
+        </div>
+        
         <div class="p-4 border-b border-border_main bg-bg_header/30">
           <input
             type="text"
@@ -531,11 +558,19 @@ export default function CryptoIntelligenceView(props) {
               <button
                 onClick={() => {
                   setSelectedSymbol(coin.symbol);
-                  if (activeTab() === 'explorer' || activeTab() === 'live') {
+                  if (activeTab() === 'explorer' || activeTab() === 'live' || activeTab() === 'macro') {
                     setActiveTab('overview');
                   }
                 }}
-                class={`w-full flex items-center justify-between px-4 py-3 border-b border-border_main/10 hover:bg-text_accent/5 transition-all group ${selectedSymbol() === coin.symbol ? 'border-l-4 border-l-text_accent bg-text_accent/10' : 'border-l-4 border-l-transparent opacity-70 hover:opacity-100'}`}
+                class={`w-full flex items-center justify-between px-4 py-3 border-b border-border_main/10 hover:bg-text_accent/5 transition-all group ${selectedSymbol() === coin.symbol ? 'border-l-4 border-l-text_accent' : 'border-l-4 border-l-transparent opacity-70 hover:opacity-100'}`}
+                style={{
+                  background: (() => {
+                    const change = coin.change_24h || coin.quote?.USD?.percent_change_24h || 0;
+                    const opacity = Math.min(Math.abs(change) / 15, 0.15);
+                    const color = change >= 0 ? '34, 197, 94' : '239, 68, 68';
+                    return `linear-gradient(to right, rgba(${color}, ${opacity}) 0%, rgba(0,0,0,0) 80%)`;
+                  })()
+                }}
               >
                 <div class="flex items-center gap-3">
                   <div class="w-8 h-8 flex items-center justify-center bg-black/40 border border-border_main text-[10px] font-black group-hover:border-text_accent/40 transition-colors">
@@ -582,9 +617,13 @@ export default function CryptoIntelligenceView(props) {
             {(tab) => (
               <button
                 onClick={() => setActiveTab(tab.id)}
-                class={`px-3 h-full text-[8px] font-black tracking-[0.15em] transition-all border-b-2 flex items-center shrink-0 whitespace-nowrap ${activeTab() === tab.id ? 'text-text_accent border-text_accent bg-text_accent/5' : 'text-text_secondary border-transparent opacity-40 hover:opacity-100 hover:bg-white/5'}`}
+                class={`px-3 h-full text-[8px] font-black tracking-[0.15em] transition-all border-b-2 flex items-center shrink-0 whitespace-nowrap relative group ${activeTab() === tab.id ? 'text-text_accent border-text_accent bg-text_accent/5' : 'text-text_secondary border-transparent opacity-40 hover:opacity-100 hover:bg-white/5'}`}
               >
                 {tab.label}
+                {/* Visual indicator for specific asset analysis */}
+                <Show when={tab.category === 'specific'}>
+                  <div class="absolute top-0 right-0 w-1.5 h-1.5 bg-text_accent rounded-full shadow-[0_0_6px_rgba(139,92,246,0.6)] group-hover:scale-125 transition-transform" title="Connected to Sidebar" />
+                </Show>
               </button>
             )}
           </For>
@@ -594,25 +633,43 @@ export default function CryptoIntelligenceView(props) {
         <div class="flex-1 overflow-y-auto win-scroll p-6 bg-black/5">
 
           <Show when={activeTab() === 'live'}>
-            <LiveMarketTerminal watchlist={liveWatchlist()} setWatchlist={setLiveWatchlist} />
+            <div class="flex flex-col gap-6 animate-in fade-in duration-500">
+              <div class="flex items-center justify-between px-4 py-2 border-b border-border_main bg-bg_header/40">
+                <div class="flex items-center gap-3">
+                  <div class="w-1.5 h-1.5 bg-blue-500 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+                  <span class="text-[9px] font-black tracking-[0.3em] text-text_primary uppercase font-mono">LIVE MARKET TERMINAL</span>
+                  <span class="text-[7px] font-black px-1.5 py-0.5 rounded border bg-blue-500/10 border-blue-500/30 text-blue-400">GENERAL</span>
+                </div>
+              </div>
+              <LiveMarketTerminal watchlist={liveWatchlist()} setWatchlist={setLiveWatchlist} />
+            </div>
           </Show>
 
           <Show when={activeTab() === 'explorer'}>
-            <CryptoAssetExplorer
-              onSelect={(sym) => {
-                setSelectedSymbol(sym);
-                setActiveTab('overview');
-              }}
-              onAddToLive={(sym) => {
-                const pair = sym.includes('USDT') ? sym : `${sym}USDT`;
-                setLiveWatchlist(prev => {
-                  if (prev.includes(pair)) return prev;
-                  if (prev.length >= 10) return [pair, ...prev.slice(0, 9)];
-                  return [pair, ...prev];
-                });
-                setActiveTab('live');
-              }}
-            />
+            <div class="flex flex-col gap-6 animate-in fade-in duration-500">
+              <div class="flex items-center justify-between px-4 py-2 border-b border-border_main bg-bg_header/40">
+                <div class="flex items-center gap-3">
+                  <div class="w-1.5 h-1.5 bg-blue-500 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+                  <span class="text-[9px] font-black tracking-[0.3em] text-text_primary uppercase font-mono">ASSET EXPLORER</span>
+                  <span class="text-[7px] font-black px-1.5 py-0.5 rounded border bg-blue-500/10 border-blue-500/30 text-blue-400">GENERAL</span>
+                </div>
+              </div>
+              <CryptoAssetExplorer
+                onSelect={(sym) => {
+                  setSelectedSymbol(sym);
+                  setActiveTab('overview');
+                }}
+                onAddToLive={(sym) => {
+                  const pair = sym.includes('USDT') ? sym : `${sym}USDT`;
+                  setLiveWatchlist(prev => {
+                    if (prev.includes(pair)) return prev;
+                    if (prev.length >= 10) return [pair, ...prev.slice(0, 9)];
+                    return [pair, ...prev];
+                  });
+                  setActiveTab('live');
+                }}
+              />
+            </div>
           </Show>
 
           <Show when={activeTab() === 'overview'}>
@@ -624,6 +681,7 @@ export default function CryptoIntelligenceView(props) {
                 <div class="col-span-12 lg:col-span-8 flex flex-col border-2 border_main bg-black/40 h-[500px] shrink-0">
                   <SectionHeader
                     title={`PRICE HISTORY (${selectedSymbol()}) // ${selectedRange()}`}
+                    category="specific"
                     action={
                       <div class="flex items-center gap-4 mr-2">
                         <div class="flex gap-1">
@@ -660,7 +718,7 @@ export default function CryptoIntelligenceView(props) {
 
                 {/* Crypto Strategic Dossier */}
                 <div class="col-span-12 lg:col-span-4 flex flex-col border-2 border_main bg-bg_header/20 overflow-hidden">
-                  <SectionHeader title="MARKET OVERVIEW" />
+                  <SectionHeader title="MARKET OVERVIEW" category="specific" />
                   <div class="flex-1 p-5 flex flex-col gap-4 overflow-y-auto win-scroll">
                     {/* Header Info */}
                     <div class="flex items-center gap-4 pb-4 border-b border-white/5">
@@ -744,19 +802,12 @@ export default function CryptoIntelligenceView(props) {
                 </div>
               </div>
 
-              <div class="grid grid-cols-12 gap-6">
-                {/* LIQUIDITY HEATMAP (Institutional Class) */}
-                <div class="col-span-12 h-[450px]">
-                  <LiquidityHeatmap symbol={selectedSymbol()} />
-                </div>
-              </div>
-
               {/* AI MULTI-AGENT DOSSIER (HIGH DENSITY) */}
               <div class="grid grid-cols-12 gap-6">
 
                 {/* COMPACT AI DOSSIER */}
                 <div class="col-span-12 lg:col-span-4 flex flex-col border-2 border-border_main bg-black/40 overflow-hidden">
-                  <SectionHeader title="ANALYTICS SUMMARY" />
+                  <SectionHeader title="ANALYTICS SUMMARY" category="specific" />
                   <div class="p-5 flex flex-col gap-4">
                     <Show when={!aiLoading()} fallback={<div class="py-8 flex flex-col items-center gap-3"><div class="w-6 h-6 border-2 border-text_accent border-t-transparent animate-spin rounded-full"></div><span class="text-[8px] font-black text-text_accent uppercase tracking-[0.2em]">ANALYZING...</span></div>}>
                       <div class="flex items-center gap-2 mb-2">
@@ -788,7 +839,7 @@ export default function CryptoIntelligenceView(props) {
 
                 {/* AGENT FEEDS (Scrollable) */}
                 <div class="col-span-12 lg:col-span-8 flex flex-col border-2 border-border_main bg-black/40 overflow-hidden">
-                  <SectionHeader title="AI MULTI-AGENT ANALYSIS FEED" />
+                  <SectionHeader title="AI MULTI-AGENT ANALYSIS FEED" category="specific" />
                   <div class="flex-1 overflow-y-auto max-h-[300px] win-scroll">
                     <div class="grid grid-cols-2 divide-x divide-y divide-border_main/10">
                       <For each={Object.entries(aiVerdict()?.agents || {})}>
@@ -810,7 +861,7 @@ export default function CryptoIntelligenceView(props) {
               {/* NEWS & IMPACT (HIGH DENSITY) */}
               <div class="grid grid-cols-12 gap-6 h-[400px]">
                 <div class="col-span-12 lg:col-span-8 flex flex-col border-2 border-border_main bg-black/40 overflow-hidden">
-                  <SectionHeader title="MARKET NEWS INTELLIGENCE" />
+                  <SectionHeader title="MARKET NEWS INTELLIGENCE" category="specific" />
                   <div class="flex-1 overflow-y-auto p-2 space-y-1 win-scroll">
                     <For each={detail()?.news?.slice(0, 12)}>
                       {(n) => (
@@ -829,7 +880,7 @@ export default function CryptoIntelligenceView(props) {
                   </div>
                 </div>
                 <div class="col-span-12 lg:col-span-4 flex flex-col border-2 border-border_main bg-black/40 overflow-hidden">
-                  <SectionHeader title="GLOBAL IMPACT & METADATA" />
+                  <SectionHeader title="GLOBAL IMPACT & METADATA" category="specific" />
                   <div class="flex-1 overflow-y-auto p-5 space-y-4 win-scroll bg-black/20">
                     <div class="flex flex-wrap gap-2">
                       <For each={detail()?.metadata?.tags?.slice(0, 8)}>
@@ -860,13 +911,13 @@ export default function CryptoIntelligenceView(props) {
               <div class="grid grid-cols-12 gap-6 h-[450px] shrink-0">
                 {/* SEASONALITY */}
                 <div class="col-span-12 lg:col-span-5 flex flex-col border-2 border-border_main bg-black/40 overflow-hidden">
-                  <SectionHeader title={`SEASONALITY HEATMAP (${selectedSymbol()})`} />
+                  <SectionHeader title={`SEASONALITY HEATMAP (${selectedSymbol()})`} category="specific" />
                   <div ref={seasChartDom} class="flex-1 min-h-0"></div>
                 </div>
 
                 {/* GLOBAL MARKET HEATMAP */}
                 <div class="col-span-12 lg:col-span-7 flex flex-col border-2 border-border_main bg-black/40 group overflow-hidden">
-                  <SectionHeader title="GLOBAL MARKET HEATMAP (TV)" />
+                  <SectionHeader title="GLOBAL MARKET HEATMAP (TV)" category="specific" />
                   <div class="flex-1 relative overflow-hidden min-h-0">
                     <TradingViewHeatmap theme={props.theme?.()} />
                   </div>
@@ -885,7 +936,7 @@ export default function CryptoIntelligenceView(props) {
               <div class="grid grid-cols-12 gap-6 h-[500px]">
                 {/* MONTE CARLO GRAPH */}
                 <div class="col-span-1 lg:col-span-8 flex flex-col border-2 border-border_main bg-black/40 overflow-hidden">
-                  <SectionHeader title="PRICE SIMULATION (MONTE CARLO)" action={
+                  <SectionHeader title="PRICE SIMULATION (MONTE CARLO)" category="specific" action={
                     <div class="flex gap-1">
                       {['7d', '30d', '90d'].map((h) => (
                         <button
@@ -904,7 +955,7 @@ export default function CryptoIntelligenceView(props) {
 
                 {/* PROBABILITY MATRIX */}
                 <div class="col-span-1 lg:col-span-4 flex flex-col border-2 border-border_main bg-black/40 overflow-hidden">
-                  <SectionHeader title="ANALYSIS MATRIX" />
+                  <SectionHeader title="ANALYSIS MATRIX" category="specific" />
                   <div class="flex-1 p-0">
                     <Show when={detail()?.monte_carlo?.[horizon()]}>
                       {(mc) => (
@@ -951,7 +1002,7 @@ export default function CryptoIntelligenceView(props) {
 
               {/* HISTORICAL TABLE */}
               <div class="flex flex-col border-2 border-border_main bg-black/40 h-[500px]">
-                <SectionHeader title="PRICE HISTORY DATA" />
+                <SectionHeader title="PRICE HISTORY DATA" category="specific" />
                 <div class="flex-1 overflow-y-auto win-scroll relative">
                   <table class="w-full text-left text-[10px] font-mono border-collapse">
                     <thead class="bg-bg_header/60 sticky top-0 z-10 border-b border-border_main">
@@ -1006,7 +1057,16 @@ export default function CryptoIntelligenceView(props) {
 
           <Show when={activeTab() === 'macro'}>
             <div class="h-full overflow-y-auto win-scroll pr-2">
-              <CryptoMacroPanel symbol={selectedSymbol()} />
+              <div class="flex flex-col gap-6 animate-in fade-in duration-500">
+                <div class="flex items-center justify-between px-4 py-2 border-b border-border_main bg-bg_header/40">
+                  <div class="flex items-center gap-3">
+                    <div class="w-1.5 h-1.5 bg-blue-500 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+                    <span class="text-[9px] font-black tracking-[0.3em] text-text_primary uppercase font-mono">MACRO INTELLIGENCE</span>
+                    <span class="text-[7px] font-black px-1.5 py-0.5 rounded border bg-blue-500/10 border-blue-500/30 text-blue-400">GENERAL</span>
+                  </div>
+                </div>
+                <CryptoMacroPanel symbol={selectedSymbol()} />
+              </div>
             </div>
           </Show>
 
@@ -1015,7 +1075,7 @@ export default function CryptoIntelligenceView(props) {
               <div class="grid grid-cols-12 gap-6">
                 {/* LIVE INTEL STREAM */}
                 <div class="col-span-12 xl:col-span-8 flex flex-col border-2 border-border_main bg-black/40 max-h-[800px]">
-                  <SectionHeader title="LIVE NEWS FEED // RSS FEED" />
+                  <SectionHeader title="LIVE NEWS FEED // RSS FEED" category="specific" />
                   <div class="flex-1 overflow-y-auto p-4 space-y-1 win-scroll">
                     <For each={detail()?.news}>
                       {(item) => (
@@ -1044,7 +1104,7 @@ export default function CryptoIntelligenceView(props) {
                 {/* MACRO CONTEXT SIDEBAR */}
                 <div class="col-span-12 xl:col-span-4 flex flex-col gap-6">
                   <div class="flex flex-col border-2 border-border_main bg-black/40 overflow-hidden">
-                    <SectionHeader title="MARKET CONTEXT" />
+                    <SectionHeader title="MARKET CONTEXT" category="specific" />
                     <div class="p-6 space-y-6 overflow-y-auto max-h-[700px]">
                       <div class="flex flex-col gap-3">
                         <span class="text-[9px] font-black text-text_secondary uppercase tracking-widest opacity-50 border-b border-border_main/20 pb-2">MARKET TAGS</span>
@@ -1085,6 +1145,13 @@ export default function CryptoIntelligenceView(props) {
 
           <Show when={activeTab() === 'advanced'}>
             <div class="h-full flex flex-col animate-in zoom-in duration-500 overflow-hidden">
+              <div class="flex items-center justify-between px-4 py-2 border-b border-border_main bg-bg_header/40 shrink-0">
+                <div class="flex items-center gap-3">
+                  <div class="w-1.5 h-1.5 bg-blue-500 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+                  <span class="text-[9px] font-black tracking-[0.3em] text-text_primary uppercase font-mono">ADVANCED ENTITY VIEW</span>
+                  <span class="text-[7px] font-black px-1.5 py-0.5 rounded border bg-blue-500/10 border-blue-500/30 text-blue-400">GENERAL</span>
+                </div>
+              </div>
               <EntityAdvancedView
                 symbol={selectedSymbol() + (selectedSymbol().includes('-') ? '' : '-USD')}
                 fullHistory={(detail()?.history || []).map(h => ({
@@ -1101,114 +1168,6 @@ export default function CryptoIntelligenceView(props) {
 
 
         </div>
-
-        <Show when={activeTab() === 'institutional'}>
-          <div class="h-full flex flex-col gap-6 animate-in zoom-in duration-500 overflow-y-auto win-scroll pr-2 pb-10">
-            <div class="grid grid-cols-12 gap-6">
-              <div class="col-span-12 lg:col-span-6 h-[400px]">
-                <VaRDashboard symbol={selectedSymbol()} />
-              </div>
-              <div class="col-span-12 lg:col-span-6 h-[400px]">
-                <RiskOverlayChart symbol={selectedSymbol()} />
-              </div>
-            </div>
-            <div class="grid grid-cols-12 gap-6">
-              <div class="col-span-12 lg:col-span-6 h-[400px]">
-                <PolicyDivergenceTracker symbol={selectedSymbol()} />
-              </div>
-              <div class="col-span-12 lg:col-span-6 h-[400px]">
-                <InfraMacroProxy symbol={selectedSymbol()} />
-              </div>
-            </div>
-            <div class="grid grid-cols-12 gap-6">
-              <div class="col-span-12 h-[400px]">
-                <SupplyChainIntel symbol={selectedSymbol()} />
-              </div>
-            </div>
-          </div>
-        </Show>
-
-        {/* LIQUIDATIONS TAB */}
-        <Show when={activeTab() === 'liquidations'}>
-          <div class="h-full flex flex-col gap-6 animate-in slide-in-from-bottom-4 duration-500 overflow-y-auto win-scroll pr-2 pb-10">
-            <div class="flex items-center justify-between shrink-0">
-              <div class="flex items-center gap-3">
-                <div class="w-1.5 h-1.5 bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]" />
-                <span class="text-[10px] font-black tracking-[0.3em] text-text_primary uppercase font-mono">REAL-TIME LIQUIDATION STREAM</span>
-              </div>
-              <button
-                onClick={fetchLiquidations}
-                class="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/30 text-[8px] font-black text-red-500 hover:bg-red-500 hover:text-white transition-all uppercase"
-              >
-                <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>
-                REFRESH
-              </button>
-            </div>
-
-            <div class="flex flex-col border-2 border-red-500/20 bg-black/40 overflow-hidden">
-              <div class="px-5 py-3 bg-red-500/5 border-b border-red-500/10 flex items-center justify-between">
-                <span class="text-[8px] font-black text-red-400 tracking-[0.3em] uppercase">LIQUIDATION EVENTS ({'>'} $10K)</span>
-                <span class="text-[8px] font-black text-text_secondary font-mono">{liquidations().length} EVENTS</span>
-              </div>
-              <div class="flex-1 overflow-y-auto win-scroll">
-                <Show when={!liqLoading()} fallback={
-                  <div class="py-16 flex flex-col items-center gap-4">
-                    <div class="w-8 h-8 border-2 border-red-500 border-t-transparent animate-spin rounded-full"></div>
-                    <span class="text-[9px] font-black text-red-400 tracking-[0.3em] uppercase">FETCHING LIQUIDATIONS...</span>
-                  </div>
-                }>
-                  <Show when={liquidations().length > 0} fallback={
-                    <div class="py-16 flex flex-col items-center gap-4">
-                      <svg class="w-10 h-10 text-text_secondary/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10" /><path d="M16 16s-1.5-2-4-2-4 2-4 2M9 9h.01M15 9h.01" /></svg>
-                      <span class="text-[10px] font-black text-text_secondary/50 tracking-[0.2em] uppercase">NO LIQUIDATIONS DETECTED</span>
-                    </div>
-                  }>
-                    <table class="w-full text-left text-[10px] font-mono border-collapse">
-                      <thead class="bg-red-500/10 sticky top-0 z-10 border-b border-red-500/20">
-                        <tr>
-                          <th class="p-4 border-r border-red-500/10 text-red-400 font-black tracking-widest">TIME</th>
-                          <th class="p-4 border-r border-red-500/10 text-white font-black tracking-widest">SYMBOL</th>
-                          <th class="p-4 border-r border-red-500/10 text-white font-black tracking-widest">SIDE</th>
-                          <th class="p-4 border-r border-red-500/10 text-white font-black tracking-widest">PRICE</th>
-                          <th class="p-4 border-r border-red-500/10 text-white font-black tracking-widest">QTY</th>
-                          <th class="p-4 text-right text-white font-black tracking-widest">USD VALUE</th>
-                        </tr>
-                      </thead>
-                      <tbody class="divide-y divide-red-500/5">
-                        <For each={liquidations()}>
-                          {(liq) => (
-                            <tr class="hover:bg-red-500/5 transition-colors group">
-                              <td class="p-4 border-r border-red-500/5 text-text_secondary font-mono text-[9px]">{liq.time || liq.event_time || 'N/A'}</td>
-                              <td class="p-4 border-r border-red-500/5 text-text_accent font-black group-hover:text-white transition-colors">{liq.symbol}</td>
-                              <td class="p-4 border-r border-red-500/5">
-                                <span class={`px-2 py-0.5 text-[8px] font-black rounded-sm ${liq.side === 'SELL' ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}`}>
-                                  {liq.side || liq.Side || 'N/A'}
-                                </span>
-                              </td>
-                              <td class="p-4 border-r border-red-500/5 text-text_primary font-mono font-bold">${fmt(liq.price, liq.price < 1 ? 4 : 2)}</td>
-                              <td class="p-4 border-r border-red-500/5 text-text_primary font-mono">{fmt(liq.qty || liq.quantity, 2)}</td>
-                              <td class="p-4 text-right text-red-400 font-black font-mono">${fmt(liq.usd_value || liq.usdValue || (liq.price * (liq.qty || liq.quantity)), 0)}</td>
-                            </tr>
-                          )}
-                        </For>
-                      </tbody>
-                    </table>
-                  </Show>
-                </Show>
-              </div>
-            </div>
-
-            <div class="flex items-center gap-4 px-4 py-3 bg-black/30 border border-border_main/20 text-[8px] text-text_secondary">
-              <span class="uppercase tracking-widest font-black">DATA SOURCE: BINANCE LIQUIDATION STREAM</span>
-              <span class="text-text_secondary/30">|</span>
-              <span class="uppercase tracking-widest font-black">MIN THRESHOLD: $10,000 USD</span>
-              <span class="text-text_secondary/30">|</span>
-              <span class="text-text_accent font-black">
-                {(Array.isArray(liquidations()) ? liquidations() : []).filter(l => (l.side === 'SELL' || l.Side === 'SELL')).length} SELL / {(Array.isArray(liquidations()) ? liquidations() : []).filter(l => (l.side === 'BUY' || l.Side === 'BUY')).length} BUY
-              </span>
-            </div>
-          </div>
-        </Show>
 
         {/* FOOTER STATUS BAR */}
         <div class="h-10 border-t border-border_main bg-bg_header/20 shrink-0 flex items-center justify-between px-6">

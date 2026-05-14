@@ -1,7 +1,16 @@
-import { createSignal, onMount, createEffect, For, Show, onCleanup } from 'solid-js';
+// CryptoOnChainPanel - REDESIGNED v2 - Full on-chain intelligence
+import { createSignal, onMount, createEffect, For, Show, onCleanup, createMemo } from 'solid-js';
 import * as echarts from 'echarts';
 
 const fmt = (v, d = 2) => (v == null || isNaN(v)) ? 'N/A' : Number(v).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
+const fmtVol = (v) => {
+  if (v == null || isNaN(v)) return 'N/A';
+  if (v >= 1e9) return (v / 1e9).toFixed(2) + 'B';
+  if (v >= 1e6) return (v / 1e6).toFixed(2) + 'M';
+  if (v >= 1e3) return (v / 1e3).toFixed(2) + 'K';
+  return v.toFixed(2);
+};
+const fmtPct = (v) => (v == null || isNaN(v)) ? 'N/A' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`;
 
 function SectionHeader({ title, action }) {
   return (
@@ -11,6 +20,124 @@ function SectionHeader({ title, action }) {
         <span class="text-[9px] font-black tracking-[0.3em] text-text_primary uppercase font-mono">{title}</span>
       </div>
       {action}
+    </div>
+  );
+}
+
+// ============================================
+// NEW: MVRV RATIO CHART
+// ============================================
+function MvrvChart({ data }) {
+  let ref, chart;
+  onMount(() => {
+    if (!ref || !data || !data.length) return;
+    chart = echarts.init(ref);
+    chart.setOption({
+      backgroundColor: 'transparent',
+      tooltip: { trigger: 'axis', backgroundColor: '#0a0a0a', borderColor: '#333', textStyle: { color: '#ccc', fontSize: 10 } },
+      grid: { top: 30, right: 50, bottom: 40, left: 60 },
+      xAxis: { type: 'category', data: data.map(d => d.date), axisLabel: { color: '#555', fontSize: 8, rotate: 45 }, axisLine: { lineStyle: { color: '#333' } } },
+      yAxis: [
+        { type: 'value', name: 'MVRV', axisLabel: { color: '#555', fontSize: 8 }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.03)' } } },
+        { type: 'value', name: 'Price', axisLabel: { color: '#555', fontSize: 8 }, splitLine: { show: false } }
+      ],
+      series: [
+        { name: 'MVRV', type: 'line', data: data.map(d => d.mvrv), smooth: true, symbol: 'none', lineStyle: { color: '#e040fb', width: 2 }, areaStyle: { color: 'rgba(224, 64, 251, 0.05)' } },
+        { name: 'Price', type: 'line', yAxisIndex: 1, data: data.map(d => d.price), smooth: true, symbol: 'none', lineStyle: { color: '#00e5ff', width: 1 } }
+      ]
+    });
+    const h = () => chart?.resize();
+    window.addEventListener('resize', h);
+    onCleanup(() => { window.removeEventListener('resize', h); chart?.dispose(); });
+  });
+  return <div ref={ref} class="w-full h-full" />;
+}
+
+// ============================================
+// NEW: SOPR (SPENT OUTPUT PROFIT/LOSS) CHART
+// ============================================
+function SoprChart({ data }) {
+  let ref, chart;
+  onMount(() => {
+    if (!ref || !data || !data.length) return;
+    chart = echarts.init(ref);
+    chart.setOption({
+      backgroundColor: 'transparent',
+      tooltip: { trigger: 'axis', backgroundColor: '#0a0a0a', borderColor: '#333', textStyle: { color: '#ccc', fontSize: 10 } },
+      grid: { top: 30, right: 50, bottom: 40, left: 60 },
+      xAxis: { type: 'category', data: data.map(d => d.date), axisLabel: { color: '#555', fontSize: 8, rotate: 45 }, axisLine: { lineStyle: { color: '#333' } } },
+      yAxis: [
+        { type: 'value', name: 'SOPR', axisLabel: { color: '#555', fontSize: 8 }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.03)' } } }
+      ],
+      series: [
+        { name: 'SOPR', type: 'line', data: data.map(d => d.sopr), smooth: true, symbol: 'none', lineStyle: { color: '#ff9100', width: 2 }, areaStyle: { color: 'rgba(255, 145, 0, 0.05)' } }
+      ]
+    });
+    const h = () => chart?.resize();
+    window.addEventListener('resize', h);
+    onCleanup(() => { window.removeEventListener('resize', h); chart?.dispose(); });
+  });
+  return <div ref={ref} class="w-full h-full" />;
+}
+
+// ============================================
+// NEW: HOLDER DISTRIBUTION
+// ============================================
+function HolderDistribution({ data }) {
+  let ref, chart;
+  onMount(() => {
+    if (!ref || !data) return;
+    chart = echarts.init(ref);
+    const entries = Object.entries(data).sort((a, b) => b[1] - a[1]);
+    chart.setOption({
+      backgroundColor: 'transparent',
+      tooltip: { formatter: p => `${p.name}: ${p.value}%` },
+      series: [{
+        type: 'pie', radius: ['45%', '75%'], center: ['50%', '50%'],
+        label: { color: '#aaa', fontSize: 9, formatter: '{b}: {c}%' },
+        emphasis: { label: { fontSize: 11, fontWeight: 'bold' } },
+        data: entries.map(([k, v], i) => ({ name: k, value: v, itemStyle: { color: ['#f7931a', '#627eea', '#26a17b', '#f0b90b', '#9945ff'][i % 5] } }))
+      }]
+    });
+    const h = () => chart?.resize();
+    window.addEventListener('resize', h);
+    onCleanup(() => { window.removeEventListener('resize', h); chart?.dispose(); });
+  });
+  return <div ref={ref} class="w-full h-full" />;
+}
+
+// ============================================
+// NEW: DORMANT ADDRESS AWAKENING ALERTS
+// ============================================
+function DormantAlerts({ data }) {
+  if (!data || !data.length) return (
+    <div class="py-10 text-center text-[9px] text-text_secondary">NO DORMANT ACTIVITY DETECTED</div>
+  );
+  
+  return (
+    <div class="max-h-[200px] overflow-y-auto win-scroll">
+      <table class="w-full text-[9px] font-mono">
+        <thead class="bg-bg_header/60 sticky top-0 z-10 border-b border-border_main">
+          <tr>
+            <th class="p-2 text-left text-text_accent">DATE</th>
+            <th class="p-2 text-right text-yellow-400">COIN AGE</th>
+            <th class="p-2 text-right text-white">VOL USD</th>
+            <th class="p-2 text-right text-white">TYPE</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-border_main/10">
+          <For each={data.slice(0, 10)}>
+            {(ev) => (
+              <tr class="hover:bg-white/5 transition-colors">
+                <td class="p-2 text-text_secondary">{ev.date}</td>
+                <td class="p-2 text-right text-yellow-400 font-bold">{ev.coin_age}d</td>
+                <td class="p-2 text-right text-white">${fmtVol(ev.volume_usd)}</td>
+                <td class={`p-2 text-right font-black ${ev.type === 'DISTRIBUTION' ? 'text-red-400' : 'text-green-400'}`}>{ev.type}</td>
+              </tr>
+            )}
+          </For>
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -97,9 +224,40 @@ export default function CryptoOnChainPanel(props) {
         </div>
       </Show>
       <Show when={!loading() && data()}>
+        {/* MVRV + SOPR CHARTS */}
+        <div class="grid grid-cols-12 gap-6">
+          <div class="col-span-12 lg:col-span-6 flex flex-col border-2 border-border_main bg-black/40 h-[350px]">
+            <SectionHeader title="MVRV RATIO (MARKET VALUE / REALIZED VALUE)" />
+            <div class="flex-1 p-2 min-h-0">
+              <Show when={data()?.mvrv?.history?.length}>
+                <MvrvChart data={data().mvrv.history} />
+              </Show>
+            </div>
+            <div class="px-4 py-2 border-t border-border_main bg-bg_header/20 flex items-center justify-between">
+              <span class="text-[8px] font-black text-text_secondary">CURRENT MVRV: <span class="text-white font-mono">{data()?.mvrv?.current}</span></span>
+              <span class={`text-[8px] font-black ${data()?.mvrv?.assessment === 'OVERVALUED' ? 'text-red-400' : data()?.mvrv?.assessment === 'UNDERVALUED' ? 'text-green-400' : 'text-blue-400'}`}>
+                {data()?.mvrv?.assessment || 'N/A'}
+              </span>
+            </div>
+          </div>
+
+          <div class="col-span-12 lg:col-span-6 flex flex-col border-2 border-border_main bg-black/40 h-[350px]">
+            <SectionHeader title="SOPR (SPENT OUTPUT PROFIT/LOSS)" />
+            <div class="flex-1 p-2 min-h-0">
+              <Show when={data()?.sopr?.history?.length}>
+                <SoprChart data={data().sopr.history} />
+              </Show>
+            </div>
+            <div class="px-4 py-2 border-t border-border_main bg-bg_header/20 flex items-center justify-between">
+              <span class="text-[8px] font-black text-text_secondary">CURRENT SOPR: <span class="text-white font-mono">{data()?.sopr?.current}</span></span>
+              <span class="text-[8px] font-black text-text_secondary">TREND: <span class="text-text_accent">{data()?.sopr?.trend || 'NEUTRAL'}</span></span>
+            </div>
+          </div>
+        </div>
+
         {/* EXCHANGE FLOW */}
         <div class="grid grid-cols-12 gap-6">
-          <div class="col-span-12 lg:col-span-8 flex flex-col border-2 border-border_main bg-black/40 h-[400px]">
+          <div class="col-span-12 lg:col-span-8 flex flex-col border-2 border-border_main bg-black/40 h-[350px]">
             <SectionHeader title="EXCHANGE NET FLOW ESTIMATION" />
             <div class="flex-1 p-2 min-h-0">
               <Show when={data()?.exchange_flow?.flow_history?.length}>
@@ -141,7 +299,7 @@ export default function CryptoOnChainPanel(props) {
         </div>
 
         {/* WHALE ACTIVITY */}
-        <div class="flex flex-col border-2 border-border_main bg-black/40 max-h-[500px]">
+        <div class="flex flex-col border-2 border-border_main bg-black/40 max-h-[400px]">
           <SectionHeader title="WHALE ACTIVITY TRACKER" />
           <div class="flex-1 overflow-y-auto win-scroll">
             <table class="w-full text-left text-[10px] font-mono border-collapse">
@@ -183,9 +341,9 @@ export default function CryptoOnChainPanel(props) {
           </Show>
         </div>
 
-        {/* NVT RATIO */}
+        {/* NVT + HOLDER DISTRIBUTION */}
         <div class="grid grid-cols-12 gap-6">
-          <div class="col-span-12 lg:col-span-8 flex flex-col border-2 border-border_main bg-black/40 h-[350px]">
+          <div class="col-span-12 lg:col-span-6 flex flex-col border-2 border-border_main bg-black/40 h-[350px]">
             <SectionHeader title="NVT RATIO (NETWORK VALUE / TRANSACTIONS)" />
             <div class="flex-1 p-2 min-h-0">
               <Show when={data()?.nvt_ratio?.history?.length}>
@@ -193,28 +351,32 @@ export default function CryptoOnChainPanel(props) {
               </Show>
             </div>
           </div>
-          <div class="col-span-12 lg:col-span-4 flex flex-col border-2 border-border_main bg-black/40">
-            <SectionHeader title="NVT ASSESSMENT" />
-            <div class="p-5 flex flex-col gap-4">
-              <Show when={data()?.nvt_ratio}>
-                <div class="flex flex-col gap-1">
-                  <span class="text-[8px] font-black text-text_secondary uppercase">CURRENT NVT</span>
-                  <span class="text-[22px] font-black text-white font-mono">{data().nvt_ratio.current_nvt}</span>
-                </div>
-                <div class="flex flex-col gap-1">
-                  <span class="text-[8px] font-black text-text_secondary uppercase">6M AVERAGE</span>
-                  <span class="text-[14px] font-black text-text_accent font-mono">{data().nvt_ratio.avg_nvt_6m}</span>
-                </div>
-                <div class={`px-4 py-3 border-2 text-center text-[12px] font-black ${
-                  data().nvt_ratio.assessment === 'UNDERVALUED' ? 'border-green-500 text-green-400 bg-green-500/10' :
-                  data().nvt_ratio.assessment === 'OVERVALUED' ? 'border-red-500 text-red-400 bg-red-500/10' :
-                  'border-blue-500 text-blue-400 bg-blue-500/10'}`}>
-                  {data().nvt_ratio.assessment}
-                </div>
+          <div class="col-span-12 lg:col-span-6 flex flex-col border-2 border-border_main bg-black/40 h-[350px]">
+            <SectionHeader title="HOLDER DISTRIBUTION" />
+            <div class="flex-1 p-2 min-h-0">
+              <Show when={data()?.holder_distribution}>
+                <HolderDistribution data={data().holder_distribution} />
               </Show>
+            </div>
+            <div class="px-4 py-2 border-t border-border_main bg-bg_header/20 flex items-center justify-between">
+              <span class="text-[8px] font-black text-text_secondary">CONCENTRATION: {data()?.holder_distribution?.['EXCHANGES'] ? 'HIGH' : 'LOW'}</span>
+              <span class="text-[8px] font-black text-text_secondary">WHALES (>1%): {data()?.holder_distribution?.['WHALES'] || 'N/A'}</span>
             </div>
           </div>
         </div>
+
+        {/* DORMANT ADDRESS AWAKENING */}
+        <Show when={data()?.dormant_awakening?.events?.length}>
+          <div class="flex flex-col border-2 border-border_main bg-black/40">
+            <SectionHeader title="DORMANT ADDRESS AWAKENING ALERTS" />
+            <div class="p-4">
+              <div class="text-center mb-4">
+                <span class="text-[10px] font-black text-yellow-400 uppercase">OLD COINS MOVING AFTER LONG SLEEP</span>
+              </div>
+              <DormantAlerts data={data().dormant_awakening.events} />
+            </div>
+          </div>
+        </Show>
       </Show>
     </div>
   );

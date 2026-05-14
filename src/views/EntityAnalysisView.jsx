@@ -1,6 +1,7 @@
 import { createSignal, onMount, createEffect, onCleanup, For, Show } from 'solid-js';
 import * as echarts from 'echarts';
 import { io } from "socket.io-client";
+import { fetchWithRetry } from '../utils/apiFetch';
 import EntityAnalysisCharts from '../components/EntityAnalysisCharts';
 import EntityAdvancedView from '../components/EntityAdvancedView';
 import EntityFullReport from '../components/EntityFullReport';
@@ -26,9 +27,12 @@ function EntityRealTimeChart(props) {
         const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
         try {
-            const res = await fetch(`${import.meta.env.VITE_ENTITY_URL}/api/entity/realtime/${props.symbol}`, { signal: controller.signal });
+            const data = await fetchWithRetry(
+                `${import.meta.env.VITE_ENTITY_URL}/api/entity/realtime/${props.symbol}`,
+                { signal: controller.signal },
+                { retries: 2, backoffBase: 500 }
+            );
             clearTimeout(timeoutId);
-            const data = await res.json();
 
             setMarketOpen(data.isStreaming !== false);
 
@@ -460,9 +464,12 @@ const EntityAnalysisView = (props) => {
         const timeoutId = setTimeout(() => controller.abort(), 12000);
 
         try {
-            const res = await fetch(`${import.meta.env.VITE_ENTITY_URL}/api/entity/market-indices`, { signal: controller.signal });
+            const data = await fetchWithRetry(
+                `${import.meta.env.VITE_ENTITY_URL}/api/entity/market-indices`,
+                { signal: controller.signal },
+                { retries: 2, backoffBase: 500 }
+            );
             clearTimeout(timeoutId);
-            const data = await res.json();
             setMarketIndices(data);
         } catch (err) {
             console.error("Market indices fetch failed", err);
@@ -481,9 +488,12 @@ const EntityAnalysisView = (props) => {
 
         setLoading(true);
         try {
-            const res = await fetch(`${import.meta.env.VITE_ENTITY_URL}/api/entity/search?q=${encodeURIComponent(searchQuery())}`, { signal: searchController.signal });
+            const data = await fetchWithRetry(
+                `${import.meta.env.VITE_ENTITY_URL}/api/entity/search?q=${encodeURIComponent(searchQuery())}`,
+                { signal: searchController.signal },
+                { retries: 2, backoffBase: 500 }
+            );
             clearTimeout(timeoutId);
-            const data = await res.json();
             setSearchResults(data.quotes || []);
         } catch (err) {
             if (err.name !== 'AbortError') console.error("Search failed", err);
@@ -508,8 +518,11 @@ const EntityAnalysisView = (props) => {
         try {
             // 1. PHASE 1: Fetch Core Profile Data (Fast)
             const period = rangeMap[selectedRange()] || '6mo';
-            const res = await fetch(`${import.meta.env.VITE_ENTITY_URL}/api/entity/profile/${symbol}?period=${period}`, { signal });
-            const data = await res.json();
+            const data = await fetchWithRetry(
+                `${import.meta.env.VITE_ENTITY_URL}/api/entity/profile/${symbol}?period=${period}`,
+                { signal },
+                { retries: 2, backoffBase: 500 }
+            );
 
             // Immediately show profile with initial news (if any)
             setProfile(data);

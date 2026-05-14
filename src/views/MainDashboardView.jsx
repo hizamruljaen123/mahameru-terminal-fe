@@ -1,6 +1,8 @@
 import { createSignal, onMount, createEffect, onCleanup, For, Show, createResource, createMemo } from 'solid-js';
 import * as echarts from 'echarts';
 import { io } from 'socket.io-client';
+import { fetchWithRetry } from '../utils/apiFetch';
+import { getCached, setCache } from '../utils/apiCache';
 
 const DASHBOARD_API = import.meta.env.VITE_DASHBOARD_API;
 const GEO_API = import.meta.env.VITE_GEO_DATA_API;
@@ -19,6 +21,18 @@ const swrGet = (key) => {
 };
 const swrSet = (key, data) => {
    try { localStorage.setItem(`swr_${key}`, JSON.stringify({ data, ts: Date.now() })); } catch { }
+};
+
+// ── Concurrency Limiter ─────────────────────────────────────────────────────
+// Limits parallel API calls to avoid overwhelming the backend connection pool
+const limitConcurrency = async (tasks, limit = 4) => {
+   const results = [];
+   for (let i = 0; i < tasks.length; i += limit) {
+      const batch = tasks.slice(i, i + limit);
+      const batchResults = await Promise.allSettled(batch.map(t => t()));
+      results.push(...batchResults);
+   }
+   return results;
 };
 
 // --- CONFIG & CONSTANTS ---
@@ -124,8 +138,11 @@ export default function MainDashboardView(props) {
    const [intelStale] = createSignal(swrGet('intel'));
    const [intel, { refetch: refetchIntel }] = createResource(async () => {
       try {
-         const resp = await fetch(`${DASHBOARD_API}/api/dashboard/intelligence`);
-         const json = await resp.json();
+         const json = await fetchWithRetry(
+            `${DASHBOARD_API}/api/dashboard/intelligence`,
+            {},
+            { retries: 2, backoffBase: 500 }
+         );
          if (json.data) swrSet('intel', json.data);
          return json.data;
       } catch (e) { return intelStale(); }
@@ -138,15 +155,22 @@ export default function MainDashboardView(props) {
       const cached = swrGet('countries');
       // Return cached immediately; also kick off a network refresh
       if (cached) {
-         fetch(`${DASHBOARD_API}/api/dashboard/countries`)
-            .then(r => r.json())
+         // Background refresh with retry
+         fetchWithRetry(
+            `${DASHBOARD_API}/api/dashboard/countries`,
+            {},
+            { retries: 2, backoffBase: 500 }
+         )
             .then(j => { if (j.data) swrSet('countries', j.data); })
             .catch(() => { });
          return cached;
       }
       try {
-         const resp = await fetch(`${DASHBOARD_API}/api/dashboard/countries`);
-         const json = await resp.json();
+         const json = await fetchWithRetry(
+            `${DASHBOARD_API}/api/dashboard/countries`,
+            {},
+            { retries: 2, backoffBase: 500 }
+         );
          if (json.data) swrSet('countries', json.data);
          return json.data;
       } catch (e) { return []; }
@@ -161,8 +185,11 @@ export default function MainDashboardView(props) {
       async (geo) => {
          if (geo.code === 'GLO') return null;
          try {
-            const resp = await fetch(`${DASHBOARD_API}/api/dashboard/google-trends?geo=${geo.code}&name=${geo.name}`);
-            const json = await resp.json();
+            const json = await fetchWithRetry(
+               `${DASHBOARD_API}/api/dashboard/google-trends?geo=${geo.code}&name=${geo.name}`,
+               {},
+               { retries: 2, backoffBase: 500 }
+            );
             return json.data;
          } catch (e) { return []; }
       }
@@ -176,8 +203,11 @@ export default function MainDashboardView(props) {
       async (topic) => {
          if (!topic) return [];
          try {
-            const resp = await fetch(`${DASHBOARD_API}/api/dashboard/google-news?q=${encodeURIComponent(topic)}`);
-            const json = await resp.json();
+            const json = await fetchWithRetry(
+               `${DASHBOARD_API}/api/dashboard/google-news?q=${encodeURIComponent(topic)}`,
+               {},
+               { retries: 2, backoffBase: 500 }
+            );
             return json.data;
          } catch (e) { return []; }
       }
@@ -189,8 +219,11 @@ export default function MainDashboardView(props) {
    const [marketsStale] = createSignal(swrGet('markets'));
    const [markets, { refetch: refetchMarkets }] = createResource(async () => {
       try {
-         const resp = await fetch(`${DASHBOARD_API}/api/dashboard/markets`);
-         const json = await resp.json();
+         const json = await fetchWithRetry(
+            `${DASHBOARD_API}/api/dashboard/markets`,
+            {},
+            { retries: 2, backoffBase: 500 }
+         );
          if (json.data) swrSet('markets', json.data);
          return json.data;
       } catch (e) { return marketsStale(); }
@@ -204,8 +237,11 @@ export default function MainDashboardView(props) {
    const [heatmapStale] = createSignal(swrGet('sentiment_heatmap'));
    const [sentimentHeatmap, { refetch: refetchHeatmap }] = createResource(async () => {
       try {
-         const resp = await fetch(`${DASHBOARD_API}/api/dashboard/sentiment-heatmap`);
-         const json = await resp.json();
+         const json = await fetchWithRetry(
+            `${DASHBOARD_API}/api/dashboard/sentiment-heatmap`,
+            {},
+            { retries: 2, backoffBase: 500 }
+         );
          if (json.data) swrSet('sentiment_heatmap', json.data);
          return json.data;
       } catch (e) { return heatmapStale(); }
@@ -246,8 +282,11 @@ export default function MainDashboardView(props) {
 
    const fetchWeatherForCity = async (city) => {
       try {
-         const resp = await fetch(`${GEO_API}/api/weather/forecast?lat=${city.lat}&lng=${city.lng}&tz=${city.tz}`);
-         const data = await resp.json();
+         const data = await fetchWithRetry(
+            `${GEO_API}/api/weather/forecast?lat=${city.lat}&lng=${city.lng}&tz=${city.tz}`,
+            {},
+            { retries: 2, backoffBase: 1000 }
+         );
          if (data && data.current_weather) {
             setWeatherData(prev => ({
                ...prev,
@@ -261,7 +300,11 @@ export default function MainDashboardView(props) {
    };
 
    const fetchAllWeather = () => {
-      CITIES.forEach(city => fetchWeatherForCity(city));
+      // Use concurrency limiter to avoid burst
+      limitConcurrency(
+         CITIES.map(city => () => fetchWeatherForCity(city)),
+         3
+      );
    };
 
    const getMarketCountdown = (city) => {
@@ -305,8 +348,11 @@ export default function MainDashboardView(props) {
 
       // --- PRELOAD NEWS CACHE (SQLite Fast Access) ---
       // Populate the stream immediately from the last 10 cached articles
-      fetch(`${DASHBOARD_API}/api/dashboard/news-preload`)
-         .then(r => r.json())
+      fetchWithRetry(
+         `${DASHBOARD_API}/api/dashboard/news-preload`,
+         {},
+         { retries: 1, backoffBase: 500 }
+      )
          .then(j => { if (j.data) setLiveNews(j.data); })
          .catch(() => { });
 

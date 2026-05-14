@@ -1,4 +1,5 @@
-import { createSignal, onMount, onCleanup, For, Show, createEffect } from 'solid-js';
+// CryptoAssetExplorer - REDESIGNED v2 - Full asset explorer with multi-timeframe
+import { createSignal, onMount, onCleanup, For, Show, createEffect, createMemo } from 'solid-js';
 import * as echarts from 'echarts';
 
 const fmt = (v, d = 2) => (v == null || isNaN(v)) ? 'N/A' : Number(v).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -12,17 +13,17 @@ const fmtMln = (v) => {
 const fmtPct = (v) => (v == null || isNaN(v)) ? 'N/A' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`;
 const signColor = (v) => v > 0 ? 'text-green-400' : v < 0 ? 'text-red-400' : 'text-text_secondary';
 
-function Sparkline({ klines }) {
+function Sparkline({ klines, timeframe }) {
   let ref;
   let chart;
 
   const render = () => {
     if (!ref || !klines || klines.length === 0) return;
     if (!chart) chart = echarts.init(ref);
-    
+
     const data = klines.map(d => d.close);
     const isUp = data[data.length - 1] >= data[0];
-    
+
     chart.setOption({
       backgroundColor: 'transparent',
       animation: false,
@@ -34,9 +35,9 @@ function Sparkline({ klines }) {
         data: data,
         symbol: 'none',
         smooth: true,
-        lineStyle: { 
-          width: 1.5, 
-          color: isUp ? '#0ecb81' : '#f6465d' 
+        lineStyle: {
+          width: 1.5,
+          color: isUp ? '#0ecb81' : '#f6465d'
         },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
@@ -55,9 +56,101 @@ function Sparkline({ klines }) {
     onCleanup(() => { ro.disconnect(); chart?.dispose(); });
   });
 
-  createEffect(() => { klines; render(); });
+  createEffect(() => { klines; timeframe; render(); });
 
   return <div ref={ref} class="w-full h-8" />;
+}
+
+// ============================================
+// NEW: TIMEFRAME SELECTOR
+// ============================================
+function TimeframeSelector({ current, onChange }) {
+  const timeframes = ['1m', '5m', '15m', '1h'];
+  
+  return (
+    <div class="flex gap-1">
+      {timeframes.map(tf => (
+        <button
+          key={tf}
+          onClick={() => onChange(tf)}
+          class={`text-[8px] px-2 py-1 rounded transition-all ${
+            current === tf
+              ? 'bg-text_accent text-black font-bold'
+              : 'bg-white/5 text-text_secondary/50 hover:text-text_secondary hover:bg-white/10'
+          }`}
+        >
+          {tf}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ============================================
+// NEW: ADVANCED FILTERS
+// ============================================
+function AdvancedFilters({ filters, setFilters }) {
+  return (
+    <div class="flex items-center gap-2">
+      <div class="flex items-center gap-1">
+        <span class="text-[8px] font-black text-text_secondary uppercase">Vol Min:</span>
+        <input
+          type="number"
+          value={filters.minVolume}
+          onChange={(e) => setFilters(prev => ({ ...prev, minVolume: parseFloat(e.target.value) || 0 }))}
+          class="w-20 bg-bg_main/60 border border-border_main px-2 py-1 text-[8px] text-text_primary focus:border-text_accent outline-none"
+          placeholder="1M"
+        />
+      </div>
+      <div class="flex items-center gap-1">
+        <span class="text-[8px] font-black text-text_secondary uppercase">Cap Min:</span>
+        <input
+          type="number"
+          value={filters.minMarketCap}
+          onChange={(e) => setFilters(prev => ({ ...prev, minMarketCap: parseFloat(e.target.value) || 0 }))}
+          class="w-20 bg-bg_main/60 border border-border_main px-2 py-1 text-[8px] text-text_primary focus:border-text_accent outline-none"
+          placeholder="100M"
+        />
+      </div>
+      <div class="flex items-center gap-1">
+        <span class="text-[8px] font-black text-text_secondary uppercase">Change:</span>
+        <select
+          value={filters.changeFilter}
+          onChange={(e) => setFilters(prev => ({ ...prev, changeFilter: e.target.value }))}
+          class="bg-bg_main/60 border border-border_main px-2 py-1 text-[8px] text-text_primary focus:border-text_accent outline-none"
+        >
+          <option value="all">All</option>
+          <option value="gainers">+Gainers</option>
+          <option value="losers">-Losers</option>
+          <option value="high_vol">High Vol</option>
+        </select>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// NEW: WATCHLIST MANAGER
+// ============================================
+function WatchlistManager({ watchlist, onAdd, onRemove }) {
+  return (
+    <div class="flex items-center gap-2">
+      <span class="text-[8px] font-black text-text_secondary uppercase">Watchlist:</span>
+      <div class="flex gap-1">
+        {watchlist.slice(0, 5).map((item, i) => (
+          <div key={i} class="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded">
+            <span class="text-[7px] font-black text-text_accent">{item}</span>
+            <button
+              onClick={() => onRemove(item)}
+              class="text-[6px] text-text_secondary hover:text-red-400"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function CryptoAssetExplorer(props) {
@@ -66,13 +159,16 @@ export default function CryptoAssetExplorer(props) {
   const [search, setSearch] = createSignal("");
   const [prices, setPrices] = createSignal({});
   const [klineStore, setKlineStore] = createSignal({});
+  const [timeframe, setTimeframe] = createSignal('1m');
   const [wsStatus, setWsStatus] = createSignal("CONNECTING");
   const [dataSource, setDataSource] = createSignal("CMC");
+  const [filters, setFilters] = createSignal({ minVolume: 0, minMarketCap: 0, changeFilter: 'all' });
+  const [watchlist, setWatchlist] = createSignal(['BTCUSDT', 'ETHUSDT']);
   let ws = null;
 
   const connectWS = () => {
     if (ws) ws.close();
-    const wsUrl = import.meta.env.VITE_CRYPTO_STREAM_WS || 'wss://api.asetpedia.online/ws/crypto';
+    const wsUrl = import.meta.env.VITE_CRYPTO_STREAM_WS;
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => setWsStatus("LIVE");
@@ -85,7 +181,16 @@ export default function CryptoAssetExplorer(props) {
         const newKlines = {};
         const newPrices = {};
         Object.entries(msg.data).forEach(([s, data]) => {
-          const klines = (data.klines || []).sort((a, b) => a.time - b.time);
+          let klines = [];
+          if (data.klines) {
+            if (Array.isArray(data.klines)) {
+              klines = data.klines;
+            } else if (typeof data.klines === 'object') {
+              // If it's an object with timeframe keys, get the selected timeframe data
+              klines = data.klines[timeframe()] || data.klines['1m'] || [];
+            }
+          }
+          klines = klines.sort((a, b) => a.time - b.time);
           newKlines[s] = klines;
           if (klines.length > 0) {
             newPrices[s] = { price: klines[klines.length - 1].close, side: 'neutral' };
@@ -138,30 +243,71 @@ export default function CryptoAssetExplorer(props) {
     if (ws) ws.close();
   });
 
-  const filteredCoins = () => {
+  const filteredCoins = createMemo(() => {
     const q = search().toLowerCase();
-    if (!q) return coins();
-    return coins().filter(c => c.name.toLowerCase().includes(q) || c.symbol.toLowerCase().includes(q));
-  };
+    const f = filters();
+    let result = coins();
+    
+    if (q) {
+      result = result.filter(c => c.name.toLowerCase().includes(q) || c.symbol.toLowerCase().includes(q));
+    }
+    
+    if (f.minVolume > 0) {
+      result = result.filter(c => (c.quote?.USD?.volume_24h || 0) >= f.minVolume * 1e6);
+    }
+    
+    if (f.minMarketCap > 0) {
+      result = result.filter(c => (c.quote?.USD?.market_cap || 0) >= f.minMarketCap * 1e6);
+    }
+    
+    if (f.changeFilter === 'gainers') {
+      result = result.filter(c => (c.quote?.USD?.percent_change_24h || 0) > 0);
+    } else if (f.changeFilter === 'losers') {
+      result = result.filter(c => (c.quote?.USD?.percent_change_24h || 0) < 0);
+    }
+    
+    return result;
+  });
 
   return (
     <div class="flex flex-col h-full bg-bg_main/20">
       {/* Header / Search */}
-      <div class="p-4 border-b border-border_main bg-black/40 flex items-center justify-between gap-4">
-        <div class="flex flex-col gap-1">
-          <h2 class="text-[12px] font-black text-text_accent uppercase tracking-widest">Global Asset Explorer</h2>
-          <p class="text-[9px] text-text_secondary uppercase">Institutional Data powered by <span class="text-text_accent">{dataSource()}</span> INFRASTRUCTURE</p>
+      <div class="p-4 border-b border-border_main bg-black/40 flex flex-col gap-3">
+        <div class="flex items-center justify-between gap-4">
+          <div class="flex flex-col gap-1">
+            <h2 class="text-[12px] font-black text-text_accent uppercase tracking-widest">Global Asset Explorer</h2>
+            <p class="text-[9px] text-text_secondary uppercase">Institutional Data powered by <span class="text-text_accent">{dataSource()}</span> INFRASTRUCTURE</p>
+          </div>
+
+          <div class="flex items-center gap-4">
+            <TimeframeSelector current={timeframe()} onChange={setTimeframe} />
+            <div class="relative w-64">
+              <input
+                type="text"
+                placeholder="FILTER ASSETS (NAME/SYMBOL)..."
+                class="w-full bg-bg_main/60 border border-border_main px-3 py-1.5 text-[10px] font-mono text-text_primary focus:border-text_accent outline-none transition-all placeholder:text-text_secondary/30"
+                onInput={(e) => setSearch(e.target.value)}
+                value={search()}
+              />
+              <div class="absolute right-2 top-1/2 -translate-y-1/2 w-1 h-3 bg-text_accent/20" />
+            </div>
+          </div>
         </div>
-        
-        <div class="relative w-64">
-          <input 
-            type="text"
-            placeholder="FILTER ASSETS (NAME/SYMBOL)..."
-            class="w-full bg-bg_main/60 border border-border_main px-3 py-1.5 text-[10px] font-mono text-text_primary focus:border-text_accent outline-none transition-all placeholder:text-text_secondary/30"
-            onInput={(e) => setSearch(e.target.value)}
-            value={search()}
+
+        <div class="flex items-center justify-between gap-4">
+          <AdvancedFilters filters={filters()} setFilters={setFilters} />
+          <WatchlistManager 
+            watchlist={watchlist()} 
+            onAdd={(sym) => {
+              const pair = sym.includes('USDT') ? sym : `${sym}USDT`;
+              setWatchlist(prev => {
+                if (prev.includes(pair)) return prev;
+                if (prev.length >= 10) return [pair, ...prev.slice(0, 9)];
+                return [pair, ...prev];
+              });
+            }}
+            onRemove={(sym) => setWatchlist(prev => prev.filter(s => s !== sym))}
           />
-          <div class="absolute right-2 top-1/2 -translate-y-1/2 w-1 h-3 bg-text_accent/20" />
         </div>
       </div>
 
@@ -175,7 +321,7 @@ export default function CryptoAssetExplorer(props) {
               <th class="px-4 py-3 border-r border-border_main text-right">Price (USD)</th>
               <th class="px-4 py-3 border-r border-border_main text-right">24h %</th>
               <th class="px-4 py-3 border-r border-border_main text-right">7d %</th>
-              <th class="px-4 py-3 border-r border-border_main w-32">Live Trend</th>
+              <th class="px-4 py-3 border-r border-border_main w-32">Live Trend ({timeframe()})</th>
               <th class="px-4 py-3 border-r border-border_main text-right">Market Cap</th>
               <th class="px-4 py-3 border-r border-border_main text-right">Volume (24h)</th>
               <th class="px-4 py-3 text-center">Action</th>
@@ -196,7 +342,7 @@ export default function CryptoAssetExplorer(props) {
                 {(coin) => {
                   const quote = coin.quote.USD;
                   return (
-                    <tr 
+                    <tr
                       class="hover:bg-text_accent/5 transition-colors group cursor-pointer"
                       onClick={() => props.onSelect(coin.symbol)}
                     >
@@ -214,9 +360,9 @@ export default function CryptoAssetExplorer(props) {
                       </td>
                       <td class="px-4 py-3 text-right font-mono text-[11px]">
                         <span class={
-                          prices()[coin.symbol + 'USDT']?.side === 'up' ? 'text-green-400' : 
-                          prices()[coin.symbol + 'USDT']?.side === 'down' ? 'text-red-400' : 
-                          'text-text_primary'
+                          prices()[coin.symbol + 'USDT']?.side === 'up' ? 'text-green-400' :
+                            prices()[coin.symbol + 'USDT']?.side === 'down' ? 'text-red-400' :
+                              'text-text_primary'
                         }>
                           ${fmt(prices()[coin.symbol + 'USDT']?.price || quote.price, quote.price < 1 ? 4 : 2)}
                         </span>
@@ -228,7 +374,7 @@ export default function CryptoAssetExplorer(props) {
                         {fmtPct(quote.percent_change_7d)}
                       </td>
                       <td class="px-2 py-1">
-                        <Sparkline klines={klineStore()[coin.symbol + 'USDT'] || []} />
+                        <Sparkline klines={klineStore()[coin.symbol + 'USDT'] || []} timeframe={timeframe()} />
                       </td>
                       <td class="px-4 py-3 text-right font-mono text-[10px] text-text_secondary">
                         ${fmtMln(quote.market_cap)}
@@ -238,19 +384,19 @@ export default function CryptoAssetExplorer(props) {
                       </td>
                       <td class="px-4 py-3 text-center">
                         <div class="flex items-center justify-center gap-2">
-                          <button 
+                          <button
                             onClick={(e) => { e.stopPropagation(); props.onSelect(coin.symbol); }}
                             class="bg-text_accent/10 hover:bg-text_accent/20 border border-text_accent/20 text-text_accent text-[8px] font-black px-2 py-1 uppercase tracking-tighter transition-all"
                           >
                             Intel
                           </button>
-                          <button 
+                          <button
                             onClick={(e) => { e.stopPropagation(); props.onAddToLive(coin.symbol); }}
                             class="bg-blue-500/10 hover:bg-blue-500/30 border border-blue-500/20 text-blue-400 text-[8px] font-black px-2 py-1 uppercase tracking-tighter transition-all"
                           >
                             + Live
                           </button>
-                          <button 
+                          <button
                             onClick={(e) => { e.stopPropagation(); window.open(`https://www.binance.com/en/trade/${coin.symbol}_USDT`, '_blank'); }}
                             class="bg-yellow-500/10 hover:bg-yellow-500/30 border border-yellow-500/20 text-yellow-500 text-[8px] font-black px-2 py-1 uppercase tracking-tighter transition-all"
                           >
@@ -272,6 +418,7 @@ export default function CryptoAssetExplorer(props) {
         <div class="flex gap-4">
           <span>Total Assets: {coins().length}</span>
           <span>Filtered: {filteredCoins().length}</span>
+          <span>Watchlist: {watchlist().length}</span>
         </div>
         <div class="flex items-center gap-2">
           <div class={`w-1.5 h-1.5 rounded-full animate-pulse ${wsStatus() === 'LIVE' ? 'bg-green-500' : 'bg-red-500'}`} />

@@ -1,6 +1,11 @@
 import { createSignal, Show, For, onMount, createEffect } from 'solid-js';
 import { useComparativeData } from './hooks/useComparativeData';
 import { useAIStream } from './hooks/useAIStream';
+import { AVAILABLE_MODELS } from '../../../lib/models/modelRegistry';
+import ModelSelector from '../../../components/shared/ModelSelector';
+import LanguageSelector from '../../../components/shared/LanguageSelector';
+
+
 import CompanySelector from './components/CompanySelector';
 import TechnicalComparePanel from './components/TechnicalComparePanel';
 import FundamentalComparePanel from './components/FundamentalComparePanel';
@@ -83,7 +88,7 @@ const REPORT_STYLES = `
   .ai-stage-content tr:hover td { background: #f8fafc; }
 `;
 
-export default function ComparativeView() {
+export default function ComparativeView(props) {
   const RESEARCH_API = import.meta.env.VITE_RESEARCH_API;
 
   const {
@@ -102,17 +107,8 @@ export default function ComparativeView() {
   const [activeView, setActiveView] = createSignal('new'); // 'new' | 'history'
   const [reportContainerRef, setReportContainerRef] = createSignal(null);
   const [logContainerRef, setLogContainerRef] = createSignal(null);
-  const [availableModels, setAvailableModels] = createSignal([
-    { "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash", "provider": "DeepSeek" },
-    { "id": "deepseek-v4-pro", "name": "DeepSeek V4 Pro", "provider": "DeepSeek" },
-    { "id": "deepseek-chat", "name": "DeepSeek Chat Standard", "provider": "DeepSeek" },
-    { "id": "deepseek-reasoner", "name": "DeepSeek Reasoner Standard", "provider": "DeepSeek" },
-    { "id": "deepseek-r1", "name": "DeepSeek R1", "provider": "DeepSeek" },
-    { "id": "gpt-5.5", "name": "GPT 5.5", "provider": "OpenAI" },
-    { "id": "gpt-5.4-mini", "name": "GPT 5.4-Mini", "provider": "OpenAI" },
-    { "id": "kimi-k2.5", "name": "Kimi k2.5", "provider": "Moonshot AI" },
-    { "id": "gemini-flash-latest", "name": "Gemini 3 Flash", "provider": "Google" },
-  ]);
+  const [availableModels, setAvailableModels] = createSignal(AVAILABLE_MODELS);
+
   const [history, setHistory] = createSignal([]);
 
   const activeCompanies = () => {
@@ -369,210 +365,285 @@ export default function ComparativeView() {
 
       <div class="flex-1 flex overflow-hidden">
         {/* ─── LEFT SIDEBAR ─────────────────────────── */}
-        <div class="w-[280px] border-r border-border_main flex flex-col bg-bg_sidebar overflow-y-auto win-scroll p-4 gap-4 shrink-0">
+        <div class="w-[320px] border-r border-border_main flex flex-col bg-[#05070a] overflow-y-visible shrink-0 relative">
+          {/* Sidebar Header */}
+          <div class="p-6 pb-2">
+            <h2 class="text-[10px] font-black text-text_accent tracking-[0.5em] uppercase opacity-80 mb-6">
+              Comp Analysis
+            </h2>
 
-          {/* Company Selector */}
-          <CompanySelector
-            companies={companies}
-            setCompanies={setCompanies}
-            disabled={loading() || isStreaming()}
-          />
-
-          {/* AI Settings - Compact */}
-          <div class="glass-panel p-2 flex flex-col gap-2">
-            <div class="grid grid-cols-2 gap-2">
-              <div class="flex flex-col gap-1">
-                <label class="text-[7px] font-black text-text_accent/50 uppercase tracking-widest">Engine</label>
-                <select
-                  class="bg-black border border-border_main px-2 py-1 text-[9px] font-mono text-white outline-none focus:border-text_accent"
-                  value={model()}
-                  onChange={(e) => setModel(e.target.value)}
-                  disabled={loading() || isStreaming()}
+            {/* Analysis Mode Switcher */}
+            <div class="flex items-center gap-1 bg-white/[0.03] p-1 rounded-xl border border-white/5 mb-2">
+                <button
+                    onClick={() => props.setMode('single')}
+                    class={`flex-1 px-3 py-2 text-[8px] font-black tracking-widest rounded-lg transition-all ${props.mode() === 'single' ? 'bg-text_accent text-bg_main shadow-[0_0_15px_rgba(34,211,238,0.2)]' : 'text-white/30 hover:text-white hover:bg-white/5'}`}
                 >
-                  <For each={availableModels()}>
-                    {(m) => <option value={m.id}>{m.name || m.id}</option>}
-                  </For>
-                </select>
-              </div>
-              <div class="flex flex-col gap-1">
-                <label class="text-[7px] font-black text-text_accent/50 uppercase tracking-widest">Language</label>
-                <select
-                  class="bg-black border border-border_main px-2 py-1 text-[9px] font-mono text-white outline-none focus:border-text_accent"
-                  value={language()}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  disabled={loading() || isStreaming()}
+                    SINGLE
+                </button>
+                <button
+                    onClick={() => props.setMode('comparative')}
+                    class={`flex-1 px-3 py-2 text-[8px] font-black tracking-widest rounded-lg transition-all ${props.mode() === 'comparative' ? 'bg-text_accent text-bg_main shadow-[0_0_15px_rgba(34,211,238,0.2)]' : 'text-white/30 hover:text-white hover:bg-white/5'}`}
                 >
-                  <option value="en">EN</option>
-                  <option value="id">ID</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="flex items-center justify-between bg-white/5 p-1.5 border border-white/5 rounded-sm">
-              <div class="flex flex-col">
-                <span class="text-[8px] font-black text-text_accent leading-none">TOKEN SAVER</span>
-                <span class="text-[6px] text-white/20 uppercase">SAVE ~65%</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setCaveman(!caveman())}
-                class={`w-7 h-3.5 rounded-full transition-all relative ${caveman() ? 'bg-text_accent' : 'bg-white/10'}`}
-              >
-                <div class={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-all ${caveman() ? 'left-4' : 'left-0.5'}`}></div>
-              </button>
+                    COMPARE
+                </button>
             </div>
           </div>
 
-          {/* Institutional Command Hub */}
-          <div class="glass-panel p-3 flex flex-col gap-3">
-            <h3 class="text-[8px] font-black text-text_accent/50 tracking-[0.4em] border-b border-border_main pb-2">
-              Institutional Command Hub
-            </h3>
-            
-            <div class="grid grid-cols-3 gap-2">
-              {/* Row 1: Core Process */}
-              <button
-                onClick={handleGatherData}
-                disabled={loading() || isStreaming()}
-                class={`flex flex-col items-center justify-center gap-1.5 p-2 rounded border transition-all ${loading() ? 'bg-text_accent/20 border-text_accent animate-pulse' : 'bg-white/5 border-white/10 hover:border-text_accent/50 hover:bg-white/10'} disabled:opacity-30 group`}
-                title="Gather Data"
-              >
-                <svg class={`w-4 h-4 ${loading() ? 'text-text_accent animate-spin' : 'text-white/60 group-hover:text-text_accent'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7C5 4 4 5 4 7z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7c0 2 1 3 3 3h10c2 0 3-1 3-3" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12c0 2 1 3 3 3h10c2 0 3-1 3-3" />
-                </svg>
-                <span class="text-[7px] font-black uppercase tracking-tighter text-white/40 group-hover:text-white">Gather</span>
-              </button>
-
-              <button
-                onClick={handleRunAnalysis}
-                disabled={loading() || isStreaming() || Object.keys(rawData()).length === 0}
-                class={`flex flex-col items-center justify-center gap-1.5 p-2 rounded border transition-all ${isStreaming() ? 'bg-text_accent border-text_accent' : 'bg-white/5 border-white/10 hover:border-text_accent/50 hover:bg-white/10'} disabled:opacity-30 group`}
-                title="Synthesize Report"
-              >
-                <svg class={`w-4 h-4 ${isStreaming() ? 'text-bg_main animate-pulse' : 'text-white/60 group-hover:text-text_accent'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-                <span class={`text-[7px] font-black uppercase tracking-tighter ${isStreaming() ? 'text-bg_main' : 'text-white/40 group-hover:text-white'}`}>Synth</span>
-              </button>
-
-              <button
-                onClick={handleNewResearch}
-                disabled={loading() || isStreaming()}
-                class="flex flex-col items-center justify-center gap-1.5 p-2 rounded border bg-white/5 border-white/10 hover:border-blue-400/50 hover:bg-blue-400/10 transition-all disabled:opacity-30 group"
-                title="New Research"
-              >
-                <svg class="w-4 h-4 text-white/60 group-hover:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span class="text-[7px] font-black uppercase tracking-tighter text-white/40 group-hover:text-white">New</span>
-              </button>
-
-
-              <button
-                onClick={handleExportZIP}
-                disabled={!reports()[8]}
-                class="flex flex-col items-center justify-center gap-1.5 p-2 rounded border bg-white/5 border-white/10 hover:border-amber-400/50 hover:bg-amber-400/10 transition-all disabled:opacity-30 group"
-                title="Export ZIP"
-              >
-                <svg class="w-4 h-4 text-white/60 group-hover:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                </svg>
-                <span class="text-[7px] font-black uppercase tracking-tighter text-white/40 group-hover:text-white">ZIP</span>
-              </button>
-
-              <div class="relative group">
-                <input
-                  type="file"
-                  accept=".zip"
-                  onChange={handleLoadZIP}
+          <div class="flex-1 overflow-y-auto win-scroll px-6 flex flex-col gap-8 pb-10">
+            {/* SECTION 1: ASSET CONTEXT */}
+            <section class="flex flex-col gap-4">
+              <div class="flex items-center justify-between">
+                <span class="text-[8px] font-black text-white/30 uppercase tracking-[0.2em]">Asset Context</span>
+                <div class="h-px flex-1 bg-white/5 ml-4"></div>
+              </div>
+              
+              <div class="p-1 bg-white/[0.02] border border-white/5 rounded-2xl">
+                <CompanySelector
+                  companies={companies}
+                  setCompanies={setCompanies}
                   disabled={loading() || isStreaming()}
-                  class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed"
                 />
-                <div class="flex flex-col items-center justify-center gap-1.5 p-2 rounded border bg-white/5 border-white/10 group-hover:border-emerald-400/50 group-hover:bg-emerald-400/10 transition-all opacity-100 group-disabled:opacity-30">
-                  <svg class="w-4 h-4 text-white/60 group-hover:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                  </svg>
-                  <span class="text-[7px] font-black uppercase tracking-tighter text-white/40 group-hover:text-white">Load</span>
+              </div>
+            </section>
+
+            {/* SECTION 2: AI ORCHESTRATION */}
+            <section class="flex flex-col gap-5 p-5 rounded-2xl bg-white/[0.02] border border-white/5 relative group/settings">
+              <div class="absolute top-0 right-0 p-3 opacity-10 group-hover/settings:opacity-30 transition-opacity">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41M12 7a5 5 0 100 10 5 5 0 000-10z"/>
+                </svg>
+              </div>
+
+              <div class="flex flex-col gap-1.5">
+                <label class="text-[8px] font-black text-text_accent tracking-[0.2em] uppercase">Intelligence Engine</label>
+                <ModelSelector
+                  selectedModelId={model()}
+                  availableModels={availableModels()}
+                  onSelect={(m) => setModel(m.id)}
+                />
+              </div>
+
+              <div class="flex flex-col gap-1.5">
+                <label class="text-[8px] font-black text-white/30 tracking-[0.2em] uppercase">Output Language</label>
+                <LanguageSelector
+                  selectedLanguage={language()}
+                  onSelect={(lang) => setLanguage(lang)}
+                  disabled={loading() || isStreaming()}
+                />
+              </div>
+
+              <div class="flex items-center justify-between pt-2 border-t border-white/5 mt-1">
+                <div class="flex flex-col">
+                  <span class="text-[9px] font-black text-white/80 uppercase leading-none mb-0.5">Token Optimizer</span>
+                  <span class="text-[7px] text-text_accent font-bold uppercase tracking-widest">Active Reduction</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCaveman(!caveman())}
+                  class={`w-9 h-5 rounded-full transition-all relative ${caveman() ? 'bg-text_accent' : 'bg-white/10'}`}
+                >
+                  <div class={`absolute top-1 w-3 h-3 rounded-full bg-white shadow-sm transition-all ${caveman() ? 'left-5' : 'left-1'}`}></div>
+                </button>
+              </div>
+            </section>
+
+            {/* SECTION 3: COMMAND HUB */}
+            <section class="flex flex-col gap-4">
+              <div class="flex items-center justify-between">
+                <span class="text-[8px] font-black text-white/30 uppercase tracking-[0.2em]">Command Hub</span>
+                <div class="h-px flex-1 bg-white/5 ml-4"></div>
+              </div>
+
+              <div class="grid grid-cols-3 gap-3">
+                <button
+                  onClick={handleGatherData}
+                  disabled={loading() || isStreaming()}
+                  class={`group flex flex-col items-center justify-center gap-2 p-3 rounded-xl border transition-all ${loading() ? 'bg-text_accent/10 border-text_accent animate-pulse' : 'bg-white/[0.03] border-white/10 hover:border-text_accent hover:bg-text_accent/5'} disabled:opacity-20`}
+                >
+                  <div class={`p-2 rounded-lg transition-colors ${loading() ? 'bg-text_accent/20 text-text_accent' : 'bg-white/5 text-white/40 group-hover:text-text_accent group-hover:bg-text_accent/10'}`}>
+                    <svg class={`w-5 h-5 ${loading() ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7C5 4 4 5 4 7z" />
+                    </svg>
+                  </div>
+                  <span class="text-[8px] font-black uppercase tracking-widest text-white/40 group-hover:text-white">Gather</span>
+                </button>
+
+                <button
+                  onClick={handleRunAnalysis}
+                  disabled={loading() || isStreaming() || Object.keys(rawData()).length === 0}
+                  class={`group flex flex-col items-center justify-center gap-2 p-3 rounded-xl border transition-all ${isStreaming() ? 'bg-text_accent border-text_accent' : 'bg-white/[0.03] border-white/10 hover:border-text_accent hover:bg-text_accent/5'} disabled:opacity-20`}
+                >
+                  <div class={`p-2 rounded-lg transition-colors ${isStreaming() ? 'bg-white/20 text-white' : 'bg-white/5 text-white/40 group-hover:text-text_accent group-hover:bg-text_accent/10'}`}>
+                    <svg class={`w-5 h-5 ${isStreaming() ? 'animate-pulse' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                  </div>
+                  <span class="text-[8px] font-black uppercase tracking-widest text-white/40 group-hover:text-white">Synth</span>
+                </button>
+
+                <button
+                  onClick={handleNewResearch}
+                  disabled={loading() || isStreaming()}
+                  class="group flex flex-col items-center justify-center gap-2 p-3 rounded-xl border bg-white/[0.03] border-white/10 hover:border-blue-400 hover:bg-blue-400/5 transition-all disabled:opacity-20"
+                >
+                  <div class="p-2 rounded-lg bg-white/5 text-white/40 group-hover:text-blue-400 group-hover:bg-blue-400/10 transition-colors">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                  </div>
+                  <span class="text-[8px] font-black uppercase tracking-widest text-white/40 group-hover:text-white">New</span>
+                </button>
+
+                <button
+                  onClick={handleExportZIP}
+                  disabled={!reports()[8]}
+                  class="group flex flex-col items-center justify-center gap-2 p-3 rounded-xl border bg-white/[0.03] border-white/10 hover:border-purple-400 hover:bg-purple-400/5 transition-all disabled:opacity-20"
+                >
+                  <div class="p-2 rounded-lg bg-white/5 text-white/40 group-hover:text-purple-400 group-hover:bg-purple-400/10 transition-colors">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                    </svg>
+                  </div>
+                  <span class="text-[8px] font-black uppercase tracking-widest text-white/40 group-hover:text-white">ZIP</span>
+                </button>
+
+                <div class="relative group">
+                  <input
+                    type="file"
+                    accept=".zip"
+                    onChange={handleLoadZIP}
+                    disabled={loading() || isStreaming()}
+                    class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed"
+                  />
+                  <div class="flex flex-col items-center justify-center gap-2 p-3 rounded-xl border bg-white/[0.03] border-white/10 group-hover:border-emerald-400 group-hover:bg-emerald-400/5 transition-all h-full">
+                    <div class="p-2 rounded-lg bg-white/5 text-white/40 group-hover:text-emerald-400 group-hover:bg-emerald-400/10 transition-colors">
+                      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                      </svg>
+                    </div>
+                    <span class="text-[8px] font-black uppercase tracking-widest text-white/40 group-hover:text-white">Load</span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setActiveView('history')}
+                  class="group flex flex-col items-center justify-center gap-2 p-3 rounded-xl border bg-white/[0.03] border-white/10 hover:border-amber-400 hover:bg-amber-400/5 transition-all"
+                >
+                  <div class="p-2 rounded-lg bg-white/5 text-white/40 group-hover:text-amber-400 group-hover:bg-amber-400/10 transition-colors">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <span class="text-[8px] font-black uppercase tracking-widest text-white/40 group-hover:text-white">History</span>
+                </button>
+              </div>
+            </section>
+
+            {/* SECTION 4: PROCESS TERMINAL */}
+            <section class="flex flex-col gap-4">
+              <div class="flex items-center justify-between">
+                <span class="text-[8px] font-black text-white/30 uppercase tracking-[0.2em]">Process Terminal</span>
+                <div class="h-px flex-1 bg-white/5 ml-4"></div>
+              </div>
+              
+              <div class="p-4 bg-black/40 border border-white/5 rounded-xl min-h-[150px] max-h-[200px] flex flex-col gap-2">
+                <div
+                  ref={setLogContainerRef}
+                  class="flex-1 overflow-y-auto win-scroll flex flex-col gap-1.5 font-mono text-[8px] pr-1"
+                >
+                  <For each={logs()}>
+                    {(log) => (
+                      <div class="flex gap-2 animate-in slide-in-from-left-1 duration-200">
+                        <span class="text-text_accent opacity-30 shrink-0">[{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
+                        <span class={log.includes('✓') || log.includes('complete') ? 'text-green-400' : log.includes('Error') ? 'text-red-400' : 'text-white/60'}>
+                          {log}
+                        </span>
+                      </div>
+                    )}
+                  </For>
+                  <Show when={loading() || isStreaming()}>
+                    <div class="w-1 h-3 bg-text_accent animate-pulse mt-0.5"></div>
+                  </Show>
+                  <Show when={logs().length === 0}>
+                    <div class="text-white/10 italic py-2 uppercase tracking-widest text-[7px]">System standby...</div>
+                  </Show>
                 </div>
               </div>
-            </div>
+            </section>
+
+            {/* SECTION 5: REPORT STAGES */}
+            <Show when={isStreaming() || reports()[1]}>
+              <section class="flex flex-col gap-4">
+                <div class="flex items-center justify-between">
+                  <span class="text-[8px] font-black text-white/30 uppercase tracking-[0.2em]">Generation Stages</span>
+                  <div class="h-px flex-1 bg-white/5 ml-4"></div>
+                </div>
+                
+                <div class="flex flex-col gap-1 p-1 bg-white/[0.02] border border-white/5 rounded-xl">
+                  <For each={Object.entries(GET_STAGE_NAMES(language()))}>
+                    {([num, name]) => {
+                      const n = Number(num);
+                      const isDone = !!reports()[n];
+                      const isActive = currentStage() === n;
+                      return (
+                        <a 
+                          href={`#ai-stage-${n}`} 
+                          class={`group flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/[0.05] transition-all relative overflow-hidden ${isActive ? 'bg-white/[0.04]' : ''}`}
+                        >
+                          <div class={`absolute left-0 top-0 bottom-0 w-1 bg-text_accent transition-opacity ${isActive || isDone ? 'opacity-100' : 'opacity-0'}`}></div>
+                          <span class={`w-5 h-5 flex items-center justify-center rounded-full text-[9px] font-black shrink-0 ${isActive ? 'bg-text_accent text-black animate-pulse' : isDone ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 text-white/20'}`}>
+                            {isDone ? '✓' : n}
+                          </span>
+                          <div class="flex flex-col">
+                            <span class={`text-[9px] font-black uppercase tracking-tight leading-none mb-1 ${isActive ? 'text-text_accent' : isDone ? 'text-white/80' : 'text-white/20'}`}>
+                              {name}
+                            </span>
+                            <span class="text-[7px] font-bold text-white/10 uppercase tracking-widest">Stage 0{n}</span>
+                          </div>
+                        </a>
+                      );
+                    }}
+                  </For>
+                </div>
+              </section>
+            </Show>
+
+            {/* SECTION 6: QUICK RECENT */}
+            <section class="flex flex-col gap-4">
+              <div class="flex items-center justify-between">
+                <span class="text-[8px] font-black text-white/30 uppercase tracking-[0.2em]">Recent Pulse</span>
+                <div class="h-px flex-1 bg-white/5 ml-4"></div>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <For each={history().slice(0, 5)}>
+                  {(item) => (
+                    <button 
+                      onClick={() => loadHistoryItem(item)}
+                      class="px-3 py-1.5 rounded-full bg-white/[0.03] border border-white/5 text-[9px] font-black text-white/40 hover:text-text_accent hover:border-text_accent/30 hover:bg-text_accent/5 transition-all uppercase tracking-wider"
+                    >
+                      {item.symbols.join(' vs ')}
+                    </button>
+                  )}
+                </For>
+                <Show when={history().length === 0}>
+                  <span class="text-[9px] font-bold text-white/10 uppercase tracking-widest py-2">No Recent Activity</span>
+                </Show>
+              </div>
+            </section>
           </div>
 
-          {/* Research History - Simplified in sidebar, link to main tab */}
-          <div class="glass-panel p-3 flex flex-col gap-2">
-            <h3 class="text-[8px] font-black text-text_accent/50 tracking-[0.4em] border-b border-border_main pb-1 flex justify-between items-center">
-              Quick History
-              <button onClick={() => setActiveView('history')} class="text-text_accent hover:underline">View All</button>
-            </h3>
-            <div class="flex flex-col gap-1.5">
-              <For each={history().slice(0, 3)}>
-                {(item) => (
-                  <div class="bg-black/40 border border-white/5 p-2 rounded flex flex-col gap-1 cursor-pointer hover:border-text_accent/30 transition-all" onClick={() => loadHistoryItem(item)}>
-                    <div class="flex items-center justify-between">
-                      <span class="text-[8px] font-black text-white/80">{item.symbols.join(' vs ')}</span>
-                      <span class="text-[6px] text-white/20">{new Date(item.timestamp).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                )}
-              </For>
+          {/* Sidebar Footer Status */}
+          <div class="p-4 bg-black/40 border-t border-white/5 flex items-center justify-between px-6">
+            <div class="flex items-center gap-2">
+              <div class={`w-1.5 h-1.5 rounded-full ${loading() || isStreaming() ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`}></div>
+              <span class="text-[8px] font-black text-white/30 uppercase tracking-widest">
+                {loading() || isStreaming() ? 'Syncing...' : 'Stable'}
+              </span>
             </div>
+            <span class="text-[8px] font-black text-white/10 uppercase">v4.2.0-CP</span>
           </div>
-
-          {/* Execution Logs */}
-          <div class="glass-panel p-3 flex flex-col gap-2 min-h-[150px] max-h-[200px]">
-            <h3 class="text-[8px] font-black text-text_accent/50 tracking-[0.4em] border-b border-border_main pb-1">
-              Process Terminal
-            </h3>
-            <div
-              ref={setLogContainerRef}
-              class="flex-1 overflow-y-auto win-scroll flex flex-col gap-1.5 font-mono text-[8px] pr-1"
-            >
-              <For each={logs()}>
-                {(log) => (
-                  <div class="flex gap-2 animate-in slide-in-from-left-1 duration-200">
-                    <span class="text-text_accent opacity-30 shrink-0">[{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
-                    <span class={log.includes('✓') || log.includes('complete') ? 'text-green-400' : log.includes('Error') ? 'text-red-400' : 'text-white/60'}>
-                      {log}
-                    </span>
-                  </div>
-                )}
-              </For>
-              <Show when={loading() || isStreaming()}>
-                <div class="w-1 h-3 bg-text_accent animate-pulse mt-0.5"></div>
-              </Show>
-              <Show when={logs().length === 0}>
-                <div class="text-white/10 italic py-2 uppercase tracking-widest text-[7px]">System standby...</div>
-              </Show>
-            </div>
-          </div>
-
-          {/* Stage Progress */}
-          <Show when={isStreaming() || reports()[1]}>
-            <div class="glass-panel p-3 flex flex-col gap-1.5">
-              <h3 class="text-[8px] font-black text-text_accent/50 tracking-[0.4em] border-b border-border_main pb-1 mb-1">
-                Report Stages
-              </h3>
-              <For each={Object.entries(GET_STAGE_NAMES(language()))}>
-                {([num, name]) => {
-                  const n = Number(num);
-                  const isDone = !!reports()[n];
-                  const isActive = currentStage() === n;
-                  return (
-                    <a href={`#ai-stage-${n}`} class={`flex items-center gap-2 py-0.5 transition-colors text-[8px] font-bold uppercase tracking-wide ${isActive ? 'text-text_accent' : isDone ? 'text-white/50 hover:text-text_accent' : 'text-white/15'}`}>
-                      <span class={`w-3 h-3 flex items-center justify-center rounded-full text-[7px] font-black shrink-0 ${isActive ? 'bg-text_accent text-black animate-pulse' : isDone ? 'bg-white/20 text-white' : 'border border-white/10 text-white/20'}`}>
-                        {isDone ? '✓' : n}
-                      </span>
-                      {name}
-                    </a>
-                  );
-                }}
-              </For>
-            </div>
-          </Show>
-
         </div>
+
 
         {/* ─── MAIN CONTENT ──────────────────────────── */}
         <div class="flex-1 flex flex-col overflow-hidden bg-[#090d15]">
@@ -597,28 +668,29 @@ export default function ComparativeView() {
 
           <div class="flex-1 overflow-y-auto win-scroll">
             <Show when={activeView() === 'new'}>
-              {/* Initial empty state */}
               <Show when={phase() === 'input'}>
-                <div class="h-full flex flex-col items-center justify-center text-center p-10 gap-6">
-                  <div class="w-16 h-16 border border-white/10 rounded-full flex items-center justify-center">
-                    <svg class="w-8 h-8 text-white/20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <div class="h-full flex flex-col items-center justify-center text-center p-10 gap-8 animate-in fade-in zoom-in-95 duration-700">
+                  <div class="w-24 h-24 border border-white/5 rounded-full flex items-center justify-center relative">
+                    <div class="absolute inset-0 border-t border-text_accent/20 rounded-full animate-spin-slow"></div>
+                    <svg class="w-10 h-10 text-white/10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
                       <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
                   </div>
-                  <div class="flex flex-col gap-2">
-                    <h2 class="text-[16px] font-black text-white/60 tracking-[0.3em]">Comparative Analysis Engine</h2>
-                    <p class="text-[10px] font-mono text-white/20 max-w-md uppercase tracking-wider leading-relaxed">
-                      Enter 2–3 company tickers in the sidebar. Click "Gather Data" to collect all market intelligence, then "Synthesize Report" to generate 8 stages of institutional-grade AI analysis.
+                  <div class="flex flex-col gap-3">
+                    <h2 class="text-[20px] font-black text-white tracking-[0.4em] uppercase opacity-80">Comparative Hub</h2>
+                    <p class="text-[10px] font-medium text-white/20 max-w-sm uppercase tracking-[0.2em] leading-loose">
+                      Enter 2–3 company tickers in the discovery section to collect market intelligence and synthesize an institutional-grade comparative analysis.
                     </p>
                   </div>
-                  <div class="flex gap-6 text-[8px] font-mono text-white/15 uppercase tracking-widest">
-                    <span>• Technical Analysis</span>
-                    <span>• Fundamental Comparison</span>
-                    <span>• ESG Assessment</span>
-                    <span>• Legal Intelligence</span>
+                  <div class="flex gap-8 text-[8px] font-black text-white/10 uppercase tracking-[0.3em]">
+                    <span class="flex items-center gap-2"><span class="w-1 h-1 rounded-full bg-text_accent/30"></span> Technical Matrix</span>
+                    <span class="flex items-center gap-2"><span class="w-1 h-1 rounded-full bg-text_accent/30"></span> Fundamental Deep-Dive</span>
+                    <span class="flex items-center gap-2"><span class="w-1 h-1 rounded-full bg-text_accent/30"></span> ESG Risk Scorecard</span>
+                    <span class="flex items-center gap-2"><span class="w-1 h-1 rounded-full bg-text_accent/30"></span> Legal Exposure</span>
                   </div>
                 </div>
               </Show>
+
 
               {/* Error */}
               <Show when={error()}>
@@ -922,7 +994,7 @@ export default function ComparativeView() {
               <div class="max-w-4xl mx-auto p-12">
                 <div class="flex items-center justify-between mb-12 border-b border-white/10 pb-6">
                   <div class="flex flex-col gap-1">
-                    <h2 class="text-2xl font-black text-white tracking-widest uppercase">Institutional Research Archive</h2>
+                    <h2 class="text-2xl font-black text-white tracking-widest uppercase">Archive</h2>
                     <p class="text-[10px] font-mono text-white/40 uppercase tracking-widest">Chronological timeline of your local analysis reports</p>
                   </div>
                   <div class="text-right">

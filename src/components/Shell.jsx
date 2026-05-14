@@ -108,16 +108,19 @@ export function Sidebar(props) {
   const [catFilter, setCatFilter] = createSignal("");
   const [activeGroup, setActiveGroup] = createSignal(null);
 
-  // Auto-collapse sidebar when in Workspace
+  // Auto-collapse sidebar when in Workspace or Copilot
   createEffect((prevView) => {
     const currentView = props.view();
-    if (currentView === 'workspace' && prevView !== 'workspace') {
+    const shouldCollapse = ['workspace', 'copilot'].includes(currentView);
+    const wasCollapsed = ['workspace', 'copilot'].includes(prevView);
+
+    if (shouldCollapse && !wasCollapsed) {
       setIsOpen(false);
-    } else if (currentView !== 'workspace' && prevView === 'workspace') {
+    } else if (!shouldCollapse && wasCollapsed) {
       setIsOpen(true);
     }
     return currentView;
-  }, props.view());
+  }, "");
 
   const filteredCategories = createMemo(() => {
     const all = [...new Set([...NEWS_CATEGORIES, ...props.categories.map(c => c.toUpperCase())])].sort();
@@ -160,6 +163,7 @@ export function Sidebar(props) {
         </Show>
         <button
           onClick={() => setIsOpen(!isOpen())}
+          title={isOpen() ? "Collapse Sidebar" : "Expand Sidebar"}
           class={`flex items-center justify-center text-text_secondary hover:text-text_accent ${isOpen() ? 'absolute right-2 w-8 h-8' : 'w-10 h-10'}`}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
@@ -236,15 +240,18 @@ export function Sidebar(props) {
         ]}>
           {(section) => (
             <>
+              <Show when={isOpen()}>
                 <div class="text-[8px] text-text_accent font-black px-6 mt-6 mb-2 tracking-[0.3em] opacity-30 border-l-2 border-text_accent/20 ml-3">
                   {section.title}
                 </div>
+              </Show>
 
               <For each={section.items}>
                 {(item) => (
                   <div class="flex flex-col">
                     <a
                       href={item.id === 'dashboard' ? '/' : `/${item.id}`}
+                      title={isOpen() ? "" : item.label}
                       onClick={(e) => {
                         e.preventDefault();
                         props.setView(item.id);
@@ -452,7 +459,7 @@ export function Header(props) {
 
 export function Footer() {
   return (
-    <footer class="h-10 px-8 bg-black border-t border-border_main flex items-center justify-between z-40 relative shadow-[0_-10px_20px_rgba(0,0,0,0.5)]">
+    <footer class="h-10 px-8 bg-black border-t border-border_main flex items-center justify-between z-40 relative shrink-0 shadow-[0_-10px_20px_rgba(0,0,0,0.5)]">
 
     </footer>
   );

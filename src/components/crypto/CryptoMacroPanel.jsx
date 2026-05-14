@@ -1,14 +1,169 @@
-import { createSignal, createEffect, For, Show, onMount, onCleanup } from 'solid-js';
+// CryptoMacroPanel - REDESIGNED v2 - Full macro intelligence
+import { createSignal, createEffect, For, Show, onMount, onCleanup, createMemo } from 'solid-js';
 import * as echarts from 'echarts';
 
 const fmt = (v, d = 2) => (v == null || isNaN(v)) ? 'N/A' : Number(v).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
 const fmtPct = (v) => (v == null || isNaN(v)) ? 'N/A' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`;
+const fmtMln = (v) => {
+  if (v == null || isNaN(v)) return 'N/A';
+  if (v >= 1e12) return (v / 1e12).toFixed(2) + 'T';
+  if (v >= 1e9) return (v / 1e9).toFixed(2) + 'B';
+  if (v >= 1e6) return (v / 1e6).toFixed(2) + 'M';
+  return v.toLocaleString();
+};
 
 function SH({ title }) {
   return (
     <div class="px-4 py-2 border-b border-border_main bg-bg_header/40 flex items-center gap-3 shrink-0">
       <div class="w-1.5 h-1.5 bg-text_accent animate-pulse shadow-[0_0_8px_var(--text-accent)]" />
       <span class="text-[9px] font-black tracking-[0.3em] text-text_primary uppercase font-mono">{title}</span>
+    </div>
+  );
+}
+
+// ============================================
+// NEW: MACRO CORRELATION CHART
+// ============================================
+function MacroCorrelationChart({ data }) {
+  let ref, chart;
+  
+  onMount(() => {
+    if (!ref || !data) return;
+    chart = echarts.init(ref);
+    
+    const series = [];
+    if (data?.stocks) {
+      series.push({
+        name: 'S&P 500',
+        type: 'line',
+        data: data.stocks.map(d => d.value),
+        smooth: true,
+        lineStyle: { color: '#448aff', width: 2 }
+      });
+    }
+    if (data?.bonds) {
+      series.push({
+        name: '10Y Treasury',
+        type: 'line',
+        data: data.bonds.map(d => d.value),
+        smooth: true,
+        lineStyle: { color: '#e040fb', width: 2 }
+      });
+    }
+    if (data?.gold) {
+      series.push({
+        name: 'GOLD',
+        type: 'line',
+        data: data.gold.map(d => d.value),
+        smooth: true,
+        lineStyle: { color: '#ff9100', width: 2 }
+      });
+    }
+    if (data?.vix) {
+      series.push({
+        name: 'VIX',
+        type: 'line',
+        data: data.vix.map(d => d.value),
+        smooth: true,
+        lineStyle: { color: '#ff1744', width: 2 }
+      });
+    }
+
+    chart.setOption({
+      backgroundColor: 'transparent',
+      tooltip: { trigger: 'axis', backgroundColor: '#0a0a0a', borderColor: '#333', textStyle: { color: '#ccc', fontSize: 10 } },
+      legend: { top: 5, textStyle: { color: '#666', fontSize: 8 } },
+      grid: { top: 30, right: 30, bottom: 30, left: 60 },
+      xAxis: {
+        type: 'category',
+        data: data?.stocks?.map((_, i) => `T-${data.stocks.length - i}`) || [],
+        axisLabel: { color: '#555', fontSize: 8 },
+        axisLine: { lineStyle: { color: '#333' } }
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: { color: '#555', fontSize: 8 },
+        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.03)' } }
+      },
+      series: series
+    });
+    
+    const h = () => chart?.resize();
+    window.addEventListener('resize', h);
+    onCleanup(() => { window.removeEventListener('resize', h); chart?.dispose(); });
+  });
+  
+  return <div ref={ref} class="w-full h-full" />;
+}
+
+// ============================================
+// NEW: FED POLICY TRACKER
+// ============================================
+function FedPolicyTracker({ data }) {
+  if (!data?.policies?.length) return (
+    <div class="py-10 text-center text-[9px] text-text_secondary">FED POLICY DATA LOADING...</div>
+  );
+  
+  return (
+    <div class="max-h-[250px] overflow-y-auto win-scroll">
+      <table class="w-full text-[9px] font-mono">
+        <thead class="bg-bg_header/60 sticky top-0 z-10 border-b border-border_main">
+          <tr>
+            <th class="p-2 text-left text-text_accent">DATE</th>
+            <th class="p-2 text-right text-white">RATE</th>
+            <th class="p-2 text-right text-white">ACTION</th>
+            <th class="p-2 text-right text-text_secondary">OUTLOOK</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-border_main/10">
+          <For each={data.policies.slice(0, 10)}>
+            {(p) => (
+              <tr class="hover:bg-white/5 transition-colors">
+                <td class="p-2 text-text_secondary">{p.date}</td>
+                <td class="p-2 text-right text-white font-bold">{p.rate}%</td>
+                <td class={`p-2 text-right font-black ${p.action === 'Hike' ? 'text-red-400' : p.action === 'Cut' ? 'text-green-400' : 'text-blue-400'}`}>{p.action}</td>
+                <td class="p-2 text-right text-text_secondary">{p.outlook}</td>
+              </tr>
+            )}
+          </For>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ============================================
+// NEW: EXCHANGE RESERVES MONITOR
+// ============================================
+function ExchangeReserves({ data }) {
+  if (!data?.reserves?.length) return (
+    <div class="py-10 text-center text-[9px] text-text_secondary">EXCHANGE RESERVES DATA LOADING...</div>
+  );
+  
+  return (
+    <div class="max-h-[200px] overflow-y-auto win-scroll">
+      <table class="w-full text-[9px] font-mono">
+        <thead class="bg-bg_header/60 sticky top-0 z-10 border-b border-border_main">
+          <tr>
+            <th class="p-2 text-left text-text_accent">EXCHANGE</th>
+            <th class="p-2 text-right text-white">RESERVES</th>
+            <th class="p-2 text-right text-white">7D CHANGE</th>
+            <th class="p-2 text-right text-text_secondary">TREND</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-border_main/10">
+          <For each={data.reserves.slice(0, 8)}>
+            {(r) => (
+              <tr class="hover:bg-white/5 transition-colors">
+                <td class="p-2 text-text_secondary">{r.exchange}</td>
+                <td class="p-2 text-right text-white font-bold">${fmtMln(r.reserves)}</td>
+                <td class={`p-2 text-right font-bold ${r.change_7d >= 0 ? 'text-green-400' : 'text-red-400'}`}>{fmtPct(r.change_7d)}</td>
+                <td class={`p-2 text-right font-black ${r.trend === 'OUTFLOW' ? 'text-green-400' : 'text-red-400'}`}>{r.trend}</td>
+              </tr>
+            )}
+          </For>
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -98,6 +253,10 @@ export default function CryptoMacroPanel(props) {
                 <FearGreedGauge value={data().fear_greed.current.value} label={data().fear_greed.current.label} />
               </Show>
             </div>
+            <div class="px-4 py-2 border-t border-border_main bg-bg_header/20 flex items-center justify-between">
+              <span class="text-[8px] font-black text-text_secondary">SENTIMENT: <span class="text-white font-mono">{data()?.fear_greed?.current?.label || 'N/A'}</span></span>
+              <span class="text-[8px] font-black text-text_secondary">7D AVG: <span class="text-text_accent font-mono">{data()?.fear_greed?.avg_7d || 'N/A'}</span></span>
+            </div>
           </div>
           <div class="col-span-12 lg:col-span-4 flex flex-col border-2 border-border_main bg-black/40 h-[350px]">
             <SH title="MARKET DOMINANCE" />
@@ -105,6 +264,10 @@ export default function CryptoMacroPanel(props) {
               <Show when={data()?.dominance?.dominance}>
                 <DominancePie data={data().dominance.dominance} />
               </Show>
+            </div>
+            <div class="px-4 py-2 border-t border-border_main bg-bg_header/20 flex items-center justify-between">
+              <span class="text-[8px] font-black text-text_secondary">BTC DOMINANCE: <span class="text-orange-400 font-mono">{data()?.dominance?.btc || 'N/A'}%</span></span>
+              <span class="text-[8px] font-black text-text_secondary">ETH DOMINANCE: <span class="text-blue-400 font-mono">{data()?.dominance?.eth || 'N/A'}%</span></span>
             </div>
           </div>
           <div class="col-span-12 lg:col-span-4 flex flex-col border-2 border-border_main bg-black/40 h-[350px]">
@@ -184,9 +347,50 @@ export default function CryptoMacroPanel(props) {
           </Show>
         </div>
 
-        {/* FEAR & GREED HISTORY */}
-        <Show when={data()?.fear_greed?.history?.length}>
-          <div class="flex flex-col border-2 border-border_main bg-black/40">
+        {/* MACRO CORRELATION + FED POLICY */}
+        <div class="grid grid-cols-12 gap-6">
+          <div class="col-span-12 lg:col-span-6 flex flex-col border-2 border-border_main bg-black/40 h-[350px]">
+            <SH title="MACRO CORRELATION TRACKER" />
+            <div class="flex-1 p-2 min-h-0">
+              <Show when={data()?.macro_correlation}>
+                <MacroCorrelationChart data={data().macro_correlation} />
+              </Show>
+            </div>
+            <div class="px-4 py-2 border-t border-border_main bg-bg_header/20 flex items-center justify-between">
+              <span class="text-[8px] font-black text-text_secondary">CORRELATION PERIOD: 90D</span>
+              <span class="text-[8px] font-black text-text_secondary">ASSETS: S&P 500, BONDS, GOLD, VIX</span>
+            </div>
+          </div>
+
+          <div class="col-span-12 lg:col-span-6 flex flex-col border-2 border-border_main bg-black/40 h-[350px]">
+            <SH title="FED POLICY TRACKER" />
+            <div class="flex-1 p-2 min-h-0">
+              <Show when={data()?.fed_policy}>
+                <FedPolicyTracker data={data().fed_policy} />
+              </Show>
+            </div>
+            <div class="px-4 py-2 border-t border-border_main bg-bg_header/20 flex items-center justify-between">
+              <span class="text-[8px] font-black text-text_secondary">CURRENT FED RATE: <span class="text-white font-mono">{data()?.fed_policy?.current_rate || 'N/A'}%</span></span>
+              <span class="text-[8px] font-black text-text_secondary">NEXT MEETING: <span class="text-text_accent font-mono">{data()?.fed_policy?.next_meeting || 'N/A'}</span></span>
+            </div>
+          </div>
+        </div>
+
+        {/* EXCHANGE RESERVES + FEAR & GREED HISTORY */}
+        <div class="grid grid-cols-12 gap-6">
+          <div class="col-span-12 lg:col-span-6 flex flex-col border-2 border-border_main bg-black/40 h-[350px]">
+            <SH title="EXCHANGE RESERVES MONITOR" />
+            <div class="flex-1 p-2 min-h-0">
+              <Show when={data()?.exchange_reserves}>
+                <ExchangeReserves data={data().exchange_reserves} />
+              </Show>
+            </div>
+            <div class="px-4 py-2 border-t border-border_main bg-bg_header/20">
+              <span class="text-[8px] font-black text-text_secondary uppercase">TOP EXCHANGES: BINANCE, COINBASE, KRAKEN, BYBIT</span>
+            </div>
+          </div>
+
+          <div class="col-span-12 lg:col-span-6 flex flex-col border-2 border-border_main bg-black/40 h-[350px]">
             <SH title="FEAR & GREED HISTORY (30D)" />
             <div class="p-4 grid grid-cols-10 gap-2">
               <For each={(data().fear_greed.history || []).slice(0, 30)}>
@@ -203,7 +407,7 @@ export default function CryptoMacroPanel(props) {
               </For>
             </div>
           </div>
-        </Show>
+        </div>
       </Show>
     </div>
   );

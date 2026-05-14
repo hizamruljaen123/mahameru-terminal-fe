@@ -68,69 +68,55 @@ export default function CompanySelector(props) {
   };
 
   return (
-    <div class="flex flex-col gap-3">
-      <div class="text-[8px] font-black text-text_accent/50 tracking-[0.4em] uppercase border-b border-border_main pb-1">
-        SELECT COMPANIES TO COMPARE
-      </div>
-
-      <div class="relative">
-        <label class="text-[8px] font-black tracking-wider uppercase block mb-1 text-sky-400">
-          Multi-Ticker Input
-        </label>
-        <div class="flex flex-col gap-2 border border-white/20 bg-white/5 rounded-sm p-1">
-          <div class="flex items-center gap-2 px-2 py-1.5">
-             <svg class="w-3 h-3 text-text_accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-             </svg>
-             <input
-              type="text"
-              placeholder="E.G. BBCA.JK, AAPL, MSFT"
-              class="flex-1 bg-transparent text-[11px] font-mono text-white outline-none uppercase tracking-wider placeholder:text-white/15"
-              value={inputValue()}
-              onInput={handleInput}
-              disabled={props.disabled}
-            />
-            <Show when={inputValue()}>
-              <button
-                onClick={() => { setInputValue(''); props.setCompanies(['', '', '']); setSuggestions([]); }}
-                class="text-white/20 hover:text-red-400 text-[10px] font-black"
-              >✕</button>
-            </Show>
+    <div class="flex flex-col gap-2">
+      <div class="relative group">
+        <div class={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-300 ${props.disabled ? 'opacity-50 cursor-not-allowed bg-white/5 border-white/5' : 'bg-white/[0.03] border-white/10 hover:border-text_accent/30 focus-within:border-text_accent/50 focus-within:bg-white/[0.05] focus-within:shadow-[0_0_20px_rgba(34,211,238,0.05)]'}`}>
+          <div class={`transition-colors duration-300 ${inputValue() ? 'text-text_accent' : 'text-white/20'}`}>
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
           </div>
           
-          {/* Active Tickers Chips */}
-          <div class="flex flex-wrap gap-1 px-1 pb-1">
-            <For each={props.companies().filter(s => s.length > 0)}>
-              {(symbol, i) => (
-                <div class={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase flex items-center gap-1.5 ${BG_COLORS[i()] || 'bg-white/10'} ${COLORS[i()] || 'text-white'}`}>
-                  <span>{symbol}</span>
-                  <button onClick={() => {
-                    const next = props.companies().filter(s => s !== symbol);
-                    props.setCompanies(next);
-                  }} class="hover:text-white">✕</button>
-                </div>
-              )}
-            </For>
-          </div>
+          <input
+            type="text"
+            placeholder="Search & Compare Tickers..."
+            class="flex-1 bg-transparent text-[11px] font-bold text-white outline-none uppercase tracking-[0.1em] placeholder:text-white/10 placeholder:font-normal"
+            value={inputValue()}
+            onInput={handleInput}
+            disabled={props.disabled}
+          />
+
+          <Show when={inputValue()}>
+            <button
+              onClick={() => { setInputValue(''); props.setCompanies(['', '', '']); setSuggestions([]); }}
+              class="p-1 hover:bg-white/10 rounded-full text-white/20 hover:text-red-400 transition-all"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </Show>
         </div>
 
-        {/* Autocomplete dropdown */}
+        {/* Autocomplete dropdown - Redesigned to be solid and premium */}
         <Show when={suggestions().length > 0}>
-          <div class="absolute z-50 w-full bg-bg_sidebar border border-border_main shadow-2xl mt-1 flex flex-col max-h-56 overflow-y-auto win-scroll rounded-sm">
-            <div class="bg-white/5 px-3 py-1 text-[7px] font-black text-white/30 uppercase tracking-[0.2em]">Select Match for "{currentWord()}"</div>
+          <div class="absolute z-50 w-full bg-[#0a0a0a] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.8)] mt-2 flex flex-col max-h-64 overflow-y-auto win-scroll rounded-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div class="bg-white/[0.02] px-4 py-2 text-[8px] font-black text-white/20 uppercase tracking-[0.2em] border-b border-white/5">
+              Suggestions for "{currentWord()}"
+            </div>
             <For each={suggestions()}>
               {(rec) => (
                 <button
                   type="button"
-                  class="text-left px-3 py-2 text-[9px] hover:bg-text_accent hover:text-bg_main font-mono border-b border-border_main/30 text-white transition-colors flex flex-col gap-0.5 group"
+                  class="text-left px-4 py-3 hover:bg-white/[0.05] border-b border-white/[0.03] last:border-b-0 transition-colors flex flex-col gap-1 group"
                   onClick={() => selectSymbol(rec.symbol)}
                 >
                   <div class="flex items-center justify-between">
-                    <span class="font-black text-text_accent group-hover:text-bg_main uppercase">{rec.symbol}</span>
-                    <span class="text-[7px] opacity-40 italic group-hover:text-bg_main/50">{rec.typeDisp || rec.quoteType || rec.type || 'Equity'}</span>
+                    <span class="text-[10px] font-black text-text_accent group-hover:text-white transition-colors">{rec.symbol}</span>
+                    <span class="text-[7px] font-bold text-white/10 uppercase tracking-widest">{rec.typeDisp || rec.quoteType || 'Equity'}</span>
                   </div>
-                  <div class="text-[10px] font-bold text-white/90 truncate uppercase tracking-tight group-hover:text-bg_main">
-                    {rec.shortname || rec.longname || rec.name || 'Unknown Company'}
+                  <div class="text-[9px] font-bold text-white/40 group-hover:text-white/80 transition-colors truncate uppercase">
+                    {rec.shortname || rec.longname || rec.name}
                   </div>
                 </button>
               )}
@@ -139,9 +125,27 @@ export default function CompanySelector(props) {
         </Show>
       </div>
 
-      <div class="text-[7px] font-mono text-white/20 text-center pt-1">
-        Max 3 companies · Separate with commas
-      </div>
+      {/* Active Tickers Chips - Modern Pill Style */}
+      <Show when={props.companies().filter(s => s.length > 0).length > 0}>
+        <div class="flex flex-wrap gap-2 mt-1">
+          <For each={props.companies().filter(s => s.length > 0)}>
+            {(symbol, i) => (
+              <div class={`px-3 py-1 rounded-full text-[9px] font-black uppercase flex items-center gap-2 border animate-in zoom-in-90 duration-200 ${BG_COLORS[i()] || 'bg-white/5'} ${COLORS[i()] || 'text-white border-white/10'}`}>
+                <span class="tracking-widest">{symbol}</span>
+                <button onClick={() => {
+                  const next = props.companies().filter(s => s !== symbol);
+                  props.setCompanies(next);
+                }} class="w-3.5 h-3.5 flex items-center justify-center rounded-full hover:bg-black/20 transition-colors">
+                  <svg class="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </For>
+        </div>
+      </Show>
     </div>
   );
 }
+

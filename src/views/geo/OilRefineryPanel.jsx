@@ -86,27 +86,38 @@ export default function OilRefineryPanel() {
   let tradeFlowChartRef = null;
   let riskHeatmapRef = null;
 
-  const fetchRefineries = async () => {
-    try {
-      const res = await fetch(`${import.meta.env.VITE_OIL_REFINERY_API}/api/refineries`);
-      const result = await res.json();
-      if (result.status === 'success') {
-        const processed = (result.data || []).map(r => {
-          const cap = parseFloat(r.kapasitas_bbl_per_hari) || 0;
-          let cat = 'unknown';
-          if (cap >= 400000) cat = 'major';
-          else if (cap >= 200000) cat = 'large';
-          else if (cap >= 100000) cat = 'medium';
-          else if (cap >= 30000) cat = 'small';
-          else if (cap > 0) cat = 'micro';
-          return { ...r, category: cat, capacity: cap, latitude: parseFloat(r.latitude), longitude: parseFloat(r.longitude) };
-        });
-        setRefineries(processed);
-      }
-    } catch (e) {
-      console.error("Refinery Analysis: Fetch error", e);
-    }
-  };
+   const fetchRefineries = async () => {
+     try {
+       // Pagination: fetch all refineries (1450 total) in one call
+       const limit = 2000;
+       const offset = 0;
+       const res = await fetch(
+         `${import.meta.env.VITE_OIL_REFINERY_API}/api/refineries?limit=${limit}&offset=${offset}`
+       );
+       const result = await res.json();
+       if (result.status === 'success') {
+         // Handle both paginated data field and legacy response
+         const items = result.data || result.results || [];
+         const processed = items.map(r => {
+           const cap = parseFloat(r.kapasitas_bbl_per_hari) || 0;
+           let cat = 'unknown';
+           if (cap >= 400000) cat = 'major';
+           else if (cap >= 200000) cat = 'large';
+           else if (cap >= 100000) cat = 'medium';
+           else if (cap >= 30000) cat = 'small';
+           else if (cap > 0) cat = 'micro';
+           return { ...r, category: cat, capacity: cap, latitude: parseFloat(r.latitude), longitude: parseFloat(r.longitude) };
+         });
+         setRefineries(processed);
+         // Optional: log pagination info for debugging
+         if (result.total && processed.length < result.total) {
+           console.warn(`Refineries: loaded ${processed.length} of ${result.total} total. Consider pagination.`);
+         }
+       }
+     } catch (e) {
+       console.error("Refinery Analysis: Fetch error", e);
+     }
+   };
 
   const fetchLngFacilities = async () => {
     setLoadingLng(true);

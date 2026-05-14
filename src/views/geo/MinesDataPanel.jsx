@@ -1,4 +1,6 @@
 import { createSignal, onMount, For, Show } from 'solid-js';
+import { fetchWithRetry } from '../../utils/apiFetch';
+import { getCached, setCache } from '../../utils/apiCache';
 
 export default function MinesDataPanel() {
   const [mines, setMines] = createSignal([]);
@@ -29,27 +31,39 @@ export default function MinesDataPanel() {
 
   const fetchFilters = async () => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_MINES_API}/api/mines/filters`);
-      const data = await res.json();
-      setFilters(data.data);
+      // Cache filters for 5 minutes (reference data)
+      const cached = getCached('mines_filters');
+      if (cached) {
+        setFilters(cached);
+        return;
+      }
+      const data = await fetchWithRetry(
+        `${import.meta.env.VITE_MINES_API}/api/mines/filters`,
+        {},
+        { retries: 2, backoffBase: 500 }
+      );
+      // Backend returns { status, data: { countries: [...], commodities: [...] } }
+      const filterData = data.data || data;
+      setFilters(filterData);
+      setCache('mines_filters', filterData, 5 * 60 * 1000);
     } catch (e) { console.error("Filter Fetch Error:", e); }
   };
 
   const fetchMines = async () => {
     setLoading(true);
     try {
-      let url = `${import.meta.env.VITE_MINES_API}/api/mines?page_size=200`;
+      let url = `${import.meta.env.VITE_MINES_API}/api/mines?page_size=500`;
       if (selectedCountry()) url += `&country=${selectedCountry()}`;
       if (selectedCommodity()) url += `&commodity=${selectedCommodity()}`;
       if (search()) url += `&search=${search()}`;
 
-      const res = await fetch(url);
-      const result = await res.json();
-      setMines(result.data || []);
+      const result = await fetchWithRetry(url, {}, { retries: 2, backoffBase: 500 });
+      const items = result.data || result.results || [];
+      setMines(items);
 
       if (mineMarkers) {
         mineMarkers.clearLayers();
-        result.data.forEach(mine => {
+        items.forEach(mine => {
           if (mine.latitude && mine.longitude) {
             const marker = window.L.circleMarker([mine.latitude, mine.longitude], {
               radius: 5,
@@ -62,7 +76,7 @@ export default function MinesDataPanel() {
             mineMarkers.addLayer(marker);
           }
         });
-        if (result.data.length > 0 && mapInstance) {
+        if (items.length > 0 && mapInstance) {
            // mapInstance.fitBounds(mineMarkers.getBounds());
         }
       }

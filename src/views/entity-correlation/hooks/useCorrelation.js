@@ -315,17 +315,19 @@ export const useCorrelation = () => {
         return [];
       }
     },
-    searchRefineries: async (q) => {
-      if (!q) return [];
-      try {
-        const response = await fetch(`${import.meta.env.VITE_OIL_REFINERY_API}/api/refineries?q=${encodeURIComponent(q)}`);
-        const res = await response.json();
-        return res.data || [];
-      } catch (err) {
-        console.error("Refinery search error:", err);
-        return [];
-      }
-    },
+     searchRefineries: async (q) => {
+       if (!q) return [];
+       try {
+         // Pagination: limit results for search (max 100)
+         const limit = 100;
+         const response = await fetch(`${import.meta.env.VITE_OIL_REFINERY_API}/api/refineries?q=${encodeURIComponent(q)}&limit=${limit}`);
+         const res = await response.json();
+         return res.data || res.results || [];
+       } catch (err) {
+         console.error("Refinery search error:", err);
+         return [];
+       }
+     },
     fetchCompanyEvents: async (symbol) => {
       try {
         const response = await fetch(`${import.meta.env.VITE_MARKET_API}/api/market/company-events?symbol=${encodeURIComponent(symbol)}`);

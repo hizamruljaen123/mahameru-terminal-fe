@@ -9,6 +9,7 @@
   "main": "src/index.jsx",
   "scripts": {
     "dev": "vite",
+    "local": "vite --host 127.0.0.1 --port 5173",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 5151",
     "start": "vite preview --host 0.0.0.0 --port 5151"

@@ -307,8 +307,13 @@ function App() {
     if (e.state && e.state.view) {
       setView(e.state.view);
     } else {
-      const path = window.location.pathname.replace(/\/$/, "");
-      setView(routeMap[path || '/'] || 'dashboard');
+      const path = window.location.pathname;
+      if (path.startsWith('/copilot/chat/')) {
+        setView('copilot');
+      } else {
+        const cleanPath = path.replace(/\/$/, "");
+        setView(routeMap[cleanPath || '/'] || 'dashboard');
+      }
     }
   };
 
@@ -381,14 +386,27 @@ function App() {
 
   // Immediate detection before first render
   const getInitialView = () => {
-    const path = window.location.pathname.replace(/\/$/, ""); // Remove trailing slash
-    return routeMap[path || '/'] || 'dashboard';
+    const path = window.location.pathname;
+    
+    // Handle deep links for copilot chat
+    if (path.startsWith('/copilot/chat/')) {
+        return 'copilot';
+    }
+    
+    const cleanPath = path.replace(/\/$/, ""); // Remove trailing slash
+    return routeMap[cleanPath || '/'] || 'dashboard';
   };
 
   const [view, setView] = createSignal(getInitialView());
 
   const syncBrowserUrl = (v) => {
     const path = v === 'dashboard' ? '/' : `/${v}`;
+    
+    // Special handling for copilot to prevent resetting deep links if we are already there
+    if (v === 'copilot' && window.location.pathname.startsWith('/copilot/chat/')) {
+        return;
+    }
+
     if (window.location.pathname !== path) {
       window.history.pushState({ view: v }, '', path);
     }
@@ -416,7 +434,7 @@ function App() {
         setCrisisModule={setCrisisModule}
       />
 
-      <main class="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+      <main class="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden relative">
         <Header
           view={view}
           status={status}
@@ -556,7 +574,7 @@ function App() {
           </Show>
 
           <Show when={view() === 'copilot'}>
-            <div class="h-full flex flex-col overflow-hidden">
+            <div class="flex-1 flex flex-col min-h-0 overflow-hidden">
               <MahameruCopilot />
             </div>
           </Show>

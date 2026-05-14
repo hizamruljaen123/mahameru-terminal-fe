@@ -61,24 +61,72 @@ export default function DatacenterMap(props) {
     const initMap = () => {
         if (!mapContainer) return;
 
-        mapInstance = new window.maplibregl.Map({
-            container: mapContainer,
-            style: {
-                version: 8,
-                sources: {},
-                layers: []
-            },
-            center: [0, 20], 
-            zoom: 2,
-            pitch: 0,
-            antialias: true
-        });
+        // --- WEBGL SUPPORT CHECK ---
+        const isSupported = (typeof window.maplibregl.supported === 'function') 
+            ? window.maplibregl.supported() 
+            : (() => {
+                try {
+                    const canvas = document.createElement('canvas');
+                    return !!(window.WebGLRenderingContext && (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')));
+                } catch (e) { return false; }
+            })();
 
-        mapInstance.on('load', () => {
-            mapInstance.resize();
-            setIsMapReady(true);
-            props.onMapReady(mapInstance);
-        });
+        if (!isSupported) {
+            console.error("WEBGL_NOT_SUPPORTED: DataCenter Terminal requires hardware acceleration.");
+            mapContainer.innerHTML = `
+                <div class="h-full w-full flex flex-col items-center justify-center bg-black/60 backdrop-blur-md p-8 text-center border border-red-500/20">
+                    <div class="text-3xl mb-4">⚠️</div>
+                    <div class="text-red-500 font-black tracking-widest text-sm mb-2">HARDWARE ACCELERATION REQUIRED</div>
+                    <div class="text-white/40 text-[10px] max-w-xs leading-relaxed uppercase">
+                        WebGL failed to initialize. This usually happens when hardware acceleration is disabled in your browser settings or your GPU drivers are outdated.
+                    </div>
+                    <button onclick="window.location.reload()" class="mt-6 px-4 py-2 bg-white/5 border border-white/20 hover:border-white/40 text-[9px] font-black tracking-widest transition-all">RETRY INITIALIZATION</button>
+                </div>
+            `;
+            return;
+        }
+
+        try {
+            mapInstance = new window.maplibregl.Map({
+                container: mapContainer,
+                style: {
+                    version: 8,
+                    sources: {},
+                    layers: []
+                },
+                center: [0, 20], 
+                zoom: 2,
+                pitch: 0,
+                antialias: false, // REDUCE OVERHEAD TO PREVENT CONTEXT LOSS
+                preserveDrawingBuffer: true,
+                failIfMajorPerformanceCaveat: false
+            });
+
+            // Handle Context Loss
+            mapContainer.addEventListener('webglcontextlost', (e) => {
+                console.warn("WEBGL_CONTEXT_LOST detected. Preventing default to allow recovery.");
+                e.preventDefault();
+            }, false);
+
+            mapContainer.addEventListener('webglcontextrestored', () => {
+                console.info("WEBGL_CONTEXT_RESTORED. Reloading map...");
+                window.location.reload();
+            }, false);
+
+            mapInstance.on('load', () => {
+                mapInstance.resize();
+                setIsMapReady(true);
+                props.onMapReady(mapInstance);
+            });
+
+            mapInstance.on('error', (e) => {
+                console.error("MAPLIBRE_INTERNAL_ERROR:", e.error);
+            });
+
+        } catch (err) {
+            console.error("MAP_INITIALIZATION_FAILED:", err);
+            setIsMapReady(false);
+        }
     };
 
     createEffect(() => {
