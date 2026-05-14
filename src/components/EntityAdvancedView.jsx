@@ -1,10 +1,12 @@
 import { createSignal, createEffect, onCleanup, onMount, Show } from 'solid-js';
 import { initAdvancedAnalysis, setupToggles } from './EntityAdvancedLogic.js';
+import StatsPanel from './entity/stats/StatsPanel.jsx';
 
 export default function EntityAdvancedView(props) {
     const [activeIndex, setActiveIndex] = createSignal(0);
     const [isSidebarOpen, setIsSidebarOpen] = createSignal(true);
-    const [collapsedGroups, setCollapsedGroups] = createSignal(new Set(['dynamicOscillators', 'deepQuant', 'neuralLab']));
+    const [showStatsPanel, setShowStatsPanel] = createSignal(false);
+    const [collapsedGroups, setCollapsedGroups] = createSignal(new Set(['coreOverlays', 'dynamicOscillators', 'deepQuant', 'neuralLab', 'statisticalTests']));
 
     const toggleGroup = (groupId) => {
         const next = new Set(collapsedGroups());
@@ -32,7 +34,7 @@ export default function EntityAdvancedView(props) {
         // Re-run setupToggles whenever a group is expanded or collapsed
         // to attach listeners to newly created DOM elements
         const groups = collapsedGroups();
-        setTimeout(() => setupToggles(), 100); 
+        setTimeout(() => setupToggles(), 100);
     });
 
     onCleanup(() => {
@@ -41,25 +43,25 @@ export default function EntityAdvancedView(props) {
     });
 
     const coreOverlays = [
-        { id: 'sma20', name: 'SMA 20-Day' }, { id: 'ema50', name: 'EMA 50-Day' }, 
-        { id: 'frama', name: 'FRAMA Adaptive' }, { id: 'vwap', name: 'VWAP Alpha' }, 
-        { id: 'bbands', name: 'Bollinger Matrix' }, { id: 'ichimoku', name: 'Ichimoku Cloud' }, 
+        { id: 'sma20', name: 'SMA 20-Day' }, { id: 'ema50', name: 'EMA 50-Day' },
+        { id: 'frama', name: 'FRAMA Adaptive' }, { id: 'vwap', name: 'VWAP Alpha' },
+        { id: 'bbands', name: 'Bollinger Matrix' }, { id: 'ichimoku', name: 'Ichimoku Cloud' },
         { id: 'psar', name: 'Parabolic SAR' }, { id: 'pivot', name: 'Standard Pivots' },
         { id: 'fib', name: 'Fibonacci Nodes' }, { id: 'channel', name: 'High/Low Channel' },
         { id: 'keltner', name: 'Keltner Matrix' }
     ];
 
     const dynamicOscillators = [
-        { id: 'rsi', name: 'RSI Dynamic' }, { id: 'macd', name: 'MACD Spectrum' }, 
-        { id: 'stoch', name: 'Stochastic K' }, { id: 'cci', name: 'CCI Harmonic' }, 
+        { id: 'rsi', name: 'RSI Dynamic' }, { id: 'macd', name: 'MACD Spectrum' },
+        { id: 'stoch', name: 'Stochastic K' }, { id: 'cci', name: 'CCI Harmonic' },
         { id: 'mfi', name: 'MFI Flow' }, { id: 'cmf', name: 'Chaikin CMF' },
         { id: 'roc', name: 'ROC Delta' }, { id: 'momentum', name: 'Momentum Flux' },
         { id: 'williams', name: 'Williams %R' }, { id: 'atr', name: 'ATR Volatility' }
     ];
 
     const deepQuant = [
-        { id: 'ml-hurst', name: 'Hurst Exponent' }, { id: 'ml-montecarlo', name: 'Monte Carlo P30' }, 
-        { id: 'ml-arima', name: 'ARIMA Forecast' }, { id: 'ml-apef', name: 'APEF Echo Scan' }, 
+        { id: 'ml-hurst', name: 'Hurst Exponent' }, { id: 'ml-montecarlo', name: 'Monte Carlo P30' },
+        { id: 'ml-arima', name: 'ARIMA Forecast' }, { id: 'ml-apef', name: 'APEF Echo Scan' },
         { id: 'ml-sera', name: 'SERA Energy Map' }, { id: 'zscore', name: 'Z-Score Normal' },
         { id: 'exp-qeo', name: 'Logarithmic Entropy' }, { id: 'exp-kvi', name: 'Price-Volume Impulse' },
         { id: 'exp-grs', name: 'Statistical Spread' }, { id: 'exp-frc', name: 'Fractal Adaptive Smoothing' },
@@ -67,7 +69,7 @@ export default function EntityAdvancedView(props) {
     ];
 
     const neuralLab = [
-        { id: 'nt-akft', name: 'AKFT Engine' }, { id: 'nt-ampa', name: 'AMPA Engine' }, 
+        { id: 'nt-akft', name: 'AKFT Engine' }, { id: 'nt-ampa', name: 'AMPA Engine' },
         { id: 'nt-fahma', name: 'FAHMA Engine' }, { id: 'nt-prism', name: 'PRISM Engine' }
     ];
 
@@ -87,7 +89,7 @@ export default function EntityAdvancedView(props) {
                                     <a href={item.link} target="_blank" class="absolute inset-0 flex items-center gap-4 hover:text-amber-500 transition-all duration-1000 animate-in fade-in slide-in-from-right-2 group/news">
                                         <div class="px-2 py-0.5 bg-white/5 border border-white/10 rounded text-[8px] font-black text-text_accent shrink-0">INTEL_NODE_{idx + 1}</div>
                                         <span class="text-[10px] font-black text-text_secondary group-hover/news:text-text_main uppercase tracking-tight truncate">{item.title}</span>
-                                        <span class="text-[8px] font-bold text-text_dim opacity-40 uppercase tabular-nums shrink-0">[{item.publisher} // {new Date(item.time * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}]</span>
+                                        <span class="text-[8px] font-bold text-text_dim opacity-40 uppercase tabular-nums shrink-0">[{item.publisher} // {new Date(item.time * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}]</span>
                                     </a>
                                 </Show>
                             ))}
@@ -98,15 +100,15 @@ export default function EntityAdvancedView(props) {
 
             {/* Advanced Analytical Workstation Card */}
             <div class="flex h-[calc(100vh-400px)] min-h-[600px] gap-6 relative">
-                
+
                 {/* Sidebar Toggle Button (Floating) */}
-                <button 
+                <button
                     onClick={() => setIsSidebarOpen(!isSidebarOpen())}
                     class={`absolute top-6 z-[100] w-7 h-14 bg-[#1a1a1a] border border-border_main flex items-center justify-center rounded-r hover:bg-text_accent group transition-all duration-300 shadow-xl ${isSidebarOpen() ? 'left-[320px]' : 'left-0'}`}
                     title={isSidebarOpen() ? "COLLAPSE SIDEBAR" : "EXPAND SIDEBAR"}
                 >
                     <svg class={`w-4 h-4 text-text_secondary group-hover:text-bg_main transition-transform ${isSidebarOpen() ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                        <polyline points="15 18 9 12 15 6"/>
+                        <polyline points="15 18 9 12 15 6" />
                     </svg>
                 </button>
 
@@ -126,13 +128,60 @@ export default function EntityAdvancedView(props) {
                                 <button onClick={() => window.unselectAllIndicators()} class="text-[8px] font-black text-red-500 hover:underline uppercase">NONE</button>
                             </div>
                         </div>
-                        {/* Group 1: Core Overlays */}
+                        {/* Group 1: Statistical Testing */}
                         <div class="space-y-3">
-                            <button 
+                            <button
+                                onClick={() => toggleGroup('statisticalTests')}
+                                class="w-full flex items-center justify-between text-[9px] font-black text-cyan-400 uppercase tracking-widest border-l-2 border-cyan-400 pl-3 hover:text-white transition-colors"
+                            >
+                                <span>01. STATISTICAL TESTS</span>
+                                <span class="text-[8px] opacity-40">{!collapsedGroups().has('statisticalTests') ? '-' : '+'}</span>
+                            </button>
+                            <Show when={!collapsedGroups().has('statisticalTests')}>
+                                <div class="flex flex-col gap-2 animate-in slide-in-from-top-2 duration-200">
+                                    <p class="text-[8px] text-text_dim uppercase font-bold opacity-40 mb-1">MULTI-METHOD BATTERY — 15+ TESTS</p>
+
+                                    {/* Category Filter Toggles */}
+                                    {[
+                                        { id: 'normality', label: 'Normality (4)', icon: '📊' },
+                                        { id: 'stationarity', label: 'Stationarity (2)', icon: '📈' },
+                                        { id: 'autocorrelation', label: 'Autocorrelation (3)', icon: '🔄' },
+                                        { id: 'distribution', label: 'Distribution (2)', icon: '🎯' },
+                                        { id: 'descriptive', label: 'Descriptive (5)', icon: '📋' },
+                                        { id: 'variance', label: 'Variance (2)', icon: '📉' },
+                                        { id: 'correlation', label: 'Correlation', icon: '🔗' },
+                                    ].map(cat => (
+                                        <label class="flex items-center justify-between group cursor-pointer bg-bg_main/20 p-1.5 rounded border border-transparent hover:border-border_main/30 transition-all">
+                                            <span class="text-[9px] font-bold text-text_dim group-hover:text-text_main">
+                                                {cat.icon} {cat.label}
+                                            </span>
+                                            <div class="relative">
+                                                <input type="checkbox" class="stat-cat-toggle hidden" data-cat={cat.id} checked />
+                                                <div class="w-3.5 h-3.5 rounded border border-cyan-500/30 flex items-center justify-center bg-cyan-500/20 transition-all">
+                                                    <svg class="w-2 h-2 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M5 13l4 4L19 7" /></svg>
+                                                </div>
+                                            </div>
+                                        </label>
+                                    ))}
+
+                                    {/* Execute Button */}
+                                    <button
+                                        onClick={() => setShowStatsPanel(true)}
+                                        class="mt-2 w-full py-2.5 bg-cyan-600/20 border border-cyan-500/40 text-cyan-400 text-[9px] font-black uppercase tracking-[0.2em] hover:bg-cyan-500 hover:text-black transition-all rounded"
+                                    >
+                                        ▶ OPEN STATISTICAL PANEL
+                                    </button>
+                                </div>
+                            </Show>
+                        </div>
+
+                        {/* Group 2: Core Overlays */}
+                        <div class="space-y-3">
+                            <button
                                 onClick={() => toggleGroup('coreOverlays')}
                                 class="w-full flex items-center justify-between text-[9px] font-black text-blue-400 uppercase tracking-widest border-l-2 border-blue-400 pl-3 hover:text-white transition-colors"
                             >
-                                <span>01. CORE OVERLAYS</span>
+                                <span>02. CORE OVERLAYS</span>
                                 <span class="text-[8px] opacity-40">{!collapsedGroups().has('coreOverlays') ? '-' : '+'}</span>
                             </button>
                             <Show when={!collapsedGroups().has('coreOverlays')}>
@@ -150,13 +199,13 @@ export default function EntityAdvancedView(props) {
                             </Show>
                         </div>
 
-                        {/* Group 2: Momentum & Oscillators */}
+                        {/* Group 3: Momentum & Oscillators */}
                         <div class="space-y-3">
-                            <button 
+                            <button
                                 onClick={() => toggleGroup('dynamicOscillators')}
                                 class="w-full flex items-center justify-between text-[9px] font-black text-purple-400 uppercase tracking-widest border-l-2 border-purple-400 pl-3 hover:text-white transition-colors"
                             >
-                                <span>02. DYNAMIC OSCILLATORS</span>
+                                <span>03. DYNAMIC OSCILLATORS</span>
                                 <span class="text-[8px] opacity-40">{!collapsedGroups().has('dynamicOscillators') ? '-' : '+'}</span>
                             </button>
                             <Show when={!collapsedGroups().has('dynamicOscillators')}>
@@ -174,13 +223,13 @@ export default function EntityAdvancedView(props) {
                             </Show>
                         </div>
 
-                        {/* Group 3: Deep Quant & Experimental */}
+                        {/* Group 4: Deep Quant & Experimental */}
                         <div class="space-y-3">
-                            <button 
+                            <button
                                 onClick={() => toggleGroup('deepQuant')}
                                 class="w-full flex items-center justify-between text-[9px] font-black text-amber-500 uppercase tracking-widest border-l-2 border-amber-500 pl-3 hover:text-white transition-colors"
                             >
-                                <span>03. QUANTITATIVE ANALYSIS</span>
+                                <span>04. QUANTITATIVE ANALYSIS</span>
                                 <span class="text-[8px] opacity-40">{!collapsedGroups().has('deepQuant') ? '-' : '+'}</span>
                             </button>
                             <Show when={!collapsedGroups().has('deepQuant')}>
@@ -198,13 +247,13 @@ export default function EntityAdvancedView(props) {
                             </Show>
                         </div>
 
-                        {/* Group 4: Neural Zenith Protocols */}
+                        {/* Group 5: Neural Zenith Protocols */}
                         <div class="space-y-3">
-                            <button 
+                            <button
                                 onClick={() => toggleGroup('neuralLab')}
                                 class="w-full flex items-center justify-between text-[9px] font-black text-red-500 uppercase tracking-widest border-l-2 border-red-500 pl-3 hover:text-white transition-colors"
                             >
-                                <span>04. ALGORITHMIC FORECASTING</span>
+                                <span>05. ALGORITHMIC FORECASTING</span>
                                 <span class="text-[8px] opacity-40">{!collapsedGroups().has('neuralLab') ? '-' : '+'}</span>
                             </button>
                             <Show when={!collapsedGroups().has('neuralLab')}>
@@ -243,7 +292,7 @@ export default function EntityAdvancedView(props) {
 
                     {/* Deep Analysis Overlay Panel */}
                     <div id="deepAnalysisPanel" class="absolute inset-0 bg-[#050505] z-50 overflow-y-auto scrollbar-thin hidden">
-                         <div class="sticky top-0 bg-bg_header/95 backdrop-blur-md px-10 py-6 border-b border-white/5 flex justify-between items-center z-[100]">
+                        <div class="sticky top-0 bg-bg_header/95 backdrop-blur-md px-10 py-6 border-b border-white/5 flex justify-between items-center z-[100]">
                             <h3 class="text-[13px] font-black text-indigo-400 uppercase tracking-[0.4em]">QUANTITATIVE FORECAST PROTOCOL — <span class="active-ticker">---</span></h3>
                             <div class="flex gap-4">
                                 <button onClick={() => window.stopDeep()} class="px-6 py-2 bg-yellow-600/20 border border-yellow-500/40 text-yellow-500 text-[9px] font-black uppercase tracking-widest hover:bg-yellow-500 hover:text-black transition-all">STOP ANALYSIS</button>
@@ -254,6 +303,15 @@ export default function EntityAdvancedView(props) {
                             {/* Dynamic Deep Nodes */}
                         </div>
                     </div>
+
+                    {/* Statistical Testing Panel (Overlay) */}
+                    <StatsPanel
+                        symbol={props.symbol}
+                        period="6mo"
+                        visible={showStatsPanel()}
+                        autoRun={false}
+                        onClose={() => setShowStatsPanel(false)}
+                    />
 
                     {/* Loading Screens */}
                     <div id="advancedLoadingScreen" class="absolute inset-0 bg-black/80 backdrop-blur-sm z-[200] hidden flex-col items-center justify-center">
@@ -285,7 +343,7 @@ export default function EntityAdvancedView(props) {
                         <span class="text-[9px] font-black text-green-500/60 uppercase tracking-widest animate-pulse">STREAM_READY</span>
                         <button onClick={() => document.getElementById('advancedTablePanel').classList.add('hidden')} class="px-4 py-2 bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all rounded flex items-center gap-2 group">
                             <span>TERMINATE_BUFFER</span>
-                            <svg class="w-3 h-3 group-hover:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
+                            <svg class="w-3 h-3 group-hover:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12" /></svg>
                         </button>
                     </div>
                 </div>
